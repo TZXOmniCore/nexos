@@ -2033,13 +2033,13 @@ function renderAnalytics() {
 // IA — ANTHROPIC CLAUDE API
 // ═══════════════════════════════════════════════════════════
 async function callIA(prompt, elId) {
-  if (!IA_KEY || IA_KEY === 'SUA_ANTHROPIC_KEY_AQUI') {
+  if (!IA_KEY || IA_KEY === '') {
     const el = document.getElementById(elId);
     if (el) el.innerHTML = '<span style="color:var(--muted);font-family:var(--mono);font-size:11px">⚠ Configure sua chave da API de IA nas constantes do código.</span>';
     return null;
   }
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch('https://platform.openai.com/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': IA_KEY, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 600, messages: [{ role: 'user', content: prompt }] })
@@ -2679,3 +2679,4 @@ window.addEventListener('resize', () => { const c = document.getElementById('sig
 </script>
 </body>
 </html>
+
