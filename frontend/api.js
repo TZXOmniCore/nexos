@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════
 // NEXOS v2.0 — API.JS
-// ═══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════
 
 const SUPA_URL = 'https://twxotfzlronfjfjyaklx.supabase.co';
 const SUPA_KEY = 'sb_publishable_cQG-hm_203Ftz5uIlBW76w_y-5e8De-';
