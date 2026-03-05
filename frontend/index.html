@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="theme-color" content="#0a0e1a">
+<meta name="description" content="NexOS v2.0 — Sistema de Gestão">
+<title>NexOS v2.0</title>
+
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+<!-- Styles -->
+<link rel="stylesheet" href="styles.css">
+
+<!-- Scripts externos -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════
+     LOADING
+══════════════════════════════════════════════════════ -->
+<div id="loading-screen">
+  <div class="loading-logo">Nex<b>OS</b><br><span>// v2.0 ENTERPRISE</span></div>
+  <div class="loading-bar-wrap"><div class="loading-bar"></div></div>
+  <div class="loading-text" id="loading-text">INICIANDO SISTEMA...</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     AUTH
+══════════════════════════════════════════════════════ -->
+<div id="auth-screen">
+  <div class="auth-box">
+    <div class="auth-logo">Nex<b>OS</b></div>
+    <div class="auth-tagline">// SISTEMA DE GESTÃO v2.0</div>
+
+    <div class="auth-tabs">
+      <button class="auth-tab on" onclick="authTab('login')">Entrar</button>
+      <button class="auth-tab"    onclick="authTab('register')">Criar conta</button>
+    </div>
+
+    <div class="auth-error"   id="authErr"></div>
+    <div class="auth-success" id="authOk"></div>
+
+    <!-- LOGIN -->
+    <div id="loginForm">
+      <div class="auth-input-wrap">
+        <label>EMAIL</label>
+        <input type="email" id="loginEmail" placeholder="seu@email.com" class="finput">
+      </div>
+      <div class="auth-input-wrap">
+        <label>SENHA</label>
+        <input type="password" id="loginPass" placeholder="••••••••" class="finput">
+        <button class="eye-btn" onclick="togglePass('loginPass',this)">👁</button>
+      </div>
+      <div class="auth-forgot"><a onclick="showForgot()">Esqueci minha senha</a></div>
+      <button class="btn-auth btn-auth-primary" onclick="doLogin()" id="btnLogin">
+        <span>🔐</span> Entrar no sistema
+      </button>
+      <div class="auth-divider">ou</div>
+      <button class="btn-auth btn-auth-google" onclick="doGoogleLogin()">
+        <span>🌐</span> Continuar com Google
+      </button>
+    </div>
+
+    <!-- REGISTER -->
+    <div id="registerForm" style="display:none">
+      <div class="auth-input-wrap">
+        <label>SEU NOME</label>
+        <input type="text" id="regNome" placeholder="João Silva" class="finput">
+      </div>
+      <div class="auth-input-wrap">
+        <label>NOME DA EMPRESA</label>
+        <input type="text" id="regEmpresa" placeholder="Minha Loja" class="finput">
+      </div>
+      <div class="auth-input-wrap">
+        <label>EMAIL</label>
+        <input type="email" id="regEmail" placeholder="seu@email.com" class="finput">
+      </div>
+      <div class="auth-input-wrap">
+        <label>SENHA (mín. 6 caracteres)</label>
+        <input type="password" id="regPass" placeholder="••••••••" class="finput">
+        <button class="eye-btn" onclick="togglePass('regPass',this)">👁</button>
+      </div>
+      <button class="btn-auth btn-auth-primary" onclick="doRegister()" id="btnRegister">
+        <span>🚀</span> Criar minha conta grátis
+      </button>
+    </div>
+
+    <!-- FORGOT -->
+    <div id="forgotForm" style="display:none">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6">
+        Digite seu email e enviaremos um link para redefinir sua senha.
+      </p>
+      <div class="auth-input-wrap">
+        <label>EMAIL</label>
+        <input type="email" id="forgotEmail" placeholder="seu@email.com" class="finput">
+      </div>
+      <button class="btn-auth btn-auth-primary" onclick="doForgot()">
+        <span>📧</span> Enviar link de recuperação
+      </button>
+      <button class="btn-auth btn-auth-google" onclick="authTab('login')" style="margin-top:8px">
+        ← Voltar ao login
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     ONBOARDING
+══════════════════════════════════════════════════════ -->
+<div id="onboarding">
+  <div class="onboard-box">
+    <div class="onboard-progress">
+      <div class="op-dot done" id="op0"></div>
+      <div class="op-dot"      id="op1"></div>
+      <div class="op-dot"      id="op2"></div>
+    </div>
+
+    <!-- Step 1 -->
+    <div class="onboard-step on" id="obs0">
+      <div class="onboard-icon">🏪</div>
+      <div class="onboard-title">Bem-vindo ao NexOS!</div>
+      <div class="onboard-sub">Vamos configurar sua empresa em 2 minutos.</div>
+      <label class="flabel req">Nome da empresa</label>
+      <input type="text" id="obEmpresa" placeholder="Ex: Oficina do João" class="finput">
+      <label class="flabel">Telefone / WhatsApp</label>
+      <input type="tel" id="obTel" placeholder="(00) 00000-0000" class="finput">
+      <label class="flabel">Cidade</label>
+      <input type="text" id="obCidade" placeholder="São Paulo - SP" class="finput">
+      <button class="btn btn-blue" onclick="obNext(1)">Próximo →</button>
+    </div>
+
+    <!-- Step 2 -->
+    <div class="onboard-step" id="obs1">
+      <div class="onboard-icon">💰</div>
+      <div class="onboard-title">Pagamentos</div>
+      <div class="onboard-sub">Configure como você recebe dos clientes.</div>
+      <label class="flabel">Chave PIX</label>
+      <input type="text" id="obPix" placeholder="CPF, CNPJ, email ou telefone" class="finput">
+      <label class="flabel">Termos da nota / garantia</label>
+      <textarea id="obTermos" placeholder="Ex: Garantia de 90 dias em peças e serviços..." class="finput" rows="3"></textarea>
+      <div class="brow">
+        <button class="btn btn-ghost" onclick="obNext(0)">← Voltar</button>
+        <button class="btn btn-blue"  onclick="obNext(2)">Próximo →</button>
+      </div>
+    </div>
+
+    <!-- Step 3 -->
+    <div class="onboard-step" id="obs2">
+      <div class="onboard-icon">✅</div>
+      <div class="onboard-title">Tudo pronto!</div>
+      <div class="onboard-sub">Sua conta está configurada. Você tem <b>30 dias grátis</b> do plano Pro!</div>
+      <div style="background:rgba(0,230,118,.08);border:1px solid rgba(0,230,118,.2);border-radius:12px;padding:16px;margin-bottom:20px">
+        <div style="font-family:var(--mono);font-size:11px;color:var(--green);font-weight:700;margin-bottom:10px">✓ INCLUÍDO NO SEU TRIAL</div>
+        <div style="font-size:13px;line-height:2;color:var(--muted)">
+          ✅ OS ilimitadas por 30 dias<br>
+          ✅ IA integrada<br>
+          ✅ Dashboard analytics<br>
+          ✅ Carnê e parcelas<br>
+          ✅ Estoque completo<br>
+          ✅ PDF profissional
+        </div>
+      </div>
+      <button class="btn btn-green" onclick="finishOnboard()">🚀 Começar a usar!</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     HEADER
+══════════════════════════════════════════════════════ -->
+<header>
+  <div class="brand">Nex<b>OS</b><div class="brand-badge">v2.0</div></div>
+  <div class="hright">
+    <div class="store-name" id="headerStore"></div>
+    <button class="hbtn" onclick="toggleNotif()" id="notifBtn" title="Notificações">
+      🔔<div class="notif-badge" id="notifDot" style="display:none"></div>
+    </button>
+    <button class="hbtn" onclick="toggleTheme()" id="themeBtn" title="Tema">🌙</button>
+    <div class="user-chip" onclick="toggleUserMenu()">
+      <div class="user-avatar" id="userAvatar">?</div>
+      <div>
+        <div class="user-name"  id="userName">—</div>
+        <div class="user-cargo" id="userCargo">—</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ══════════════════════════════════════════════════════
+     PAGES
+══════════════════════════════════════════════════════ -->
+<div class="pages">
+
+  <!-- P0: DASHBOARD -->
+  <div class="page on" id="p0">
+    <div id="dashSkeleton">
+      <div class="kpi-grid">
+        <div class="skeleton" style="height:90px;border-radius:14px"></div>
+        <div class="skeleton" style="height:90px;border-radius:14px"></div>
+        <div class="skeleton" style="height:90px;border-radius:14px"></div>
+        <div class="skeleton" style="height:90px;border-radius:14px"></div>
+      </div>
+      <div class="skeleton" style="height:200px;border-radius:14px;margin-bottom:14px"></div>
+    </div>
+    <div id="dashContent" style="display:none"></div>
+  </div>
+
+  <!-- P1: OS LIST -->
+  <div class="page" id="p1">
+    <div class="sw">
+      <span class="si">🔍</span>
+      <input type="search" placeholder="Buscar OS, cliente, produto..." id="searchOS" class="finput">
+    </div>
+    <div class="chips">
+      <div class="chip on" onclick="setF('todas',this)">Todas</div>
+      <div class="chip"    onclick="setF('aberta',this)">Abertas</div>
+      <div class="chip"    onclick="setF('em_andamento',this)">Em andamento</div>
+      <div class="chip"    onclick="setF('pronta',this)">Prontas</div>
+      <div class="chip"    onclick="setF('paga',this)">Pagas</div>
+      <div class="chip"    onclick="setF('fiado',this)">Fiado</div>
+    </div>
+    <div id="osList"></div>
+  </div>
+
+  <!-- P2: NOVA OS -->
+  <div class="page" id="p2">
+
+    <!-- Cliente -->
+    <div class="card">
+      <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>Cliente</div></div>
+      <label class="flabel req">Nome do cliente</label>
+      <input type="text" id="nName" placeholder="Ex: Maria Oliveira" class="finput">
+      <div class="frow">
+        <div>
+          <label class="flabel">Telefone / WhatsApp</label>
+          <input type="tel" id="nPhone" placeholder="(00) 00000-0000" class="finput">
+        </div>
+        <div>
+          <label class="flabel">CPF / Doc</label>
+          <input type="text" id="nDoc" placeholder="000.000.000-00" class="finput">
+        </div>
+      </div>
+    </div>
+
+    <!-- Itens -->
+    <div class="card">
+      <div class="ctitle">
+        <div class="ctitle-left"><div class="bar"></div>Itens / Serviços</div>
+        <button class="btn btn-ghost btn-sm" onclick="iaDescricao()">🤖 IA</button>
+      </div>
+      <div class="it-head"><span>Descrição</span><span>Qtd</span><span>Preço</span><span></span></div>
+      <div id="itemsRows"></div>
+      <div class="add-item-row">
+        <input type="text"   id="iDesc"  placeholder="Produto ou serviço" class="finput" style="margin-bottom:0">
+        <input type="number" id="iQty"   placeholder="Qtd" min="1" value="1" class="finput" style="margin-bottom:0">
+        <input type="number" id="iPrice" placeholder="R$" step="0.01" class="finput" style="margin-bottom:0">
+      </div>
+      <div class="brow" style="margin-top:8px">
+        <button class="btn btn-outline btn-sm" onclick="addItem()">＋ Adicionar</button>
+        <button class="btn btn-ghost  btn-sm" onclick="addFromStock()">📦 Estoque</button>
+        <button class="btn btn-ghost  btn-sm" onclick="iaSugerirPreco()">🤖 Preço IA</button>
+      </div>
+      <div class="it-total-row">
+        <span class="it-total-label">TOTAL</span>
+        <span class="it-total-val" id="itemsTotal">R$ 0,00</span>
+      </div>
+    </div>
+
+    <!-- Descrição -->
+    <div class="card">
+      <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>Descrição</div></div>
+      <textarea id="nDesc" placeholder="Descreva o serviço, condições, garantia..." class="finput"></textarea>
+      <div class="frow">
+        <div>
+          <label class="flabel">Tipo de OS</label>
+          <select id="nType" class="finput">
+            <option value="servico">Serviço</option>
+            <option value="venda">Venda</option>
+            <option value="orcamento">Orçamento</option>
+            <option value="conserto">Conserto/Reparo</option>
+            <option value="entrega">Entrega</option>
+          </select>
+        </div>
+        <div>
+          <label class="flabel">Prioridade</label>
+          <select id="nPrio" class="finput">
+            <option value="0">Normal</option>
+            <option value="1">Alta</option>
+            <option value="2">Urgente</option>
+          </select>
+        </div>
+      </div>
+      <div class="frow">
+        <div>
+          <label class="flabel">Garantia (dias)</label>
+          <input type="number" id="nGarantia" value="0" class="finput">
+        </div>
+        <div>
+          <label class="flabel">Previsão de entrega</label>
+          <input type="datetime-local" id="nPrevisao" class="finput">
+        </div>
+      </div>
+    </div>
+
+    <!-- Fotos -->
+    <div class="card">
+      <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>📷 Fotos</div></div>
+      <div class="photo-zone" onclick="document.getElementById('fotoInput').click()">
+        <span style="font-size:30px;opacity:.4">📷</span>
+        <span style="font-size:12px;color:var(--muted);font-family:var(--mono)">Toque para adicionar fotos</span>
+      </div>
+      <div class="photo-grid" id="photoGrid"></div>
+      <input type="file" id="fotoInput" accept="image/*" multiple capture="environment" style="display:none" onchange="handlePhotos(event)">
+    </div>
+
+    <!-- Pagamento -->
+    <div class="card">
+      <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>Pagamento</div></div>
+      <div class="pay-chips" id="payChips">
+        <div class="pchip on-dinheiro" onclick="setPay('dinheiro',this)">💵 Dinheiro</div>
+        <div class="pchip" onclick="setPay('pix',this)">📱 PIX</div>
+        <div class="pchip" onclick="setPay('credito',this)">💳 Crédito</div>
+        <div class="pchip" onclick="setPay('debito',this)">💳 Débito</div>
+        <div class="pchip" onclick="setPay('fiado',this)">📝 Fiado</div>
+        <div class="pchip" onclick="setPay('carne',this)">📜 Carnê</div>
+      </div>
+      <input type="hidden" id="nPay" value="dinheiro">
+
+      <!-- Avisos -->
+      <div id="fiadoWarn" style="display:none;background:rgba(255,214,0,.08);border:1px solid rgba(255,214,0,.2);border-radius:10px;padding:11px;font-size:12px;color:var(--yellow);margin-bottom:12px">
+        ⚠️ <b>Fiado:</b> Será registrado como conta a receber.
+      </div>
+      <div id="carneWarn" style="display:none">
+        <div class="carne-box">
+          <div style="font-family:var(--mono);font-size:11px;color:var(--purple);font-weight:700;margin-bottom:10px">📜 CONFIGURAR CARNÊ</div>
+          <div class="frow3">
+            <div><label class="flabel">Parcelas</label><input type="number" id="carneN"   value="3"  min="1" max="24" class="finput" style="margin-bottom:0" oninput="calcCarnePreview()"></div>
+            <div><label class="flabel">Dia Venc.</label><input type="number" id="carneDia" value="10" min="1" max="28" class="finput" style="margin-bottom:0" oninput="calcCarnePreview()"></div>
+            <div><label class="flabel">Entrada R$</label><input type="number" id="carneEnt" value="0" step="0.01"      class="finput" style="margin-bottom:0" oninput="calcCarnePreview()"></div>
+          </div>
+          <div class="carne-preview" id="carnePreview">Configure as parcelas acima</div>
+        </div>
+      </div>
+
+      <div class="frow">
+        <div><label class="flabel">Valor pago (R$)</label><input type="number" id="nPaid"  placeholder="0,00" step="0.01" class="finput" oninput="calcTroco()"></div>
+        <div><label class="flabel">Troco</label>          <input type="number" id="nTroco" placeholder="0,00" readonly   class="finput" style="color:var(--green)"></div>
+      </div>
+      <div class="frow">
+        <div><label class="flabel">Desconto (R$)</label><input type="number" id="nDesc2" placeholder="0,00" step="0.01" class="finput" oninput="calcTroco()"></div>
+        <div><label class="flabel">Status</label>
+          <select id="nStatus" class="finput">
+            <option value="paga">Paga</option>
+            <option value="aberta">Em Aberto</option>
+            <option value="em_andamento">Em Andamento</option>
+            <option value="fiado">Fiado</option>
+            <option value="cancelada">Cancelada</option>
+          </select>
+        </div>
+      </div>
+      <label class="flabel">Data/Hora</label>
+      <input type="datetime-local" id="nDate" class="finput">
+    </div>
+
+    <!-- Assinatura -->
+    <div class="card">
+      <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>Assinatura do Cliente</div></div>
+      <div id="termsBox" style="background:rgba(255,109,0,.06);border:1px solid rgba(255,109,0,.2);border-radius:10px;padding:12px;margin-bottom:12px;font-size:12px;color:var(--muted);line-height:1.7">
+        Configure os termos em ⚙️ Configurações
+      </div>
+      <canvas id="sigC" style="width:100%;height:130px;background:var(--bg);border:1px solid var(--b2);border-radius:10px;touch-action:none;cursor:crosshair;display:block"></canvas>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--muted2);text-align:center;margin:7px 0 10px">← Assine aqui →</div>
+      <div class="brow"><button class="btn btn-ghost btn-sm" onclick="clearSig()">🗑️ Limpar</button></div>
+    </div>
+
+    <!-- IA Sugestão -->
+    <div class="ia-card" id="iaSugestaoCard" style="display:none">
+      <div class="ia-title">🤖 SUGESTÃO DA IA</div>
+      <div class="ia-content" id="iaSugestaoText"></div>
+    </div>
+
+    <button class="btn btn-green" style="margin-bottom:28px" onclick="saveOS()">✅ EMITIR NOTA / OS</button>
+  </div>
+
+  <!-- P3: CAIXA -->
+  <div class="page" id="p3">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+      <input type="date" id="caixaDate" class="finput" style="margin-bottom:0;flex:1" onchange="renderCaixa()">
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('caixaDate').value=F.today();renderCaixa()">Hoje</button>
+    </div>
+    <div class="cx-grid" id="cxCards"></div>
+    <div class="card">
+      <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>Por Forma de Pagamento</div></div>
+      <div id="payBreak"></div>
+    </div>
+    <div class="card">
+      <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>Movimentações</div></div>
+      <div id="movList"></div>
+    </div>
+    <div class="card">
+      <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>Registrar Saída</div></div>
+      <label class="flabel">Descrição</label>
+      <input type="text" id="saidaDesc" placeholder="Ex: Fornecedor, aluguel..." class="finput">
+      <div class="frow">
+        <div>
+          <label class="flabel">Valor (R$)</label>
+          <input type="number" id="saidaVal" placeholder="0,00" step="0.01" class="finput">
+        </div>
+        <div>
+          <label class="flabel">Categoria</label>
+          <select id="saidaCat" class="finput">
+            <option>Fornecedor</option>
+            <option>Aluguel</option>
+            <option>Salário</option>
+            <option>Energia/Água</option>
+            <option>Material</option>
+            <option>Outros</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-red" onclick="addSaida()">➖ Registrar Saída</button>
+    </div>
+    <div class="brow">
+      <button class="btn btn-ghost"   onclick="exportCaixaPDF()">📄 Exportar PDF</button>
+      <button class="btn btn-outline" onclick="printRelatorio()">🖨️ Imprimir</button>
+    </div>
+    <div class="ia-card">
+      <div class="ia-title">🤖 IA — PREVISÃO DE FLUXO DE CAIXA</div>
+      <div class="ia-content" id="iaFluxoText">
+        <div class="ia-loading"><div class="ia-dot"></div><div class="ia-dot"></div><div class="ia-dot"></div></div>
+      </div>
+      <button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="iaFluxoCaixa()">🔄 Atualizar previsão</button>
+    </div>
+  </div>
+
+  <!-- P4: ESTOQUE -->
+  <div class="page" id="p4">
+    <div class="brow">
+      <button class="btn btn-blue" onclick="openNovoProduto()">＋ Novo Produto</button>
+      <button class="btn btn-ghost btn-sm" style="flex:.5" onclick="alertasEstoque()">⚠️ Alertas</button>
+    </div>
+    <div class="sw">
+      <span class="si">🔍</span>
+      <input type="search" placeholder="Buscar produto..." id="searchEstoque" class="finput">
+    </div>
+    <div class="ia-card">
+      <div class="ia-title">🤖 IA — SUGESTÃO DE REPOSIÇÃO</div>
+      <div class="ia-content" id="iaEstoqueText">
+        <div class="ia-loading"><div class="ia-dot"></div><div class="ia-dot"></div><div class="ia-dot"></div></div>
+      </div>
+      <button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="iaSugerirEstoque()">🔄 Analisar estoque</button>
+    </div>
+    <div id="estoqueList"></div>
+  </div>
+
+  <!-- P5: CLIENTES -->
+  <div class="page" id="p5">
+    <div class="brow">
+      <button class="btn btn-blue" onclick="openNovoCliente()">＋ Novo Cliente</button>
+    </div>
+    <div class="sw">
+      <span class="si">🔍</span>
+      <input type="search" placeholder="Buscar cliente..." id="searchCliente" class="finput">
+    </div>
+    <div id="clientesList"></div>
+  </div>
+
+  <!-- P6: ANALYTICS -->
+  <div class="page" id="p6">
+    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center">
+      <input type="month" id="analyticsMes" class="finput" style="margin-bottom:0;flex:1" onchange="renderAnalytics()">
+      <button class="btn btn-ghost btn-sm" onclick="setMesAtual()">Mês atual</button>
+    </div>
+    <div id="analyticsContent"></div>
+  </div>
+
+  <!-- P7: CONFIG -->
+  <div class="page" id="p7">
+    <div class="card">
+      <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>🖼️ Logo</div></div>
+      <img id="logoPreview" src="" alt="Logo" style="width:80px;height:80px;border-radius:12px;object-fit:contain;border:1px solid var(--b1);background:var(--bg);display:none;margin-bottom:12px">
+      <div class="brow">
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('logoInput').click()">📁 Carregar Logo</button>
+        <button class="btn btn-red   btn-sm" style="flex:.4" onclick="removeLogo()">🗑️</button>
+      </div>
+      <input type="file" id="logoInput" accept="image/*" style="display:none" onchange="handleLogo(event)">
+    </div>
+    <div class="card">
+      <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>Dados da Empresa</div></div>
+      <label class="flabel">Nome</label>
+      <input type="text" id="cStoreName" class="finput">
+      <div class="frow">
+        <div><label class="flabel">CNPJ/CPF</label><input type="text" id="cCnpj"  class="finput"></div>
+        <div><label class="flabel">Telefone</label><input type="tel"  id="cPhone" class="finput"></div>
+      </div>
+      <label class="flabel">Endereço</label>
+      <input type="text" id="cAddr" class="finput">
+      <div class="frow">
+        <div><label class="flabel">Instagram</label><input type="text" id="cSite" class="finput"></div>
+        <div><label class="flabel">Chave PIX</label><input type="text" id="cPix"  class="finput"></div>
+      </div>
+      <label class="flabel">Termos da nota</label>
+      <textarea id="cTerms" rows="4" class="finput"></textarea>
+      <button class="btn btn-blue" onclick="saveConfig()">💾 Salvar</button>
+    </div>
+    <div class="card">
+      <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>📱 WhatsApp API</div></div>
+      <label class="flabel">URL da API</label>
+      <input type="text" id="waUrl" placeholder="https://api.whatsapp..." class="finput">
+      <label class="flabel">API Key</label>
+      <input type="text" id="waKey" class="finput">
+      <label class="flabel">Número</label>
+      <input type="text" id="waNum" placeholder="5511999990000" class="finput">
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
+        <input type="checkbox" id="waOsPronta" checked>
+        <label style="font-size:13px">Avisar cliente quando OS ficar pronta</label>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
+        <input type="checkbox" id="waCobranca" checked>
+        <label style="font-size:13px">Enviar cobrança de parcelas vencendo</label>
+      </div>
+      <button class="btn btn-green" onclick="saveWhatsApp()">💾 Salvar WhatsApp</button>
+    </div>
+    <div class="card">
+      <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>Conta</div></div>
+      <div class="ir"><span class="irl">Email</span> <span class="irv" id="configEmail">—</span></div>
+      <div class="ir"><span class="irl">Plano</span> <span class="irv" id="configPlano">—</span></div>
+      <div class="ir"><span class="irl">Vence em</span><span class="irv" id="configVence">—</span></div>
+      <div class="brow" style="margin-top:14px">
+        <button class="btn btn-ghost" onclick="exportBackup()">📤 Backup</button>
+        <button class="btn btn-red"   onclick="doLogout()">🚪 Sair</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- P8: MASTER ADMIN -->
+  <div class="page" id="p8">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <span style="font-size:22px;font-weight:800">Painel Master</span>
+      <span class="master-badge">ADMIN GLOBAL</span>
+    </div>
+    <div class="kpi-grid" id="masterKpis"></div>
+    <div class="card">
+      <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>Crescimento MRR</div></div>
+      <div class="chart-wrap"><canvas id="chartMRR"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>Empresas Cadastradas</div></div>
+      <div class="sw">
+        <span class="si">🔍</span>
+        <input type="search" placeholder="Buscar empresa..." id="searchEmpresas" class="finput" oninput="renderEmpresas()">
+      </div>
+      <div id="empresasList"></div>
+    </div>
+  </div>
+
+</div><!-- /pages -->
+
+<!-- ══════════════════════════════════════════════════════
+     BOTTOM NAV
+══════════════════════════════════════════════════════ -->
+<nav>
+  <div class="ni on" id="n0" onclick="goP(0)"><div class="ico">📊</div>Dashboard</div>
+  <div class="ni"    id="n1" onclick="goP(1)"><div class="ico">📋</div>OS</div>
+  <div class="ni"    id="n2" onclick="goP(2)"><div class="ico">➕</div>Nova OS</div>
+  <div class="ni"    id="n3" onclick="goP(3)"><div class="ico">💰</div>Caixa</div>
+  <div class="ni"    id="n4" onclick="goP(4)"><div class="ico">📦</div>Estoque</div>
+  <div class="ni"    id="n5" onclick="goP(5)"><div class="ico">👥</div>Clientes</div>
+  <div class="ni"    id="n6" onclick="goP(6)"><div class="ico">📈</div>Analytics</div>
+  <div class="ni"    id="n7" onclick="goP(7)"><div class="ico">⚙️</div>Config</div>
+  <div class="ni"    id="n8" onclick="goP(8)" style="display:none"><div class="ico">👑</div>Master</div>
+</nav>
+
+<!-- ══════════════════════════════════════════════════════
+     MODAL
+══════════════════════════════════════════════════════ -->
+<div class="mwrap" id="mwrap">
+  <div class="msheet">
+    <div class="mhandle" onclick="closeM()"></div>
+    <div class="mbody" id="mbody"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     COMPROVANTE
+══════════════════════════════════════════════════════ -->
+<div id="compView">
+  <div style="display:flex;gap:8px;margin-bottom:16px;max-width:440px;margin-left:auto;margin-right:auto;flex-wrap:wrap">
+    <button class="btn btn-ghost  btn-sm" onclick="closeComp()">← Voltar</button>
+    <button class="btn btn-blue   btn-sm" onclick="printComp()">🖨️ Imprimir</button>
+    <button class="btn btn-green  btn-sm" onclick="genPDF(STATE.currentCompId)">📄 PDF</button>
+    <button class="btn btn-ghost  btn-sm" onclick="shareComp()">📤 Compartilhar</button>
+    <button class="btn btn-purple btn-sm" onclick="sendWA(STATE.currentCompId)">💬 WhatsApp</button>
+  </div>
+  <div id="compContent"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     NOTIF PANEL
+══════════════════════════════════════════════════════ -->
+<div id="notifPanel">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--b1)">
+    <span style="font-weight:700;font-size:14px">Notificações</span>
+    <button class="btn btn-ghost btn-sm" onclick="marcarTodasLidas()">✓ Marcar lidas</button>
+  </div>
+  <div id="notifList"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     USER MENU
+══════════════════════════════════════════════════════ -->
+<div id="userMenu">
+  <div style="padding:16px;border-bottom:1px solid var(--b1)">
+    <div style="font-weight:700" id="umNome">—</div>
+    <div style="font-size:12px;color:var(--muted);font-family:var(--mono)" id="umEmail">—</div>
+    <div style="margin-top:6px" id="umPlano"></div>
+  </div>
+  <div class="umenu-item" onclick="goP(7);UI.closeMenus()">⚙️ Configurações</div>
+  <div class="umenu-item" onclick="toggleTheme();UI.closeMenus()">🌙 Alternar tema</div>
+  <div class="umenu-sep"></div>
+  <div class="umenu-item danger" onclick="doLogout()">🚪 Sair da conta</div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- ══════════════════════════════════════════════════════
+     SCRIPTS — ordem importa!
+══════════════════════════════════════════════════════ -->
+<script src="api.js"></script>
+<script src="auth.js"></script>
+<script src="app.js"></script>
+
+</body>
+</html>
