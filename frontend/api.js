@@ -7,10 +7,11 @@ const SUPA_KEY = 'sb_publishable_cQG-hm_203Ftz5uIlBW76w_y-5e8De-';
 
 window.sb = supabase.createClient(SUPA_URL, SUPA_KEY, {
   auth: {
-    persistSession:    true,
-    autoRefreshToken:  true,
+    persistSession:     true,
+    autoRefreshToken:   true,
     detectSessionInUrl: true,
-    storage:           localStorage,
+    storage:            localStorage,
+    lock:               (name, acquireTimeout, fn) => fn(),
   }
 });
 
