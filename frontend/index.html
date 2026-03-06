@@ -5,15 +5,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <meta name="theme-color" content="#0a0e1a">
 <meta name="description" content="NexOS v2.0 — Sistema de Gestão">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>NexOS v2.0</title>
-
-<!-- Fonts -->
+<link rel="manifest" href="manifest.json">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-
-<!-- Styles -->
 <link rel="stylesheet" href="styles.css">
-
-<!-- Scripts externos -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -21,32 +18,22 @@
 </head>
 <body>
 
-<!-- ══════════════════════════════════════════════════════
-     LOADING
-══════════════════════════════════════════════════════ -->
 <div id="loading-screen">
   <div class="loading-logo">Nex<b>OS</b><br><span>// v2.0 ENTERPRISE</span></div>
   <div class="loading-bar-wrap"><div class="loading-bar"></div></div>
   <div class="loading-text" id="loading-text">INICIANDO SISTEMA...</div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════
-     AUTH
-══════════════════════════════════════════════════════ -->
 <div id="auth-screen">
   <div class="auth-box">
     <div class="auth-logo">Nex<b>OS</b></div>
     <div class="auth-tagline">// SISTEMA DE GESTÃO v2.0</div>
-
     <div class="auth-tabs">
       <button class="auth-tab on" onclick="authTab('login')">Entrar</button>
       <button class="auth-tab"    onclick="authTab('register')">Criar conta</button>
     </div>
-
     <div class="auth-error"   id="authErr"></div>
     <div class="auth-success" id="authOk"></div>
-
-    <!-- LOGIN -->
     <div id="loginForm">
       <div class="auth-input-wrap">
         <label>EMAIL</label>
@@ -66,8 +53,6 @@
         <span>🌐</span> Continuar com Google
       </button>
     </div>
-
-    <!-- REGISTER -->
     <div id="registerForm" style="display:none">
       <div class="auth-input-wrap">
         <label>SEU NOME</label>
@@ -90,8 +75,6 @@
         <span>🚀</span> Criar minha conta grátis
       </button>
     </div>
-
-    <!-- FORGOT -->
     <div id="forgotForm" style="display:none">
       <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6">
         Digite seu email e enviaremos um link para redefinir sua senha.
@@ -110,9 +93,6 @@
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════
-     ONBOARDING
-══════════════════════════════════════════════════════ -->
 <div id="onboarding">
   <div class="onboard-box">
     <div class="onboard-progress">
@@ -120,8 +100,6 @@
       <div class="op-dot"      id="op1"></div>
       <div class="op-dot"      id="op2"></div>
     </div>
-
-    <!-- Step 1 -->
     <div class="onboard-step on" id="obs0">
       <div class="onboard-icon">🏪</div>
       <div class="onboard-title">Bem-vindo ao NexOS!</div>
@@ -134,8 +112,6 @@
       <input type="text" id="obCidade" placeholder="São Paulo - SP" class="finput">
       <button class="btn btn-blue" onclick="obNext(1)">Próximo →</button>
     </div>
-
-    <!-- Step 2 -->
     <div class="onboard-step" id="obs1">
       <div class="onboard-icon">💰</div>
       <div class="onboard-title">Pagamentos</div>
@@ -149,8 +125,6 @@
         <button class="btn btn-blue"  onclick="obNext(2)">Próximo →</button>
       </div>
     </div>
-
-    <!-- Step 3 -->
     <div class="onboard-step" id="obs2">
       <div class="onboard-icon">✅</div>
       <div class="onboard-title">Tudo pronto!</div>
@@ -171,9 +145,6 @@
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════
-     HEADER
-══════════════════════════════════════════════════════ -->
 <header>
   <div class="brand">Nex<b>OS</b><div class="brand-badge">v2.0</div></div>
   <div class="hright">
@@ -192,12 +163,8 @@
   </div>
 </header>
 
-<!-- ══════════════════════════════════════════════════════
-     PAGES
-══════════════════════════════════════════════════════ -->
 <div class="pages">
 
-  <!-- P0: DASHBOARD -->
   <div class="page on" id="p0">
     <div id="dashSkeleton">
       <div class="kpi-grid">
@@ -211,7 +178,6 @@
     <div id="dashContent" style="display:none"></div>
   </div>
 
-  <!-- P1: OS LIST -->
   <div class="page" id="p1">
     <div class="sw">
       <span class="si">🔍</span>
@@ -228,10 +194,7 @@
     <div id="osList"></div>
   </div>
 
-  <!-- P2: NOVA OS -->
   <div class="page" id="p2">
-
-    <!-- Cliente -->
     <div class="card">
       <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>Cliente</div></div>
       <label class="flabel req">Nome do cliente</label>
@@ -247,8 +210,6 @@
         </div>
       </div>
     </div>
-
-    <!-- Itens -->
     <div class="card">
       <div class="ctitle">
         <div class="ctitle-left"><div class="bar"></div>Itens / Serviços</div>
@@ -271,8 +232,6 @@
         <span class="it-total-val" id="itemsTotal">R$ 0,00</span>
       </div>
     </div>
-
-    <!-- Descrição -->
     <div class="card">
       <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>Descrição</div></div>
       <textarea id="nDesc" placeholder="Descreva o serviço, condições, garantia..." class="finput"></textarea>
@@ -307,8 +266,6 @@
         </div>
       </div>
     </div>
-
-    <!-- Fotos -->
     <div class="card">
       <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>📷 Fotos</div></div>
       <div class="photo-zone" onclick="document.getElementById('fotoInput').click()">
@@ -318,8 +275,6 @@
       <div class="photo-grid" id="photoGrid"></div>
       <input type="file" id="fotoInput" accept="image/*" multiple capture="environment" style="display:none" onchange="handlePhotos(event)">
     </div>
-
-    <!-- Pagamento -->
     <div class="card">
       <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>Pagamento</div></div>
       <div class="pay-chips" id="payChips">
@@ -331,8 +286,6 @@
         <div class="pchip" onclick="setPay('carne',this)">📜 Carnê</div>
       </div>
       <input type="hidden" id="nPay" value="dinheiro">
-
-      <!-- Avisos -->
       <div id="fiadoWarn" style="display:none;background:rgba(255,214,0,.08);border:1px solid rgba(255,214,0,.2);border-radius:10px;padding:11px;font-size:12px;color:var(--yellow);margin-bottom:12px">
         ⚠️ <b>Fiado:</b> Será registrado como conta a receber.
       </div>
@@ -347,7 +300,6 @@
           <div class="carne-preview" id="carnePreview">Configure as parcelas acima</div>
         </div>
       </div>
-
       <div class="frow">
         <div><label class="flabel">Valor pago (R$)</label><input type="number" id="nPaid"  placeholder="0,00" step="0.01" class="finput" oninput="calcTroco()"></div>
         <div><label class="flabel">Troco</label>          <input type="number" id="nTroco" placeholder="0,00" readonly   class="finput" style="color:var(--green)"></div>
@@ -367,8 +319,6 @@
       <label class="flabel">Data/Hora</label>
       <input type="datetime-local" id="nDate" class="finput">
     </div>
-
-    <!-- Assinatura -->
     <div class="card">
       <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>Assinatura do Cliente</div></div>
       <div id="termsBox" style="background:rgba(255,109,0,.06);border:1px solid rgba(255,109,0,.2);border-radius:10px;padding:12px;margin-bottom:12px;font-size:12px;color:var(--muted);line-height:1.7">
@@ -378,17 +328,13 @@
       <div style="font-family:var(--mono);font-size:10px;color:var(--muted2);text-align:center;margin:7px 0 10px">← Assine aqui →</div>
       <div class="brow"><button class="btn btn-ghost btn-sm" onclick="clearSig()">🗑️ Limpar</button></div>
     </div>
-
-    <!-- IA Sugestão -->
     <div class="ia-card" id="iaSugestaoCard" style="display:none">
       <div class="ia-title">🤖 SUGESTÃO DA IA</div>
       <div class="ia-content" id="iaSugestaoText"></div>
     </div>
-
     <button class="btn btn-green" style="margin-bottom:28px" onclick="saveOS()">✅ EMITIR NOTA / OS</button>
   </div>
 
-  <!-- P3: CAIXA -->
   <div class="page" id="p3">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
       <input type="date" id="caixaDate" class="finput" style="margin-bottom:0;flex:1" onchange="renderCaixa()">
@@ -439,7 +385,6 @@
     </div>
   </div>
 
-  <!-- P4: ESTOQUE -->
   <div class="page" id="p4">
     <div class="brow">
       <button class="btn btn-blue" onclick="openNovoProduto()">＋ Novo Produto</button>
@@ -459,7 +404,6 @@
     <div id="estoqueList"></div>
   </div>
 
-  <!-- P5: CLIENTES -->
   <div class="page" id="p5">
     <div class="brow">
       <button class="btn btn-blue" onclick="openNovoCliente()">＋ Novo Cliente</button>
@@ -471,7 +415,6 @@
     <div id="clientesList"></div>
   </div>
 
-  <!-- P6: ANALYTICS -->
   <div class="page" id="p6">
     <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center">
       <input type="month" id="analyticsMes" class="finput" style="margin-bottom:0;flex:1" onchange="renderAnalytics()">
@@ -480,7 +423,6 @@
     <div id="analyticsContent"></div>
   </div>
 
-  <!-- P7: CONFIG -->
   <div class="page" id="p7">
     <div class="card">
       <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>🖼️ Logo</div></div>
@@ -539,7 +481,6 @@
     </div>
   </div>
 
-  <!-- P8: MASTER ADMIN -->
   <div class="page" id="p8">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
       <span style="font-size:22px;font-weight:800">Painel Master</span>
@@ -560,11 +501,8 @@
     </div>
   </div>
 
-</div><!-- /pages -->
+</div>
 
-<!-- ══════════════════════════════════════════════════════
-     BOTTOM NAV
-══════════════════════════════════════════════════════ -->
 <nav>
   <div class="ni on" id="n0" onclick="goP(0)"><div class="ico">📊</div>Dashboard</div>
   <div class="ni"    id="n1" onclick="goP(1)"><div class="ico">📋</div>OS</div>
@@ -577,9 +515,6 @@
   <div class="ni"    id="n8" onclick="goP(8)" style="display:none"><div class="ico">👑</div>Master</div>
 </nav>
 
-<!-- ══════════════════════════════════════════════════════
-     MODAL
-══════════════════════════════════════════════════════ -->
 <div class="mwrap" id="mwrap">
   <div class="msheet">
     <div class="mhandle" onclick="closeM()"></div>
@@ -587,9 +522,6 @@
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════
-     COMPROVANTE
-══════════════════════════════════════════════════════ -->
 <div id="compView">
   <div style="display:flex;gap:8px;margin-bottom:16px;max-width:440px;margin-left:auto;margin-right:auto;flex-wrap:wrap">
     <button class="btn btn-ghost  btn-sm" onclick="closeComp()">← Voltar</button>
@@ -601,9 +533,6 @@
   <div id="compContent"></div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════
-     NOTIF PANEL
-══════════════════════════════════════════════════════ -->
 <div id="notifPanel">
   <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--b1)">
     <span style="font-weight:700;font-size:14px">Notificações</span>
@@ -612,9 +541,6 @@
   <div id="notifList"></div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════
-     USER MENU
-══════════════════════════════════════════════════════ -->
 <div id="userMenu">
   <div style="padding:16px;border-bottom:1px solid var(--b1)">
     <div style="font-weight:700" id="umNome">—</div>
@@ -627,15 +553,15 @@
   <div class="umenu-item danger" onclick="doLogout()">🚪 Sair da conta</div>
 </div>
 
-<!-- Toast -->
 <div id="toast"></div>
 
-<!-- ══════════════════════════════════════════════════════
-     SCRIPTS — ordem importa!
-══════════════════════════════════════════════════════ -->
 <script src="api.js"></script>
 <script src="auth.js"></script>
 <script src="app.js"></script>
-
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js');
+}
+</script>
 </body>
 </html>
