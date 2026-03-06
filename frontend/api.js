@@ -1,11 +1,18 @@
 // ═══════════════════════════════════════════════════════════
 // NEXOS v2.0 — API.JS
-// ══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
 
 const SUPA_URL = 'https://twxotfzlronfjfjyaklx.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR3eG90Znpscm9uZmpmanlha2x4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1NzA5NjAsImV4cCI6MjA4ODE0Njk2MH0.QqOg_dFtoGJfNJ_-l58AMeWeynYJL8wIczO5QU-nY1A';
 
-window.sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+window.sb = supabase.createClient(SUPA_URL, SUPA_KEY, {
+  auth: {
+    persistSession:    true,
+    autoRefreshToken:  true,
+    detectSessionInUrl: true,
+    storage:           localStorage,
+  }
+});
 
 // ── helpers internos ──
 const _eid = () => window.STATE?.empresa?.id;
@@ -14,9 +21,6 @@ const _uid = () => window.STATE?.user?.id;
 // ═══════════════════════════════════════════════════════════
 const API = {
 
-  // ─────────────────────
-  // AUTH
-  // ─────────────────────
   auth: {
     getSession:  ()                  => sb.auth.getSession(),
     getUser:     ()                  => sb.auth.getUser(),
@@ -28,9 +32,6 @@ const API = {
     onChange:    (cb)                => sb.auth.onAuthStateChange(cb),
   },
 
-  // ─────────────────────
-  // PERFIL / EMPRESA
-  // ─────────────────────
   perfil: {
     get: (userId) =>
       sb.from('usuarios')
@@ -71,9 +72,6 @@ const API = {
       }).eq('id', empresaId),
   },
 
-  // ─────────────────────
-  // ORDENS DE SERVIÇO
-  // ─────────────────────
   os: {
     listar: () =>
       sb.from('ordens')
@@ -109,9 +107,6 @@ const API = {
     },
   },
 
-  // ─────────────────────
-  // PARCELAS (CARNÊ)
-  // ─────────────────────
   parcelas: {
     listar: (osId) =>
       sb.from('parcelas')
@@ -130,9 +125,6 @@ const API = {
       }).eq('id', parcId),
   },
 
-  // ─────────────────────
-  // CAIXA
-  // ─────────────────────
   caixa: {
     listar: () =>
       sb.from('caixa')
@@ -149,9 +141,6 @@ const API = {
       }),
   },
 
-  // ─────────────────────
-  // PRODUTOS / ESTOQUE
-  // ─────────────────────
   produtos: {
     listar: () =>
       sb.from('produtos')
@@ -170,9 +159,6 @@ const API = {
       sb.from('produtos').update({ ativo: false }).eq('id', id),
   },
 
-  // ─────────────────────
-  // CLIENTES
-  // ─────────────────────
   clientes: {
     listar: () =>
       sb.from('clientes')
@@ -187,9 +173,6 @@ const API = {
       sb.from('clientes').update(dados).eq('id', id),
   },
 
-  // ─────────────────────
-  // NOTIFICAÇÕES
-  // ─────────────────────
   notifs: {
     listar: () =>
       sb.from('notificacoes')
@@ -205,9 +188,6 @@ const API = {
       sb.from('notificacoes').update({ lida: true }).eq('usuario_id', _uid()),
   },
 
-  // ─────────────────────
-  // WHATSAPP CONFIG
-  // ─────────────────────
   whatsapp: {
     get: () =>
       sb.from('whatsapp_config')
@@ -222,9 +202,6 @@ const API = {
       ),
   },
 
-  // ─────────────────────
-  // MASTER ADMIN
-  // ─────────────────────
   master: {
     listarEmpresas: () =>
       sb.from('empresas')
@@ -235,9 +212,6 @@ const API = {
       sb.from('caixa').select('valor,tipo').eq('tipo', 'entrada'),
   },
 
-  // ─────────────────────
-  // IA — via Edge Function (chave fica no servidor)
-  // ─────────────────────
   ia: {
     chamar: async (prompt, maxTokens = 600) => {
       try {
@@ -258,9 +232,6 @@ const API = {
     },
   },
 
-  // ─────────────────────
-  // REALTIME
-  // ─────────────────────
   realtime: {
     iniciar: (empresaId, userId, callbacks) =>
       sb.channel('nexos-rt')
