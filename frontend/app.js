@@ -134,8 +134,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 
   UI.setLoading('Verificando sessão...');
-  const { data: { session } } = await API.auth.getSession();
-  if (session) {
+  await new Promise(r => setTimeout(r, 800));
+const { data: { session } } = await API.auth.getSession();
+if (session?.user) {
     UI.setLoading('Carregando dados...');
     await carregarUsuario(session.user);
   } else {
