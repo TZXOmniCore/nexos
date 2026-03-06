@@ -267,7 +267,7 @@ function goP(i) {
     1: () => renderOS(),
     2: () => initNovaOS(),
     3: () => { UI.setVal('caixaDate', F.today()); renderCaixa(); },
-    4: () => { renderEstoque(),
+    4: () => renderEstoque(),
     5: () => renderClientes(),
     6: () => { setMesAtual(); renderAnalytics(); },
     7: () => loadConfig(),
