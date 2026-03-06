@@ -165,8 +165,7 @@ async function carregarUsuario(user) {
   STATE.user = user;
   UI.setLoading('Carregando perfil...');
 
-  const { data: perfil, error: perfilError } = await API.perfil.get(user.id);
-if (perfilError) console.error('ERRO PERFIL:', perfilError);
+  const { data: perfil } = await API.perfil.get(user.id);
 
   if (!perfil) {
     UI.hide('loading-screen');
