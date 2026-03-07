@@ -133,27 +133,36 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (btn) btn.textContent = '☀️';
   }
 
+  initSig();
+  initEventListeners();
+
   UI.setLoading('Verificando sessão...');
-  await new Promise(r => setTimeout(r, 1700));
-const { data: { session } } = await API.auth.getSession();
-if (session?.user) {
-    UI.setLoading('Carregando dados...');
-    await carregarUsuario(session.user);
-  } else {
-    Auth.showScreen();
-  }
+
+  let booted = false;
 
   API.auth.onChange(async (event, session) => {
-    if (event === 'SIGNED_IN' && session) {
+    if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user && !booted) {
+      booted = true;
       UI.show('loading-screen');
-      UI.setLoading('Carregando...');
+      UI.setLoading('Carregando dados...');
       await carregarUsuario(session.user);
     } else if (event === 'SIGNED_OUT') {
+      booted = false;
       Object.assign(STATE, { user: null, empresa: null, perfil: null });
       localStorage.removeItem('nexos_page');
       Auth.showScreen();
+    } else if (event === 'SIGNED_IN' && session?.user && booted) {
+      booted = true;
+      UI.show('loading-screen');
+      UI.setLoading('Carregando...');
+      await carregarUsuario(session.user);
     }
   });
+
+  setTimeout(() => {
+    if (!booted) Auth.showScreen();
+  }, 4000);
+});
 
   initSig();
   initEventListeners();
