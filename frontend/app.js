@@ -164,10 +164,6 @@ window.addEventListener('DOMContentLoaded', async () => {
   }, 4000);
 });
 
-  initSig();
-  initEventListeners();
-});
-
 // ═══════════════════════════════════════════════════════════
 // CARREGAR USUÁRIO
 // ═══════════════════════════════════════════════════════════
