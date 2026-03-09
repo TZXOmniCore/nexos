@@ -851,7 +851,11 @@ window.addNota = addNota;
 
 async function delOS(id) {
   if (!confirm('Excluir esta OS?')) return;
-  await API.os.deletar(id);
+  await window.sb.from('caixa').delete().eq('ordem_id', id);
+  await window.sb.from('parcelas').delete().eq('ordem_id', id);
+  await window.sb.from('ordens_historico').delete().eq('ordem_id', id);
+  const { error } = await window.sb.from('ordens').delete().eq('id', id);
+  if (error) { UI.toast('⚠ Erro: ' + error.message, true); return; }
   await loadOS();
   UI.closeModal();
   renderOS();
