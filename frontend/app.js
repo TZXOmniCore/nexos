@@ -135,35 +135,25 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   initSig();
   initEventListeners();
-
   UI.setLoading('Verificando sessão...');
 
-  let booted = false;
+  const { data: { session } } = await window.sb.auth.getSession();
+  if (session?.user) {
+    await carregarUsuario(session.user);
+  } else {
+    Auth.showScreen();
+  }
 
-  API.auth.onChange(async (event, session) => {
-    if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user && !booted) {
-      booted = true;
-      UI.show('loading-screen');
-      UI.setLoading('Carregando dados...');
-      await carregarUsuario(session.user);
+  window.sb.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_IN' && !STATE.user) {
+      carregarUsuario(session.user);
     } else if (event === 'SIGNED_OUT') {
-      booted = false;
       Object.assign(STATE, { user: null, empresa: null, perfil: null });
       localStorage.removeItem('nexos_page');
       Auth.showScreen();
-    } else if (event === 'SIGNED_IN' && session?.user && booted) {
-      booted = true;
-      UI.show('loading-screen');
-      UI.setLoading('Carregando...');
-      await carregarUsuario(session.user);
     }
   });
-
-  setTimeout(() => {
-    if (!booted) Auth.showScreen();
-  }, 4000);
 });
-
 // ═══════════════════════════════════════════════════════════
 // CARREGAR USUÁRIO
 // ═══════════════════════════════════════════════════════════
