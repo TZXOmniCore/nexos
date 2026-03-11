@@ -234,7 +234,7 @@ async function carregarUsuario(user) {
     UI.hideLoading();
     Auth.showScreen();
   }
-});
+}
 
 const savedTheme = localStorage.getItem('nexos_theme');
 
