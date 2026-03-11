@@ -2,567 +2,1371 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="theme-color" content="#0a0e1a">
-<meta name="description" content="NexOS v2.0 — Sistema de Gestão">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>NexOS</title>
+<link rel="icon" type="image/png" href="NexOS.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#070b14">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>NexOS v2.0</title>
-<link rel="manifest" href="manifest.json">
- <link rel="icon" type="image/png" href="NexOS.png">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
 
+<!-- ═══════════════════════════ LOADING ═══════════════════════════ -->
 <div id="loading-screen">
-  <div class="loading-logo">Nex<b>OS</b><br><span>// v2.0 ENTERPRISE</span></div>
-  <div class="loading-bar-wrap"><div class="loading-bar"></div></div>
-  <div class="loading-text" id="loading-text">INICIANDO SISTEMA...</div>
+  <div class="ls-logo">
+    <img src="NexOS.png" alt="NexOS">
+    <span class="ls-logo-text">NexOS</span>
+  </div>
+  <div class="ls-bar-wrap"><div class="ls-bar"></div></div>
+  <span class="ls-text" id="ls-msg">Iniciando...</span>
 </div>
 
-<div id="auth-screen">
+<!-- ═══════════════════════════ AUTH ═══════════════════════════ -->
+<div id="auth-screen" class="gone">
+  <div class="auth-bg"></div>
   <div class="auth-box">
-    <div class="auth-logo">Nex<b>OS</b></div>
-    <div class="auth-tagline">// SISTEMA DE GESTÃO v2.0</div>
+    <div class="auth-logo-wrap">
+      <img src="NexOS.png" alt="NexOS">
+      <span class="auth-logo-text">NexOS</span>
+    </div>
+    <div class="auth-tagline">GESTÃO PROFISSIONAL</div>
+
     <div class="auth-tabs">
-      <button class="auth-tab on" onclick="authTab('login')">Entrar</button>
-      <button class="auth-tab"    onclick="authTab('register')">Criar conta</button>
+      <button class="auth-tab on" id="tab-login" onclick="Auth.tab('login')">Entrar</button>
+      <button class="auth-tab" id="tab-reg" onclick="Auth.tab('register')">Criar conta</button>
+      <button class="auth-tab" id="tab-pin" onclick="Auth.tab('pin')">PIN</button>
     </div>
-    <div class="auth-error"   id="authErr"></div>
-    <div class="auth-success" id="authOk"></div>
-    <div id="loginForm">
-      <div class="auth-input-wrap">
-        <label>EMAIL</label>
-        <input type="email" id="loginEmail" placeholder="seu@email.com" class="finput">
-      </div>
-      <div class="auth-input-wrap">
-        <label>SENHA</label>
-        <input type="password" id="loginPass" placeholder="••••••••" class="finput">
-        <button class="eye-btn" onclick="togglePass('loginPass',this)">👁</button>
-      </div>
-      <div class="auth-forgot"><a onclick="showForgot()">Esqueci minha senha</a></div>
-      <button class="btn-auth btn-auth-primary" onclick="doLogin()" id="btnLogin">
-        <span>🔐</span> Entrar no sistema
+
+    <!-- Login -->
+    <div id="auth-login">
+      <div class="auth-error" id="auth-err-login"></div>
+      <div class="auth-success" id="auth-ok-login"></div>
+      <button class="auth-google" id="btn-google">
+        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
+        Entrar com Google
       </button>
-      <div class="auth-divider">ou</div>
-      <button class="btn-auth btn-auth-google" onclick="doGoogleLogin()">
-        <span>🌐</span> Continuar com Google
-      </button>
-    </div>
-    <div id="registerForm" style="display:none">
+      <div class="auth-divider">ou email</div>
       <div class="auth-input-wrap">
-        <label>SEU NOME</label>
-        <input type="text" id="regNome" placeholder="João Silva" class="finput">
+        <label>Email</label>
+        <span class="auth-input-icon">📧</span>
+        <input class="finput" id="li-email" type="email" placeholder="seu@email.com" style="padding-left:40px">
       </div>
       <div class="auth-input-wrap">
-        <label>NOME DA EMPRESA</label>
-        <input type="text" id="regEmpresa" placeholder="Minha Loja" class="finput">
+        <label>Senha</label>
+        <span class="auth-input-icon">🔒</span>
+        <input class="finput" id="li-pass" type="password" placeholder="••••••••" style="padding-left:40px;padding-right:40px">
+        <button class="eye-btn" onclick="UI.toggleEye('li-pass',this)">👁</button>
       </div>
-      <div class="auth-input-wrap">
-        <label>EMAIL</label>
-        <input type="email" id="regEmail" placeholder="seu@email.com" class="finput">
-      </div>
-      <div class="auth-input-wrap">
-        <label>SENHA (mín. 6 caracteres)</label>
-        <input type="password" id="regPass" placeholder="••••••••" class="finput">
-        <button class="eye-btn" onclick="togglePass('regPass',this)">👁</button>
-      </div>
-      <button class="btn-auth btn-auth-primary" onclick="doRegister()" id="btnRegister">
-        <span>🚀</span> Criar minha conta grátis
+      <div class="auth-forgot"><a onclick="Auth.forgot()">Esqueceu a senha?</a></div>
+      <button class="btn btn-auth-primary" onclick="Auth.login()">
+        <span>Entrar</span> <span>→</span>
       </button>
     </div>
-    <div id="forgotForm" style="display:none">
-      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6">
-        Digite seu email e enviaremos um link para redefinir sua senha.
+
+    <!-- Register -->
+    <div id="auth-register" class="gone">
+      <div class="auth-error" id="auth-err-reg"></div>
+      <div class="auth-input-wrap">
+        <label>Nome completo</label>
+        <span class="auth-input-icon">👤</span>
+        <input class="finput" id="rg-name" type="text" placeholder="Seu nome" style="padding-left:40px">
+      </div>
+      <div class="auth-input-wrap">
+        <label>Email</label>
+        <span class="auth-input-icon">📧</span>
+        <input class="finput" id="rg-email" type="email" placeholder="seu@email.com" style="padding-left:40px">
+      </div>
+      <div class="auth-input-wrap">
+        <label>Senha</label>
+        <span class="auth-input-icon">🔒</span>
+        <input class="finput" id="rg-pass" type="password" placeholder="Mín. 6 caracteres" style="padding-left:40px;padding-right:40px">
+        <button class="eye-btn" onclick="UI.toggleEye('rg-pass',this)">👁</button>
+      </div>
+      <button class="btn btn-auth-primary" onclick="Auth.register()">
+        <span>Criar conta</span> <span>→</span>
+      </button>
+    </div>
+
+    <!-- PIN Login -->
+    <div id="auth-pin" class="gone">
+      <div class="auth-error" id="auth-err-pin"></div>
+      <p style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:16px">
+        Login rápido com PIN de funcionário
       </p>
       <div class="auth-input-wrap">
-        <label>EMAIL</label>
-        <input type="email" id="forgotEmail" placeholder="seu@email.com" class="finput">
+        <label>Código da empresa</label>
+        <span class="auth-input-icon">🏢</span>
+        <input class="finput" id="pin-empresa" type="text" placeholder="Código da empresa" style="padding-left:40px">
       </div>
-      <button class="btn-auth btn-auth-primary" onclick="doForgot()">
-        <span>📧</span> Enviar link de recuperação
+      <div class="auth-input-wrap">
+        <label>PIN (4 dígitos)</label>
+        <span class="auth-input-icon">🔢</span>
+        <input class="finput" id="pin-code" type="password" maxlength="4" placeholder="••••"
+          inputmode="numeric" style="padding-left:40px;font-size:24px;letter-spacing:8px;text-align:center">
+      </div>
+      <button class="btn btn-auth-primary" onclick="Auth.pinLogin()">
+        <span>Entrar com PIN</span>
       </button>
-      <button class="btn-auth btn-auth-google" onclick="authTab('login')" style="margin-top:8px">
-        ← Voltar ao login
-      </button>
+    </div>
+
+    <div class="auth-footer">NexOS © 2025 — Gestão profissional para seu negócio</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ ONBOARDING ═══════════════════════════ -->
+<div id="onboarding" class="gone">
+  <div class="onboard-box">
+    <div class="ob-progress">
+      <div class="ob-dot done" id="ob-dot-0"></div>
+      <div class="ob-dot" id="ob-dot-1"></div>
+      <div class="ob-dot" id="ob-dot-2"></div>
+    </div>
+
+    <div class="onboard-step on" id="ob-step-0">
+      <div class="ob-icon">🎉</div>
+      <div class="ob-title">Bem-vindo ao NexOS!</div>
+      <div class="ob-sub">Vamos configurar sua empresa em 2 minutos para você começar a usar.</div>
+      <button class="btn btn-primary btn-full btn-lg" onclick="OB.next(1)">Começar →</button>
+    </div>
+
+    <div class="onboard-step" id="ob-step-1">
+      <div class="ob-icon">🏢</div>
+      <div class="ob-title">Dados da empresa</div>
+      <div class="ob-sub">Essas informações aparecerão nos seus comprovantes.</div>
+      <label class="flabel req">Nome da empresa</label>
+      <input class="finput" id="ob-empresa" placeholder="Ex: TechFix Assistência Técnica">
+      <label class="flabel">Telefone / WhatsApp</label>
+      <input class="finput" id="ob-tel" type="tel" placeholder="(11) 99999-9999">
+      <label class="flabel">Chave PIX (opcional)</label>
+      <input class="finput" id="ob-pix" placeholder="CPF, CNPJ, telefone ou email">
+      <div class="brow">
+        <button class="btn btn-ghost" onclick="OB.next(0)">← Voltar</button>
+        <button class="btn btn-primary" onclick="OB.next(2)">Próximo →</button>
+      </div>
+    </div>
+
+    <div class="onboard-step" id="ob-step-2">
+      <div class="ob-icon">✍️</div>
+      <div class="ob-title">Assinatura do cliente</div>
+      <div class="ob-sub">Deseja coletar assinatura do cliente nas OS? Você pode ativar/desativar depois em Configurações.</div>
+      <div class="brow" style="margin-bottom:16px">
+        <button class="btn btn-green" onclick="OB.finish(true)">✅ Sim, quero</button>
+        <button class="btn btn-ghost" onclick="OB.finish(false)">Não por enquanto</button>
+      </div>
     </div>
   </div>
 </div>
 
-<div id="onboarding">
-  <div class="onboard-box">
-    <div class="onboard-progress">
-      <div class="op-dot done" id="op0"></div>
-      <div class="op-dot"      id="op1"></div>
-      <div class="op-dot"      id="op2"></div>
+<!-- ═══════════════════════════ APP ═══════════════════════════ -->
+<div class="app-layout gone" id="app">
+
+  <!-- SIDEBAR (Desktop) -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sb-header">
+      <div class="sb-logo"><img src="NexOS.png" alt="NexOS"></div>
+      <span class="sb-logo-text">NexOS</span>
     </div>
-    <div class="onboard-step on" id="obs0">
-      <div class="onboard-icon">🏪</div>
-      <div class="onboard-title">Bem-vindo ao NexOS!</div>
-      <div class="onboard-sub">Vamos configurar sua empresa em 2 minutos.</div>
-      <label class="flabel req">Nome da empresa</label>
-      <input type="text" id="obEmpresa" placeholder="Ex: Oficina do João" class="finput">
-      <label class="flabel">Telefone / WhatsApp</label>
-      <input type="tel" id="obTel" placeholder="(00) 00000-0000" class="finput">
-      <label class="flabel">Cidade</label>
-      <input type="text" id="obCidade" placeholder="São Paulo - SP" class="finput">
-      <button class="btn btn-blue" onclick="obNext(1)">Próximo →</button>
-    </div>
-    <div class="onboard-step" id="obs1">
-      <div class="onboard-icon">💰</div>
-      <div class="onboard-title">Pagamentos</div>
-      <div class="onboard-sub">Configure como você recebe dos clientes.</div>
-      <label class="flabel">Chave PIX</label>
-      <input type="text" id="obPix" placeholder="CPF, CNPJ, email ou telefone" class="finput">
-      <label class="flabel">Termos da nota / garantia</label>
-      <textarea id="obTermos" placeholder="Ex: Garantia de 90 dias em peças e serviços..." class="finput" rows="3"></textarea>
-      <div class="brow">
-        <button class="btn btn-ghost" onclick="obNext(0)">← Voltar</button>
-        <button class="btn btn-blue"  onclick="obNext(2)">Próximo →</button>
+    <div class="sb-nav">
+      <div class="sb-section-label">Principal</div>
+      <div class="sb-item on" data-page="dashboard" onclick="Nav.go('dashboard')">
+        <span class="sb-ico">📊</span> Dashboard
+      </div>
+      <div class="sb-item" data-page="os" onclick="Nav.go('os')">
+        <span class="sb-ico">🔧</span> Ordens de Serviço
+        <span class="sb-badge" id="sb-os-badge" style="display:none">0</span>
+      </div>
+      <div class="sb-item" data-page="clientes" onclick="Nav.go('clientes')">
+        <span class="sb-ico">👥</span> Clientes
+      </div>
+      <div class="sb-item" data-page="agenda" onclick="Nav.go('agenda')">
+        <span class="sb-ico">📅</span> Agenda
+        <span class="sb-dot" id="sb-agenda-dot" style="display:none"></span>
+      </div>
+
+      <div class="sb-section-label">Financeiro</div>
+      <div class="sb-item" data-page="caixa" onclick="Nav.go('caixa')">
+        <span class="sb-ico">💰</span> Caixa
+      </div>
+
+      <div class="sb-section-label">Estoque</div>
+      <div class="sb-item" data-page="estoque" onclick="Nav.go('estoque')">
+        <span class="sb-ico">📦</span> Estoque
+        <span class="sb-badge" id="sb-stock-badge" style="display:none">!</span>
+      </div>
+
+      <div class="sb-section-label">Relatórios</div>
+      <div class="sb-item" data-page="analytics" onclick="Nav.go('analytics')">
+        <span class="sb-ico">📈</span> Analytics
+      </div>
+
+      <div class="sb-section-label">Sistema</div>
+      <div class="sb-item" data-page="config" onclick="Nav.go('config')">
+        <span class="sb-ico">⚙️</span> Configurações
+      </div>
+      <div class="sb-item" id="sb-master" data-page="master" onclick="Nav.go('master')" style="display:none">
+        <span class="sb-ico">👑</span> Master Admin
+        <span class="master-badge">MASTER</span>
       </div>
     </div>
-    <div class="onboard-step" id="obs2">
-      <div class="onboard-icon">✅</div>
-      <div class="onboard-title">Tudo pronto!</div>
-      <div class="onboard-sub">Sua conta está configurada. Você tem <b>30 dias grátis</b> do plano Pro!</div>
-      <div style="background:rgba(0,230,118,.08);border:1px solid rgba(0,230,118,.2);border-radius:12px;padding:16px;margin-bottom:20px">
-        <div style="font-family:var(--mono);font-size:11px;color:var(--green);font-weight:700;margin-bottom:10px">✓ INCLUÍDO NO SEU TRIAL</div>
-        <div style="font-size:13px;line-height:2;color:var(--muted)">
-          ✅ OS ilimitadas por 30 dias<br>
-          ✅ IA integrada<br>
-          ✅ Dashboard analytics<br>
-          ✅ Carnê e parcelas<br>
-          ✅ Estoque completo<br>
-          ✅ PDF profissional
+    <div class="sb-footer">
+      <div class="sb-user" onclick="UI.toggleUserMenu()">
+        <div class="sb-avatar" id="sb-av">?</div>
+        <div class="sb-user-info">
+          <div class="sb-user-name truncate" id="sb-uname">Carregando...</div>
+          <div class="sb-user-role" id="sb-urole">—</div>
+        </div>
+        <span style="color:var(--muted);font-size:12px">⋮</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content">
+
+    <!-- TOP HEADER -->
+    <header class="top-header">
+      <div class="th-search">
+        <span class="th-search-icon">🔍</span>
+        <input type="text" id="global-search" placeholder="Buscar OS, clientes, produtos..."
+          oninput="GlobalSearch.search(this.value)" autocomplete="off">
+      </div>
+      <div class="th-spacer"></div>
+      <button class="th-btn" onclick="Nav.go('os');setTimeout(()=>openNovaOS(),100)" title="Nova OS">
+        ➕
+      </button>
+      <button class="th-btn" onclick="UI.toggleNotif()" id="notif-btn" title="Notificações">
+        🔔
+        <span class="th-notif-dot" id="notif-dot" style="display:none"></span>
+      </button>
+      <div class="th-user-chip" onclick="UI.toggleUserMenu()">
+        <div class="th-avatar" id="th-av">?</div>
+        <span class="th-user-name" id="th-uname">...</span>
+      </div>
+    </header>
+
+    <!-- PAGE CONTENT -->
+    <main class="page-content" id="page-content">
+
+      <!-- ══════════ DASHBOARD ══════════ -->
+      <div class="page on" id="pg-dashboard">
+        <div class="page-title">
+          📊 Dashboard
+          <button class="btn btn-ghost btn-sm" onclick="Dashboard.reload()" style="margin-left:auto">↻ Atualizar</button>
+        </div>
+
+        <!-- KPIs -->
+        <div class="kpi-grid" id="kpi-grid">
+          <div class="kpi-card kpi-g" id="kpi-fat-dia">
+            <div class="kpi-head">
+              <span class="kpi-label">Hoje</span>
+              <span class="kpi-ico">💵</span>
+            </div>
+            <div class="kpi-val" id="kv-hoje">—</div>
+            <div class="kpi-sub">Faturamento do dia</div>
+          </div>
+          <div class="kpi-card kpi-b" id="kpi-fat-mes">
+            <div class="kpi-head">
+              <span class="kpi-label">Este mês</span>
+              <span class="kpi-ico">📅</span>
+            </div>
+            <div class="kpi-val" id="kv-mes">—</div>
+            <div class="kpi-sub" id="ks-mes">Faturamento</div>
+          </div>
+          <div class="kpi-card kpi-o" id="kpi-os-ab">
+            <div class="kpi-head">
+              <span class="kpi-label">OS Abertas</span>
+              <span class="kpi-ico">🔧</span>
+            </div>
+            <div class="kpi-val" id="kv-os-ab">—</div>
+            <div class="kpi-sub" id="ks-os-ab">aguardando</div>
+          </div>
+          <div class="kpi-card kpi-p" id="kpi-lucro">
+            <div class="kpi-head">
+              <span class="kpi-label">Lucro</span>
+              <span class="kpi-ico">📈</span>
+            </div>
+            <div class="kpi-val" id="kv-lucro">—</div>
+            <div class="kpi-sub">Mês atual</div>
+          </div>
+        </div>
+
+        <!-- Charts + Ranking -->
+        <div style="display:grid;grid-template-columns:1fr;gap:14px" id="dash-grid">
+          <div class="card">
+            <div class="card-title">
+              <div class="card-title-left">
+                <div class="card-bar"></div> Faturamento
+              </div>
+              <div style="display:flex;gap:6px">
+                <button class="chip" onclick="Dashboard.setRange(7,this)">7d</button>
+                <button class="chip on" onclick="Dashboard.setRange(30,this)">30d</button>
+              </div>
+            </div>
+            <div class="chart-wrap"><canvas id="chart-fat"></canvas></div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <div class="card-title-left"><div class="card-bar"></div> Top Clientes</div>
+              <button class="btn btn-ghost btn-sm" onclick="Nav.go('clientes')">Ver todos →</button>
+            </div>
+            <div id="ranking-clientes">
+              <div class="empty"><div class="empty-ico">👥</div><p>Sem dados</p></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <div class="card-title-left"><div class="card-bar"></div> OS Recentes</div>
+              <button class="btn btn-ghost btn-sm" onclick="Nav.go('os')">Ver todas →</button>
+            </div>
+            <div id="dash-os-list">
+              <div class="empty"><div class="empty-ico">🔧</div><p>Nenhuma OS</p></div>
+            </div>
+          </div>
         </div>
       </div>
-      <button class="btn btn-green" onclick="finishOnboard()">🚀 Começar a usar!</button>
+
+      <!-- ══════════ OS ══════════ -->
+      <div class="page" id="pg-os">
+        <div class="page-title">
+          🔧 Ordens de Serviço
+          <button class="btn btn-primary btn-sm" onclick="openNovaOS()" style="margin-left:auto">
+            ＋ Nova OS
+          </button>
+        </div>
+
+        <div class="sw">
+          <span class="si">🔍</span>
+          <input type="text" id="os-search" placeholder="Buscar por cliente, nº, defeito..."
+            oninput="OS.filter()">
+        </div>
+
+        <div class="chips" id="os-chips">
+          <div class="chip on" data-status="" onclick="OS.setStatus('',this)">Todas</div>
+          <div class="chip" data-status="aberta" onclick="OS.setStatus('aberta',this)">🟡 Aguardando</div>
+          <div class="chip" data-status="em_andamento" onclick="OS.setStatus('em_andamento',this)">🔵 Em andamento</div>
+          <div class="chip" data-status="pronta" onclick="OS.setStatus('pronta',this)">🟠 Pronta</div>
+          <div class="chip" data-status="paga" onclick="OS.setStatus('paga',this)">🟢 Concluída</div>
+          <div class="chip" data-status="fiado" onclick="OS.setStatus('fiado',this)">🟣 Fiado</div>
+          <div class="chip" data-status="orcamento" onclick="OS.setStatus('orcamento',this)">📝 Orçamento</div>
+          <div class="chip" data-status="cancelada" onclick="OS.setStatus('cancelada',this)">🔴 Cancelada</div>
+        </div>
+
+        <div id="os-list">
+          <div class="empty"><div class="empty-ico">🔧</div><h3>Nenhuma OS ainda</h3><p>Toque em Nova OS para começar</p></div>
+        </div>
+      </div>
+
+      <!-- ══════════ CLIENTES ══════════ -->
+      <div class="page" id="pg-clientes">
+        <div class="page-title">
+          👥 Clientes
+          <button class="btn btn-primary btn-sm" onclick="openNovoCliente()" style="margin-left:auto">
+            ＋ Novo Cliente
+          </button>
+        </div>
+        <div class="sw">
+          <span class="si">🔍</span>
+          <input type="text" id="cli-search" placeholder="Buscar por nome, telefone, CPF..."
+            oninput="Clientes.filter()">
+        </div>
+        <div class="chips">
+          <div class="chip on" onclick="Clientes.setNivel('',this)">Todos</div>
+          <div class="chip" onclick="Clientes.setNivel('vip',this)">⭐ VIP</div>
+          <div class="chip" onclick="Clientes.setNivel('premium',this)">💎 Premium</div>
+        </div>
+        <div id="cli-list">
+          <div class="empty"><div class="empty-ico">👥</div><h3>Nenhum cliente</h3><p>Cadastre seu primeiro cliente</p></div>
+        </div>
+      </div>
+
+      <!-- ══════════ AGENDA ══════════ -->
+      <div class="page" id="pg-agenda">
+        <div class="page-title">
+          📅 Agenda
+          <button class="btn btn-primary btn-sm" onclick="openNovoEvento()" style="margin-left:auto">
+            ＋ Novo Evento
+          </button>
+        </div>
+        <div class="card">
+          <div class="card-title">
+            <div class="card-title-left">
+              <div class="card-bar"></div>
+              <button onclick="Agenda.prevMes()" style="color:var(--muted);font-size:18px;padding:0 8px">‹</button>
+              <span id="agenda-mes-label" style="font-size:14px;font-weight:700;min-width:160px;text-align:center">—</span>
+              <button onclick="Agenda.nextMes()" style="color:var(--muted);font-size:18px;padding:0 8px">›</button>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="Agenda.hoje()">Hoje</button>
+          </div>
+          <div id="agenda-cal" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center">
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">
+            <div class="card-title-left"><div class="card-bar"></div> Eventos do dia</div>
+          </div>
+          <div id="agenda-events">
+            <div class="empty"><div class="empty-ico">📅</div><p>Selecione um dia</p></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════ CAIXA ══════════ -->
+      <div class="page" id="pg-caixa">
+        <div class="page-title">💰 Caixa</div>
+
+        <div class="cx-grid">
+          <div class="cx-card entrada">
+            <div class="cx-num txt-green" id="cx-entrada">R$ 0,00</div>
+            <div class="cx-label">Entradas</div>
+          </div>
+          <div class="cx-card saida">
+            <div class="cx-num txt-red" id="cx-saida">R$ 0,00</div>
+            <div class="cx-label">Saídas</div>
+          </div>
+          <div class="cx-card saldo">
+            <div class="cx-num txt-blue" id="cx-saldo">R$ 0,00</div>
+            <div class="cx-label">Saldo</div>
+          </div>
+          <div class="cx-card fiado">
+            <div class="cx-num" style="color:var(--purple)" id="cx-fiado">R$ 0,00</div>
+            <div class="cx-label">Fiado pendente</div>
+          </div>
+        </div>
+
+        <div class="chips">
+          <div class="chip on" onclick="Caixa.setPeriodo('hoje',this)">Hoje</div>
+          <div class="chip" onclick="Caixa.setPeriodo('semana',this)">Semana</div>
+          <div class="chip" onclick="Caixa.setPeriodo('mes',this)">Mês</div>
+          <div class="chip" onclick="Caixa.setPeriodo('custom',this)">Personalizado</div>
+        </div>
+
+        <div id="cx-custom-range" class="gone" style="display:flex;gap:8px;margin-bottom:12px">
+          <input type="date" class="finput" id="cx-date-ini" style="margin:0;flex:1">
+          <input type="date" class="finput" id="cx-date-fim" style="margin:0;flex:1">
+          <button class="btn btn-blue btn-sm" onclick="Caixa.loadCustom()">Filtrar</button>
+        </div>
+
+        <div class="brow">
+          <button class="btn btn-ghost btn-sm" onclick="openRegistrarSaida()">➖ Registrar Saída</button>
+          <button class="btn btn-ghost btn-sm" onclick="Caixa.sangria()">💸 Sangria</button>
+          <button class="btn btn-ghost btn-sm" onclick="Caixa.fecharCaixa()">🔒 Fechar Caixa</button>
+          <button class="btn btn-ghost btn-sm" onclick="Caixa.exportPDF()">📄 PDF</button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="auth-tabs" style="margin-bottom:14px">
+          <button class="auth-tab on" id="cx-tab-mov" onclick="Caixa.setTab('mov',this)">Movimentações</button>
+          <button class="auth-tab" id="cx-tab-pagar" onclick="Caixa.setTab('pagar',this)">A Pagar</button>
+          <button class="auth-tab" id="cx-tab-receber" onclick="Caixa.setTab('receber',this)">A Receber</button>
+        </div>
+
+        <div id="cx-tab-mov-content">
+          <div class="card">
+            <div id="cx-movs">
+              <div class="empty"><div class="empty-ico">💰</div><p>Sem movimentações</p></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="cx-tab-pagar-content" class="gone">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <span style="font-size:13px;font-weight:700">Contas a Pagar</span>
+            <button class="btn btn-red btn-sm" onclick="openNovaConta('pagar')">＋ Nova</button>
+          </div>
+          <div class="card" id="contas-pagar-list">
+            <div class="empty"><div class="empty-ico">📋</div><p>Nenhuma conta</p></div>
+          </div>
+        </div>
+
+        <div id="cx-tab-receber-content" class="gone">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <span style="font-size:13px;font-weight:700">Contas a Receber</span>
+            <button class="btn btn-green btn-sm" onclick="openNovaConta('receber')">＋ Nova</button>
+          </div>
+          <div class="card" id="contas-receber-list">
+            <div class="empty"><div class="empty-ico">📋</div><p>Nenhuma conta</p></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════ ESTOQUE ══════════ -->
+      <div class="page" id="pg-estoque">
+        <div class="page-title">
+          📦 Estoque
+          <button class="btn btn-primary btn-sm" onclick="openNovoProduto()" style="margin-left:auto">
+            ＋ Produto
+          </button>
+        </div>
+        <div class="sw">
+          <span class="si">🔍</span>
+          <input type="text" id="est-search" placeholder="Buscar produto ou código de barras..."
+            oninput="Estoque.filter()">
+          <button style="font-size:18px;padding:0 4px" onclick="Scanner.open('est-search')" title="Scanner">📷</button>
+        </div>
+        <div class="chips">
+          <div class="chip on" onclick="Estoque.setFiltro('',this)">Todos</div>
+          <div class="chip" onclick="Estoque.setFiltro('baixo',this)">⚠️ Estoque baixo</div>
+          <div class="chip" onclick="Estoque.setFiltro('inativo',this)">❌ Inativos</div>
+        </div>
+        <div id="est-list">
+          <div class="empty"><div class="empty-ico">📦</div><h3>Nenhum produto</h3><p>Cadastre seus produtos</p></div>
+        </div>
+      </div>
+
+      <!-- ══════════ ANALYTICS ══════════ -->
+      <div class="page" id="pg-analytics">
+        <div class="page-title">📈 Analytics</div>
+        <div class="chips">
+          <div class="chip on" onclick="Analytics.setPeriodo('mes',this)">Este mês</div>
+          <div class="chip" onclick="Analytics.setPeriodo('anterior',this)">Mês anterior</div>
+          <div class="chip" onclick="Analytics.setPeriodo('trimestre',this)">Trimestre</div>
+          <div class="chip" onclick="Analytics.setPeriodo('ano',this)">Ano</div>
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi-card kpi-g">
+            <div class="kpi-head"><span class="kpi-label">Faturamento</span><span class="kpi-ico">💵</span></div>
+            <div class="kpi-val" id="an-fat">—</div>
+            <div class="kpi-sub"><span class="kpi-badge up" id="an-fat-badge">+0%</span></div>
+          </div>
+          <div class="kpi-card kpi-b">
+            <div class="kpi-head"><span class="kpi-label">Serviços</span><span class="kpi-ico">🔧</span></div>
+            <div class="kpi-val" id="an-svcs">—</div>
+            <div class="kpi-sub">concluídos</div>
+          </div>
+          <div class="kpi-card kpi-o">
+            <div class="kpi-head"><span class="kpi-label">Ticket Médio</span><span class="kpi-ico">🎟️</span></div>
+            <div class="kpi-val" id="an-ticket">—</div>
+            <div class="kpi-sub">por OS</div>
+          </div>
+          <div class="kpi-card kpi-r">
+            <div class="kpi-head"><span class="kpi-label">Inadimplência</span><span class="kpi-ico">⚠️</span></div>
+            <div class="kpi-val" id="an-fiado">—</div>
+            <div class="kpi-sub">fiado pendente</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">
+            <div class="card-title-left"><div class="card-bar"></div> Faturamento Mensal</div>
+          </div>
+          <div class="chart-wrap"><canvas id="chart-mensal"></canvas></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">
+            <div class="card-title-left"><div class="card-bar"></div> Pagamentos</div>
+          </div>
+          <div class="chart-wrap" style="height:200px"><canvas id="chart-pag"></canvas></div>
+        </div>
+
+        <div class="ia-card">
+          <div class="ia-title">✨ ANÁLISE IA</div>
+          <div class="ia-content" id="ia-analytics-txt">
+            <div class="ia-loading">
+              <div class="ia-dot"></div><div class="ia-dot"></div><div class="ia-dot"></div>
+            </div>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="IA.analiseMes()" style="margin-top:10px">
+            🔄 Atualizar análise
+          </button>
+        </div>
+      </div>
+
+      <!-- ══════════ CONFIGURAÇÕES ══════════ -->
+      <div class="page" id="pg-config">
+        <div class="page-title">⚙️ Configurações</div>
+
+        <!-- Logo -->
+        <div class="card">
+          <div class="card-title"><div class="card-title-left"><div class="card-bar"></div> Logo da empresa</div></div>
+          <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px">
+            <div id="logo-preview" style="width:64px;height:64px;border-radius:12px;background:var(--bg4);border:1px solid var(--b2);display:flex;align-items:center;justify-content:center;font-size:28px;overflow:hidden">🏢</div>
+            <div>
+              <button class="btn btn-ghost btn-sm" onclick="document.getElementById('logo-inp').click()">📷 Alterar logo</button>
+              <input type="file" id="logo-inp" accept="image/*" class="gone" onchange="Config.uploadLogo(this)">
+              <div style="font-size:11px;color:var(--muted);margin-top:4px">PNG, JPG — aparece nos comprovantes</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dados -->
+        <div class="card">
+          <div class="card-title"><div class="card-title-left"><div class="card-bar"></div> Dados da empresa</div></div>
+          <label class="flabel req">Nome da empresa</label>
+          <input class="finput" id="cfg-empresa" placeholder="Nome da empresa">
+          <div class="frow">
+            <div>
+              <label class="flabel">CNPJ / CPF</label>
+              <input class="finput" id="cfg-cnpj" placeholder="00.000.000/0001-00">
+            </div>
+            <div>
+              <label class="flabel">Telefone</label>
+              <input class="finput" id="cfg-tel" placeholder="(11) 99999-9999">
+            </div>
+          </div>
+          <label class="flabel">Endereço</label>
+          <input class="finput" id="cfg-end" placeholder="Rua, número, bairro">
+          <label class="flabel">Instagram</label>
+          <input class="finput" id="cfg-insta" placeholder="@seu.instagram">
+          <label class="flabel">Chave PIX</label>
+          <input class="finput" id="cfg-pix" placeholder="CPF, CNPJ, telefone ou email">
+          <label class="flabel">Termos da garantia</label>
+          <textarea class="finput" id="cfg-termos" rows="3" placeholder="Ex: Garantia de 90 dias..."></textarea>
+          <button class="btn btn-primary" onclick="Config.salvar()">💾 Salvar dados</button>
+        </div>
+
+        <!-- Recursos -->
+        <div class="card">
+          <div class="card-title"><div class="card-title-left"><div class="card-bar"></div> Recursos</div></div>
+          <div class="ir">
+            <div>
+              <div style="font-size:13px;font-weight:700">Assinatura do cliente</div>
+              <div class="irl">Coleta assinatura digital nas OS</div>
+            </div>
+            <label class="toggle-sw">
+              <input type="checkbox" id="cfg-sig" onchange="Config.toggle('assinatura',this.checked)">
+              <span class="ts-track"></span>
+            </label>
+          </div>
+          <div class="ir">
+            <div>
+              <div style="font-size:13px;font-weight:700">Fotos na OS</div>
+              <div class="irl">Permite anexar fotos do equipamento</div>
+            </div>
+            <label class="toggle-sw">
+              <input type="checkbox" id="cfg-foto" onchange="Config.toggle('fotos',this.checked)">
+              <span class="ts-track"></span>
+            </label>
+          </div>
+          <div class="ir">
+            <div>
+              <div style="font-size:13px;font-weight:700">Scanner de câmera</div>
+              <div class="irl">Leitor de código de barras e QR Code</div>
+            </div>
+            <label class="toggle-sw">
+              <input type="checkbox" id="cfg-scanner" onchange="Config.toggle('scanner',this.checked)">
+              <span class="ts-track"></span>
+            </label>
+          </div>
+          <div class="ir">
+            <div>
+              <div style="font-size:13px;font-weight:700">Tema escuro</div>
+              <div class="irl">Aparência dark/light</div>
+            </div>
+            <label class="toggle-sw">
+              <input type="checkbox" id="cfg-theme" onchange="Config.toggleTheme(this.checked)">
+              <span class="ts-track"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Funcionários -->
+        <div class="card">
+          <div class="card-title">
+            <div class="card-title-left"><div class="card-bar"></div> Funcionários</div>
+            <button class="btn btn-primary btn-sm" onclick="openNovoFuncionario()">＋ Adicionar</button>
+          </div>
+          <div id="func-list">
+            <div class="empty"><div class="empty-ico">👨‍💼</div><p>Nenhum funcionário cadastrado</p></div>
+          </div>
+        </div>
+
+        <!-- WhatsApp -->
+        <div class="card">
+          <div class="card-title"><div class="card-title-left"><div class="card-bar"></div> WhatsApp API</div></div>
+          <label class="flabel">URL da API</label>
+          <input class="finput" id="cfg-wapi" placeholder="https://api.z-api.io/instances/...">
+          <label class="flabel">Token</label>
+          <input class="finput" id="cfg-wtoken" type="password" placeholder="••••••••">
+          <button class="btn btn-green" onclick="Config.salvarWA()">💾 Salvar WhatsApp</button>
+        </div>
+
+        <!-- Backup -->
+        <div class="card">
+          <div class="card-title"><div class="card-title-left"><div class="card-bar"></div> Backup de dados</div></div>
+          <div class="brow">
+            <button class="btn btn-ghost" onclick="Config.exportJSON()">⬇️ Exportar JSON</button>
+            <button class="btn btn-ghost" onclick="document.getElementById('import-inp').click()">⬆️ Importar</button>
+            <input type="file" id="import-inp" class="gone" accept=".json" onchange="Config.importJSON(this)">
+          </div>
+        </div>
+
+        <!-- Sobre -->
+        <div class="card" style="text-align:center">
+          <img src="NexOS.png" style="width:48px;height:48px;object-fit:contain;margin-bottom:8px">
+          <div style="font-size:18px;font-weight:800;background:linear-gradient(135deg,#60a5fa,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent">NexOS</div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:4px">Versão 3.0.0 — Gestão profissional</div>
+          <div style="font-size:11px;color:var(--muted2);margin-top:6px">© 2025 NexOS. Todos os direitos reservados.</div>
+        </div>
+      </div>
+
+      <!-- ══════════ MASTER ══════════ -->
+      <div class="page" id="pg-master">
+        <div class="page-title">👑 Master Admin</div>
+        <div class="kpi-grid">
+          <div class="kpi-card kpi-g">
+            <div class="kpi-head"><span class="kpi-label">Empresas</span><span class="kpi-ico">🏢</span></div>
+            <div class="kpi-val" id="m-empresas">—</div>
+          </div>
+          <div class="kpi-card kpi-b">
+            <div class="kpi-head"><span class="kpi-label">MRR</span><span class="kpi-ico">💰</span></div>
+            <div class="kpi-val" id="m-mrr">—</div>
+          </div>
+          <div class="kpi-card kpi-o">
+            <div class="kpi-head"><span class="kpi-label">Ativas</span><span class="kpi-ico">✅</span></div>
+            <div class="kpi-val" id="m-ativas">—</div>
+          </div>
+          <div class="kpi-card kpi-r">
+            <div class="kpi-head"><span class="kpi-label">Bloqueadas</span><span class="kpi-ico">🔒</span></div>
+            <div class="kpi-val" id="m-bloq">—</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title"><div class="card-title-left"><div class="card-bar"></div> Empresas</div></div>
+          <div id="master-list">
+            <div class="empty"><div class="empty-ico">🏢</div><p>Carregando...</p></div>
+          </div>
+        </div>
+      </div>
+
+    </main><!-- /page-content -->
+  </div><!-- /main-content -->
+</div><!-- /app-layout -->
+
+<!-- ═══════════ BOTTOM NAV (Mobile) ═══════════ -->
+<nav class="bottom-nav gone" id="bottom-nav">
+  <div class="bn-item on" data-page="dashboard" onclick="Nav.go('dashboard')">
+    <span class="bn-ico">📊</span><span class="bn-label">Home</span>
+  </div>
+  <div class="bn-item" data-page="os" onclick="Nav.go('os')">
+    <span class="bn-ico">🔧</span><span class="bn-label">OS</span>
+  </div>
+  <div class="bn-item" data-page="clientes" onclick="Nav.go('clientes')">
+    <span class="bn-ico">👥</span><span class="bn-label">Clientes</span>
+  </div>
+  <div class="bn-item" data-page="estoque" onclick="Nav.go('estoque')">
+    <span class="bn-ico">📦</span><span class="bn-label">Estoque</span>
+  </div>
+  <div class="bn-item" data-page="more" onclick="UI.toggleMore()">
+    <span class="bn-ico">⋯</span><span class="bn-label">Mais</span>
+  </div>
+</nav>
+
+<!-- FAB (Mobile) -->
+<button class="fab gone" id="fab-btn" onclick="openNovaOS()">＋</button>
+
+<!-- MORE MENU (Mobile) -->
+<div id="more-menu" class="gone" style="position:fixed;bottom:calc(var(--nav-h) + 8px);left:0;right:0;background:var(--bg3);border:1px solid var(--b1);border-radius:var(--r-xl) var(--r-xl) 0 0;padding:16px;z-index:200;max-height:60vh;overflow-y:auto">
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+    <button class="btn btn-ghost" style="flex-direction:column;gap:4px;height:72px;font-size:11px" onclick="Nav.go('caixa');UI.closeMore()">💰<br>Caixa</button>
+    <button class="btn btn-ghost" style="flex-direction:column;gap:4px;height:72px;font-size:11px" onclick="Nav.go('agenda');UI.closeMore()">📅<br>Agenda</button>
+    <button class="btn btn-ghost" style="flex-direction:column;gap:4px;height:72px;font-size:11px" onclick="Nav.go('analytics');UI.closeMore()">📈<br>Analytics</button>
+    <button class="btn btn-ghost" style="flex-direction:column;gap:4px;height:72px;font-size:11px" onclick="Nav.go('config');UI.closeMore()">⚙️<br>Config</button>
+    <button class="btn btn-ghost" id="more-master" style="flex-direction:column;gap:4px;height:72px;font-size:11px;display:none" onclick="Nav.go('master');UI.closeMore()">👑<br>Master</button>
+  </div>
+</div>
+<div id="more-overlay" class="gone" onclick="UI.closeMore()" style="position:fixed;inset:0;z-index:190;background:rgba(0,0,0,.4)"></div>
+
+<!-- ═══════════ MODALS ═══════════ -->
+
+<!-- Nova OS Modal -->
+<div class="mwrap" id="modal-os">
+  <div class="mwrap-bg" onclick="UI.closeModal('modal-os')"></div>
+  <div class="msheet">
+    <div class="mhandle" onclick="UI.closeModal('modal-os')"></div>
+    <div class="mbody">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <h2 style="font-size:18px;font-weight:800" id="os-modal-title">Nova OS</h2>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-ghost btn-sm" onclick="OS.usarTemplate()" title="Template">📋</button>
+          <button class="btn btn-ghost btn-sm" onclick="UI.closeModal('modal-os')">✕</button>
+        </div>
+      </div>
+      <input type="hidden" id="os-id">
+
+      <!-- Cliente -->
+      <label class="flabel">Cliente</label>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <div class="sw" style="margin:0;flex:1">
+          <span class="si">🔍</span>
+          <input type="text" id="os-cli-search" placeholder="Buscar cliente cadastrado..." oninput="OS.searchCli(this.value)" autocomplete="off">
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="OS.semCadastro()" title="Sem cadastro">👤</button>
+      </div>
+      <div id="os-cli-dropdown" class="gone" style="background:var(--bg2);border:1px solid var(--b1);border-radius:var(--r-md);margin-bottom:12px;max-height:180px;overflow-y:auto;z-index:10;position:relative"></div>
+      <div id="os-cli-chip" class="gone" style="background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);border-radius:var(--r-md);padding:8px 12px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
+        <span id="os-cli-name" style="font-size:13px;font-weight:700"></span>
+        <button onclick="OS.clearCli()" style="color:var(--muted)">✕</button>
+      </div>
+      <div id="os-sem-cad" class="gone">
+        <input class="finput" id="os-cli-avulso" placeholder="Nome do cliente (opcional)">
+      </div>
+
+      <!-- Equipamento / Defeito -->
+      <div class="frow">
+        <div>
+          <label class="flabel req">Equipamento</label>
+          <input class="finput" id="os-equip" placeholder="Ex: iPhone 13">
+        </div>
+        <div>
+          <label class="flabel">Técnico</label>
+          <select class="finput" id="os-tecnico">
+            <option value="">Sem técnico</option>
+          </select>
+        </div>
+      </div>
+      <label class="flabel req">Defeito / Solicitação</label>
+      <input class="finput" id="os-defeito" placeholder="Ex: Tela quebrada, não liga...">
+
+      <label class="flabel" style="display:flex;align-items:center;justify-content:space-between">
+        Diagnóstico técnico
+        <button onclick="UI.toggleDescricao('os-diag-wrap')" style="font-size:11px;color:var(--muted)">— minimizar</button>
+      </label>
+      <div id="os-diag-wrap">
+        <textarea class="finput" id="os-diag" rows="2" placeholder="Diagnóstico técnico (interno)"></textarea>
+      </div>
+
+      <!-- Prioridade / Status / Garantia -->
+      <div class="frow3">
+        <div>
+          <label class="flabel">Prioridade</label>
+          <select class="finput" id="os-prioridade">
+            <option value="normal">🟡 Normal</option>
+            <option value="alta">🟠 Alta</option>
+            <option value="urgente">🔴 Urgente</option>
+          </select>
+        </div>
+        <div>
+          <label class="flabel">Status</label>
+          <select class="finput" id="os-status">
+            <option value="aberta">🟡 Aguardando</option>
+            <option value="em_andamento">🔵 Em andamento</option>
+            <option value="pronta">🟠 Pronta p/ retirada</option>
+            <option value="paga">🟢 Concluída/Paga</option>
+            <option value="fiado">🟣 Fiado</option>
+            <option value="orcamento">📝 Orçamento</option>
+            <option value="cancelada">🔴 Cancelada</option>
+          </select>
+        </div>
+        <div>
+          <label class="flabel">Garantia (dias)</label>
+          <input class="finput" id="os-garantia" type="number" placeholder="90" min="0">
+        </div>
+      </div>
+
+      <div class="frow">
+        <div>
+          <label class="flabel">Previsão de entrega</label>
+          <input class="finput" id="os-entrega" type="date">
+        </div>
+        <div>
+          <label class="flabel">Nº OS (auto)</label>
+          <input class="finput" id="os-num" placeholder="Automático" readonly style="opacity:.6">
+        </div>
+      </div>
+
+      <!-- Itens / Serviços -->
+      <label class="flabel" style="margin-top:4px">Itens / Serviços</label>
+      <div class="add-item-row" style="grid-template-columns:1fr 60px 90px 36px">
+        <div style="display:flex;gap:4px;align-items:center">
+          <input class="finput" id="item-desc" placeholder="Descrição do serviço/peça" style="margin:0;flex:1">
+          <button onclick="Scanner.open('item-desc')" id="scanner-item-btn" title="Scanner" class="gone" style="font-size:18px;padding:4px">📷</button>
+        </div>
+        <input class="finput" id="item-qty" type="number" placeholder="Qtd" min="1" value="1" style="margin:0;text-align:center">
+        <input class="finput" id="item-val" type="number" placeholder="R$ 0,00" min="0" step="0.01" style="margin:0">
+        <button class="btn btn-green btn-sm" onclick="OS.addItem()" style="padding:8px">＋</button>
+      </div>
+      <div class="it-head"><span>Descrição</span><span style="text-align:center">Qtd</span><span style="text-align:right">Valor</span><span></span></div>
+      <div id="items-list"></div>
+      <div class="it-total-row">
+        <span class="it-total-label">TOTAL</span>
+        <span class="it-total-val" id="items-total">R$ 0,00</span>
+      </div>
+
+      <!-- Pagamento -->
+      <label class="flabel" style="margin-top:14px">Forma de Pagamento</label>
+      <div class="pay-chips" id="pay-chips-os">
+        <div class="pchip" data-pay="dinheiro" onclick="OS.setPay('dinheiro',this)">💵 Dinheiro</div>
+        <div class="pchip" data-pay="pix" onclick="OS.setPay('pix',this)">🟢 PIX</div>
+        <div class="pchip" data-pay="credito" onclick="OS.setPay('credito',this)">💳 Crédito</div>
+        <div class="pchip" data-pay="debito" onclick="OS.setPay('debito',this)">💳 Débito</div>
+        <div class="pchip" data-pay="fiado" onclick="OS.setPay('fiado',this)">🤝 Fiado</div>
+        <div class="pchip" data-pay="carne" onclick="OS.setPay('carne',this)">📋 Carnê</div>
+        <div class="pchip" data-pay="transferencia" onclick="OS.setPay('transferencia',this)">🏦 Transf.</div>
+        <div class="pchip" data-pay="orcamento" onclick="OS.setPay('orcamento',this)">📝 Orçamento</div>
+      </div>
+
+      <!-- Parcelamento -->
+      <div id="cred-parcelas" class="gone" style="margin-bottom:12px">
+        <div class="carne-box">
+          <label class="flabel">Nº de parcelas</label>
+          <select class="finput" id="os-parcelas" onchange="OS.calcParcelas()">
+            <option value="2">2x</option><option value="3">3x</option>
+            <option value="4">4x</option><option value="6">6x</option>
+            <option value="10">10x</option><option value="12">12x</option>
+          </select>
+          <div class="carne-preview" id="carne-preview"></div>
+        </div>
+      </div>
+
+      <!-- Carnê -->
+      <div id="carne-config" class="gone" style="margin-bottom:12px">
+        <div class="carne-box">
+          <div class="frow">
+            <div>
+              <label class="flabel">Nº de parcelas</label>
+              <select class="finput" id="carne-num" onchange="OS.calcParcelas()">
+                <option value="2">2x</option><option value="3">3x</option>
+                <option value="4">4x</option><option value="6">6x</option>
+                <option value="10">10x</option><option value="12">12x</option>
+              </select>
+            </div>
+            <div>
+              <label class="flabel">1ª entrada em</label>
+              <input class="finput" id="carne-inicio" type="date">
+            </div>
+          </div>
+          <div class="carne-preview" id="carne-preview-2"></div>
+        </div>
+      </div>
+
+      <!-- Notas -->
+      <label class="flabel" style="margin-top:4px;display:flex;align-items:center;justify-content:space-between">
+        Observações internas
+        <button onclick="UI.toggleDescricao('os-obs-wrap')" style="font-size:11px;color:var(--muted)">— minimizar</button>
+      </label>
+      <div id="os-obs-wrap">
+        <textarea class="finput" id="os-obs" rows="2" placeholder="Anotações internas..."></textarea>
+      </div>
+
+      <!-- Fotos -->
+      <div id="os-foto-section" class="gone">
+        <label class="flabel">Fotos do equipamento</label>
+        <div class="photo-zone" onclick="document.getElementById('os-foto-inp').click()">
+          <span style="font-size:28px">📷</span>
+          <span style="font-size:13px;color:var(--muted)">Toque para adicionar fotos</span>
+        </div>
+        <input type="file" id="os-foto-inp" accept="image/*" multiple class="gone" onchange="OS.addFotos(this)">
+        <div class="photo-grid" id="os-fotos"></div>
+      </div>
+
+      <!-- Assinatura -->
+      <div id="os-sig-section" class="gone">
+        <label class="flabel">Assinatura do cliente</label>
+        <canvas id="sig-canvas" style="width:100%;height:120px;background:var(--bg2);border:1px solid var(--b1);border-radius:var(--r-md);touch-action:none"></canvas>
+        <button class="btn btn-ghost btn-sm" onclick="Sig.clear()" style="margin-top:6px">🗑️ Limpar</button>
+      </div>
+
+      <!-- Ações -->
+      <div class="brow" style="margin-top:16px">
+        <button class="btn btn-ghost" onclick="UI.closeModal('modal-os')">Cancelar</button>
+        <button class="btn btn-primary" onclick="OS.salvar()" id="btn-salvar-os">💾 Salvar OS</button>
+      </div>
     </div>
   </div>
 </div>
 
-<header>
-  <div class="brand">Nex<b>OS</b><div class="brand-badge">v2.0</div></div>
-  <div class="hright">
-    <div class="store-name" id="headerStore"></div>
-    <button class="hbtn" onclick="toggleNotif()" id="notifBtn" title="Notificações">
-      🔔<div class="notif-badge" id="notifDot" style="display:none"></div>
-    </button>
-    <button class="hbtn" onclick="toggleTheme()" id="themeBtn" title="Tema">🌙</button>
-    <div class="user-chip" onclick="toggleUserMenu()">
-      <div class="user-avatar" id="userAvatar">?</div>
-      <div>
-        <div class="user-name"  id="userName">—</div>
-        <div class="user-cargo" id="userCargo">—</div>
+<!-- OS Detalhes Modal -->
+<div class="mwrap" id="modal-os-detail">
+  <div class="mwrap-bg" onclick="UI.closeModal('modal-os-detail')"></div>
+  <div class="msheet">
+    <div class="mhandle" onclick="UI.closeModal('modal-os-detail')"></div>
+    <div class="mbody" id="os-detail-body">
+    </div>
+  </div>
+</div>
+
+<!-- Cliente Modal -->
+<div class="mwrap" id="modal-cliente">
+  <div class="mwrap-bg" onclick="UI.closeModal('modal-cliente')"></div>
+  <div class="msheet">
+    <div class="mhandle" onclick="UI.closeModal('modal-cliente')"></div>
+    <div class="mbody">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <h2 style="font-size:18px;font-weight:800" id="cli-modal-title">Novo Cliente</h2>
+        <button class="btn btn-ghost btn-sm" onclick="UI.closeModal('modal-cliente')">✕</button>
       </div>
-    </div>
-  </div>
-</header>
+      <input type="hidden" id="cli-id">
 
-<div class="pages">
-
-  <div class="page on" id="p0">
-    <div id="dashSkeleton">
-      <div class="kpi-grid">
-        <div class="skeleton" style="height:90px;border-radius:14px"></div>
-        <div class="skeleton" style="height:90px;border-radius:14px"></div>
-        <div class="skeleton" style="height:90px;border-radius:14px"></div>
-        <div class="skeleton" style="height:90px;border-radius:14px"></div>
+      <!-- Foto do cliente -->
+      <div style="display:flex;justify-content:center;margin-bottom:16px">
+        <div style="position:relative">
+          <div id="cli-foto-preview" style="width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,var(--blue-d),var(--purple-d));display:flex;align-items:center;justify-content:center;font-size:28px;color:#fff;cursor:pointer;overflow:hidden" onclick="document.getElementById('cli-foto-inp').click()">
+            👤
+          </div>
+          <input type="file" id="cli-foto-inp" accept="image/*" class="gone" onchange="Clientes.uploadFoto(this)">
+          <div style="position:absolute;bottom:0;right:0;width:22px;height:22px;background:var(--blue-d);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer" onclick="document.getElementById('cli-foto-inp').click()">📷</div>
+        </div>
       </div>
-      <div class="skeleton" style="height:200px;border-radius:14px;margin-bottom:14px"></div>
-    </div>
-    <div id="dashContent" style="display:none"></div>
-  </div>
 
-  <div class="page" id="p1">
-    <div class="sw">
-      <span class="si">🔍</span>
-      <input type="search" placeholder="Buscar OS, cliente, produto..." id="searchOS" class="finput">
-    </div>
-    <div class="chips">
-      <div class="chip on" onclick="setF('todas',this)">Todas</div>
-      <div class="chip"    onclick="setF('aberta',this)">Abertas</div>
-      <div class="chip"    onclick="setF('em_andamento',this)">Em andamento</div>
-      <div class="chip"    onclick="setF('pronta',this)">Prontas</div>
-      <div class="chip"    onclick="setF('paga',this)">Pagas</div>
-      <div class="chip"    onclick="setF('fiado',this)">Fiado</div>
-    </div>
-    <div id="osList"></div>
-  </div>
-
-  <div class="page" id="p2">
-    <div class="card">
-      <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>Cliente</div></div>
-      <label class="flabel req">Nome do cliente</label>
-      <input type="text" id="nName" placeholder="Ex: Maria Oliveira" class="finput">
+      <label class="flabel req">Nome completo</label>
+      <input class="finput" id="cli-nome" placeholder="Nome do cliente">
       <div class="frow">
         <div>
           <label class="flabel">Telefone / WhatsApp</label>
-          <input type="tel" id="nPhone" placeholder="(00) 00000-0000" class="finput">
+          <input class="finput" id="cli-tel" type="tel" placeholder="(11) 99999-9999">
         </div>
         <div>
-          <label class="flabel">CPF / Doc</label>
-          <input type="text" id="nDoc" placeholder="000.000.000-00" class="finput">
+          <label class="flabel">CPF / CNPJ</label>
+          <input class="finput" id="cli-cpf" placeholder="000.000.000-00">
         </div>
       </div>
-    </div>
-    <div class="card">
-      <div class="ctitle">
-        <div class="ctitle-left"><div class="bar"></div>Itens / Serviços</div>
-        <button class="btn btn-ghost btn-sm" onclick="iaDescricao()">🤖 IA</button>
-      </div>
-      <div class="it-head"><span>Descrição</span><span>Qtd</span><span>Preço</span><span></span></div>
-      <div id="itemsRows"></div>
-      <div class="add-item-row">
-        <input type="text"   id="iDesc"  placeholder="Produto ou serviço" class="finput" style="margin-bottom:0">
-        <input type="number" id="iQty"   placeholder="Qtd" min="1" value="1" class="finput" style="margin-bottom:0">
-        <input type="number" id="iPrice" placeholder="R$" step="0.01" class="finput" style="margin-bottom:0">
-      </div>
-      <div class="brow" style="margin-top:8px">
-        <button class="btn btn-outline btn-sm" onclick="addItem()">＋ Adicionar</button>
-        <button class="btn btn-ghost  btn-sm" onclick="addFromStock()">📦 Estoque</button>
-        <button class="btn btn-ghost  btn-sm" onclick="iaSugerirPreco()">🤖 Preço IA</button>
-      </div>
-      <div class="it-total-row">
-        <span class="it-total-label">TOTAL</span>
-        <span class="it-total-val" id="itemsTotal">R$ 0,00</span>
-      </div>
-    </div>
-    <div class="card">
-      <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>Descrição</div></div>
-      <textarea id="nDesc" placeholder="Descreva o serviço, condições, garantia..." class="finput"></textarea>
-      <div class="frow">
-        <div>
-          <label class="flabel">Tipo de OS</label>
-          <select id="nType" class="finput">
-            <option value="servico">Serviço</option>
-            <option value="venda">Venda</option>
-            <option value="orcamento">Orçamento</option>
-            <option value="conserto">Conserto/Reparo</option>
-            <option value="entrega">Entrega</option>
-          </select>
-        </div>
-        <div>
-          <label class="flabel">Prioridade</label>
-          <select id="nPrio" class="finput">
-            <option value="0">Normal</option>
-            <option value="1">Alta</option>
-            <option value="2">Urgente</option>
-          </select>
-        </div>
-      </div>
-      <div class="frow">
-        <div>
-          <label class="flabel">Garantia (dias)</label>
-          <input type="number" id="nGarantia" value="0" class="finput">
-        </div>
-        <div>
-          <label class="flabel">Previsão de entrega</label>
-          <input type="datetime-local" id="nPrevisao" class="finput">
-        </div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>📷 Fotos</div></div>
-      <div class="photo-zone" onclick="document.getElementById('fotoInput').click()">
-        <span style="font-size:30px;opacity:.4">📷</span>
-        <span style="font-size:12px;color:var(--muted);font-family:var(--mono)">Toque para adicionar fotos</span>
-      </div>
-      <div class="photo-grid" id="photoGrid"></div>
-      <input type="file" id="fotoInput" accept="image/*" multiple capture="environment" style="display:none" onchange="handlePhotos(event)">
-    </div>
-    <div class="card">
-      <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>Pagamento</div></div>
-      <div class="pay-chips" id="payChips">
-        <div class="pchip on-dinheiro" onclick="setPay('dinheiro',this)">💵 Dinheiro</div>
-        <div class="pchip" onclick="setPay('pix',this)">📱 PIX</div>
-        <div class="pchip" onclick="setPay('credito',this)">💳 Crédito</div>
-        <div class="pchip" onclick="setPay('debito',this)">💳 Débito</div>
-        <div class="pchip" onclick="setPay('fiado',this)">📝 Fiado</div>
-        <div class="pchip" onclick="setPay('carne',this)">📜 Carnê</div>
-      </div>
-      <input type="hidden" id="nPay" value="dinheiro">
-      <div id="fiadoWarn" style="display:none;background:rgba(255,214,0,.08);border:1px solid rgba(255,214,0,.2);border-radius:10px;padding:11px;font-size:12px;color:var(--yellow);margin-bottom:12px">
-        ⚠️ <b>Fiado:</b> Será registrado como conta a receber.
-      </div>
-      <div id="carneWarn" style="display:none">
-        <div class="carne-box">
-          <div style="font-family:var(--mono);font-size:11px;color:var(--purple);font-weight:700;margin-bottom:10px">📜 CONFIGURAR CARNÊ</div>
-          <div class="frow3">
-            <div><label class="flabel">Parcelas</label><input type="number" id="carneN"   value="3"  min="1" max="24" class="finput" style="margin-bottom:0" oninput="calcCarnePreview()"></div>
-            <div><label class="flabel">Dia Venc.</label><input type="number" id="carneDia" value="10" min="1" max="28" class="finput" style="margin-bottom:0" oninput="calcCarnePreview()"></div>
-            <div><label class="flabel">Entrada R$</label><input type="number" id="carneEnt" value="0" step="0.01"      class="finput" style="margin-bottom:0" oninput="calcCarnePreview()"></div>
-          </div>
-          <div class="carne-preview" id="carnePreview">Configure as parcelas acima</div>
-        </div>
-      </div>
-      <div class="frow">
-        <div><label class="flabel">Valor pago (R$)</label><input type="number" id="nPaid"  placeholder="0,00" step="0.01" class="finput" oninput="calcTroco()"></div>
-        <div><label class="flabel">Troco</label>          <input type="number" id="nTroco" placeholder="0,00" readonly   class="finput" style="color:var(--green)"></div>
-      </div>
-      <div class="frow">
-        <div><label class="flabel">Desconto (R$)</label><input type="number" id="nDesc2" placeholder="0,00" step="0.01" class="finput" oninput="calcTroco()"></div>
-        <div><label class="flabel">Status</label>
-          <select id="nStatus" class="finput">
-            <option value="paga">Paga</option>
-            <option value="aberta">Em Aberto</option>
-            <option value="em_andamento">Em Andamento</option>
-            <option value="fiado">Fiado</option>
-            <option value="cancelada">Cancelada</option>
-          </select>
-        </div>
-      </div>
-      <label class="flabel">Data/Hora</label>
-      <input type="datetime-local" id="nDate" class="finput">
-    </div>
-    <div class="card">
-      <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>Assinatura do Cliente</div></div>
-      <div id="termsBox" style="background:rgba(255,109,0,.06);border:1px solid rgba(255,109,0,.2);border-radius:10px;padding:12px;margin-bottom:12px;font-size:12px;color:var(--muted);line-height:1.7">
-        Configure os termos em ⚙️ Configurações
-      </div>
-      <canvas id="sigC" style="width:100%;height:130px;background:var(--bg);border:1px solid var(--b2);border-radius:10px;touch-action:none;cursor:crosshair;display:block"></canvas>
-      <div style="font-family:var(--mono);font-size:10px;color:var(--muted2);text-align:center;margin:7px 0 10px">← Assine aqui →</div>
-      <div class="brow"><button class="btn btn-ghost btn-sm" onclick="clearSig()">🗑️ Limpar</button></div>
-    </div>
-    <div class="ia-card" id="iaSugestaoCard" style="display:none">
-      <div class="ia-title">🤖 SUGESTÃO DA IA</div>
-      <div class="ia-content" id="iaSugestaoText"></div>
-    </div>
-    <button class="btn btn-green" style="margin-bottom:28px" onclick="saveOS()">✅ EMITIR NOTA / OS</button>
-  </div>
-
-  <div class="page" id="p3">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
-      <input type="date" id="caixaDate" class="finput" style="margin-bottom:0;flex:1" onchange="renderCaixa()">
-      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('caixaDate').value=F.today();renderCaixa()">Hoje</button>
-    </div>
-    <div class="cx-grid" id="cxCards"></div>
-    <div class="card">
-      <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>Por Forma de Pagamento</div></div>
-      <div id="payBreak"></div>
-    </div>
-    <div class="card">
-      <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>Movimentações</div></div>
-      <div id="movList"></div>
-    </div>
-    <div class="card">
-      <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>Registrar Saída</div></div>
-      <label class="flabel">Descrição</label>
-      <input type="text" id="saidaDesc" placeholder="Ex: Fornecedor, aluguel..." class="finput">
-      <div class="frow">
-        <div>
-          <label class="flabel">Valor (R$)</label>
-          <input type="number" id="saidaVal" placeholder="0,00" step="0.01" class="finput">
-        </div>
-        <div>
-          <label class="flabel">Categoria</label>
-          <select id="saidaCat" class="finput">
-            <option>Fornecedor</option>
-            <option>Aluguel</option>
-            <option>Salário</option>
-            <option>Energia/Água</option>
-            <option>Material</option>
-            <option>Outros</option>
-          </select>
-        </div>
-      </div>
-      <button class="btn btn-red" onclick="addSaida()">➖ Registrar Saída</button>
-    </div>
-    <div class="brow">
-      <button class="btn btn-ghost"   onclick="exportCaixaPDF()">📄 Exportar PDF</button>
-      <button class="btn btn-outline" onclick="printRelatorio()">🖨️ Imprimir</button>
-    </div>
-    <div class="ia-card">
-      <div class="ia-title">🤖 IA — PREVISÃO DE FLUXO DE CAIXA</div>
-      <div class="ia-content" id="iaFluxoText">
-        <div class="ia-loading"><div class="ia-dot"></div><div class="ia-dot"></div><div class="ia-dot"></div></div>
-      </div>
-      <button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="iaFluxoCaixa()">🔄 Atualizar previsão</button>
-    </div>
-  </div>
-
-  <div class="page" id="p4">
-    <div class="brow">
-      <button class="btn btn-blue" onclick="openNovoProduto()">＋ Novo Produto</button>
-      <button class="btn btn-ghost btn-sm" style="flex:.5" onclick="alertasEstoque()">⚠️ Alertas</button>
-    </div>
-    <div class="sw">
-      <span class="si">🔍</span>
-      <input type="search" placeholder="Buscar produto..." id="searchEstoque" class="finput">
-    </div>
-    <div class="ia-card">
-      <div class="ia-title">🤖 IA — SUGESTÃO DE REPOSIÇÃO</div>
-      <div class="ia-content" id="iaEstoqueText">
-        <div class="ia-loading"><div class="ia-dot"></div><div class="ia-dot"></div><div class="ia-dot"></div></div>
-      </div>
-      <button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="iaSugerirEstoque()">🔄 Analisar estoque</button>
-    </div>
-    <div id="estoqueList"></div>
-  </div>
-
-  <div class="page" id="p5">
-    <div class="brow">
-      <button class="btn btn-blue" onclick="openNovoCliente()">＋ Novo Cliente</button>
-    </div>
-    <div class="sw">
-      <span class="si">🔍</span>
-      <input type="search" placeholder="Buscar cliente..." id="searchCliente" class="finput">
-    </div>
-    <div id="clientesList"></div>
-  </div>
-
-  <div class="page" id="p6">
-    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center">
-      <input type="month" id="analyticsMes" class="finput" style="margin-bottom:0;flex:1" onchange="renderAnalytics()">
-      <button class="btn btn-ghost btn-sm" onclick="setMesAtual()">Mês atual</button>
-    </div>
-    <div id="analyticsContent"></div>
-  </div>
-
-  <div class="page" id="p7">
-    <div class="card">
-      <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>🖼️ Logo</div></div>
-      <img id="logoPreview" src="" alt="Logo" style="width:80px;height:80px;border-radius:12px;object-fit:contain;border:1px solid var(--b1);background:var(--bg);display:none;margin-bottom:12px">
-      <div class="brow">
-        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('logoInput').click()">📁 Carregar Logo</button>
-        <button class="btn btn-red   btn-sm" style="flex:.4" onclick="removeLogo()">🗑️</button>
-      </div>
-      <input type="file" id="logoInput" accept="image/*" style="display:none" onchange="handleLogo(event)">
-    </div>
-    <div class="card">
-      <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>Dados da Empresa</div></div>
-      <label class="flabel">Nome</label>
-      <input type="text" id="cStoreName" class="finput">
-      <div class="frow">
-        <div><label class="flabel">CNPJ/CPF</label><input type="text" id="cCnpj"  class="finput"></div>
-        <div><label class="flabel">Telefone</label><input type="tel"  id="cPhone" class="finput"></div>
-      </div>
+      <label class="flabel">Email</label>
+      <input class="finput" id="cli-email" type="email" placeholder="cliente@email.com">
       <label class="flabel">Endereço</label>
-      <input type="text" id="cAddr" class="finput">
+      <input class="finput" id="cli-end" placeholder="Rua, número, bairro">
       <div class="frow">
-        <div><label class="flabel">Instagram</label><input type="text" id="cSite" class="finput"></div>
-        <div><label class="flabel">Chave PIX</label><input type="text" id="cPix"  class="finput"></div>
+        <div>
+          <label class="flabel">Data de aniversário</label>
+          <input class="finput" id="cli-nasc" type="date">
+        </div>
+        <div>
+          <label class="flabel">Nível</label>
+          <select class="finput" id="cli-nivel">
+            <option value="normal">Normal</option>
+            <option value="vip">⭐ VIP</option>
+            <option value="premium">💎 Premium</option>
+          </select>
+        </div>
       </div>
-      <label class="flabel">Termos da nota</label>
-      <textarea id="cTerms" rows="4" class="finput"></textarea>
-      <button class="btn btn-blue" onclick="saveConfig()">💾 Salvar</button>
-    </div>
-    <div class="card">
-      <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>📱 WhatsApp API</div></div>
-      <label class="flabel">URL da API</label>
-      <input type="text" id="waUrl" placeholder="https://api.whatsapp..." class="finput">
-      <label class="flabel">API Key</label>
-      <input type="text" id="waKey" class="finput">
-      <label class="flabel">Número</label>
-      <input type="text" id="waNum" placeholder="5511999990000" class="finput">
-      <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
-        <input type="checkbox" id="waOsPronta" checked>
-        <label style="font-size:13px">Avisar cliente quando OS ficar pronta</label>
-      </div>
-      <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
-        <input type="checkbox" id="waCobranca" checked>
-        <label style="font-size:13px">Enviar cobrança de parcelas vencendo</label>
-      </div>
-      <button class="btn btn-green" onclick="saveWhatsApp()">💾 Salvar WhatsApp</button>
-    </div>
-    <div class="card">
-      <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>Conta</div></div>
-      <div class="ir"><span class="irl">Email</span> <span class="irv" id="configEmail">—</span></div>
-      <div class="ir"><span class="irl">Plano</span> <span class="irv" id="configPlano">—</span></div>
-      <div class="ir"><span class="irl">Vence em</span><span class="irv" id="configVence">—</span></div>
-      <div class="brow" style="margin-top:14px">
-        <button class="btn btn-ghost" onclick="exportBackup()">📤 Backup</button>
-        <button class="btn btn-red"   onclick="doLogout()">🚪 Sair</button>
+      <label class="flabel">Limite de crédito (fiado)</label>
+      <input class="finput" id="cli-limite" type="number" placeholder="R$ 0,00" min="0" step="0.01">
+      <label class="flabel">Observações</label>
+      <textarea class="finput" id="cli-obs" rows="2" placeholder="Notas sobre o cliente..."></textarea>
+
+      <div class="brow" style="margin-top:8px">
+        <button class="btn btn-ghost" onclick="UI.closeModal('modal-cliente')">Cancelar</button>
+        <button class="btn btn-primary" onclick="Clientes.salvar()">💾 Salvar</button>
       </div>
     </div>
   </div>
-
-  <div class="page" id="p8">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-      <span style="font-size:22px;font-weight:800">Painel Master</span>
-      <span class="master-badge">ADMIN GLOBAL</span>
-    </div>
-    <div class="kpi-grid" id="masterKpis"></div>
-    <div class="card">
-      <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>Crescimento MRR</div></div>
-      <div class="chart-wrap"><canvas id="chartMRR"></canvas></div>
-    </div>
-    <div class="card">
-      <div class="ctitle"><div class="ctitle-left"><div class="bar"></div>Empresas Cadastradas</div></div>
-      <div class="sw">
-        <span class="si">🔍</span>
-        <input type="search" placeholder="Buscar empresa..." id="searchEmpresas" class="finput" oninput="renderEmpresas()">
-      </div>
-      <div id="empresasList"></div>
-    </div>
-  </div>
-
 </div>
 
-<nav>
-  <div class="ni on" id="n0" onclick="goP(0)"><div class="ico">📊</div>Dashboard</div>
-  <div class="ni"    id="n1" onclick="goP(1)"><div class="ico">📋</div>OS</div>
-  <div class="ni"    id="n2" onclick="goP(2)"><div class="ico">➕</div>Nova OS</div>
-  <div class="ni"    id="n3" onclick="goP(3)"><div class="ico">💰</div>Caixa</div>
-  <div class="ni"    id="n4" onclick="goP(4)"><div class="ico">📦</div>Estoque</div>
-  <div class="ni"    id="n5" onclick="goP(5)"><div class="ico">👥</div>Clientes</div>
-  <div class="ni"    id="n6" onclick="goP(6)"><div class="ico">📈</div>Analytics</div>
-  <div class="ni"    id="n7" onclick="goP(7)"><div class="ico">⚙️</div>Config</div>
-  <div class="ni"    id="n8" onclick="goP(8)" style="display:none"><div class="ico">👑</div>Master</div>
-</nav>
-
-<div class="mwrap" id="mwrap">
+<!-- Produto Modal -->
+<div class="mwrap" id="modal-produto">
+  <div class="mwrap-bg" onclick="UI.closeModal('modal-produto')"></div>
   <div class="msheet">
-    <div class="mhandle" onclick="closeM()"></div>
-    <div class="mbody" id="mbody"></div>
+    <div class="mhandle" onclick="UI.closeModal('modal-produto')"></div>
+    <div class="mbody">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <h2 style="font-size:18px;font-weight:800" id="prod-modal-title">Novo Produto</h2>
+        <button class="btn btn-ghost btn-sm" onclick="UI.closeModal('modal-produto')">✕</button>
+      </div>
+      <input type="hidden" id="prod-id">
+
+      <div style="display:flex;gap:8px;margin-bottom:0">
+        <div style="flex:1">
+          <label class="flabel req">Nome do produto</label>
+          <input class="finput" id="prod-nome" placeholder="Ex: Tela iPhone 13">
+        </div>
+        <div style="width:44px;display:flex;flex-direction:column;justify-content:flex-end">
+          <button onclick="Scanner.open('prod-barcode')" id="scanner-prod-btn" title="Scanner código de barras" style="width:44px;height:44px;background:var(--bg4);border:1px solid var(--b1);border-radius:var(--r-md);font-size:20px;margin-bottom:12px">📷</button>
+        </div>
+      </div>
+
+      <label class="flabel">Código de barras / SKU</label>
+      <input class="finput" id="prod-barcode" placeholder="Código de barras ou SKU">
+
+      <div class="frow3">
+        <div>
+          <label class="flabel">Preço de custo</label>
+          <input class="finput" id="prod-custo" type="number" placeholder="0,00" min="0" step="0.01" oninput="Estoque.calcMargem()">
+        </div>
+        <div>
+          <label class="flabel">Preço de venda</label>
+          <input class="finput" id="prod-venda" type="number" placeholder="0,00" min="0" step="0.01" oninput="Estoque.calcMargem()">
+        </div>
+        <div>
+          <label class="flabel">Margem</label>
+          <input class="finput" id="prod-margem" placeholder="0%" readonly style="opacity:.7">
+        </div>
+      </div>
+
+      <div class="frow">
+        <div>
+          <label class="flabel">Estoque atual</label>
+          <input class="finput" id="prod-qty" type="number" placeholder="0" min="0">
+        </div>
+        <div>
+          <label class="flabel">Estoque mínimo</label>
+          <input class="finput" id="prod-min" type="number" placeholder="5" min="0">
+        </div>
+      </div>
+
+      <label class="flabel">Categoria</label>
+      <input class="finput" id="prod-cat" placeholder="Ex: Telas, Baterias, Acessórios">
+
+      <label class="flabel">Fornecedor</label>
+      <input class="finput" id="prod-forn" placeholder="Nome do fornecedor">
+
+      <div class="brow" style="margin-top:8px">
+        <button class="btn btn-ghost" onclick="UI.closeModal('modal-produto')">Cancelar</button>
+        <button class="btn btn-primary" onclick="Estoque.salvar()">💾 Salvar</button>
+      </div>
+    </div>
   </div>
 </div>
 
-<div id="compView">
-  <div style="display:flex;gap:8px;margin-bottom:16px;max-width:440px;margin-left:auto;margin-right:auto;flex-wrap:wrap">
-    <button class="btn btn-ghost  btn-sm" onclick="closeComp()">← Voltar</button>
-    <button class="btn btn-blue   btn-sm" onclick="printComp()">🖨️ Imprimir</button>
-    <button class="btn btn-green  btn-sm" onclick="genPDF(STATE.currentCompId)">📄 PDF</button>
-    <button class="btn btn-ghost  btn-sm" onclick="shareComp()">📤 Compartilhar</button>
-    <button class="btn btn-purple btn-sm" onclick="sendWA(STATE.currentCompId)">💬 WhatsApp</button>
+<!-- Evento Agenda Modal -->
+<div class="mwrap" id="modal-evento">
+  <div class="mwrap-bg" onclick="UI.closeModal('modal-evento')"></div>
+  <div class="msheet">
+    <div class="mhandle" onclick="UI.closeModal('modal-evento')"></div>
+    <div class="mbody">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <h2 style="font-size:18px;font-weight:800">Novo Evento</h2>
+        <button class="btn btn-ghost btn-sm" onclick="UI.closeModal('modal-evento')">✕</button>
+      </div>
+      <input type="hidden" id="ev-id">
+      <label class="flabel req">Título</label>
+      <input class="finput" id="ev-titulo" placeholder="Ex: Visita técnica - João">
+      <div class="frow">
+        <div>
+          <label class="flabel req">Data</label>
+          <input class="finput" id="ev-data" type="date">
+        </div>
+        <div>
+          <label class="flabel">Hora</label>
+          <input class="finput" id="ev-hora" type="time">
+        </div>
+      </div>
+      <label class="flabel req">Tipo</label>
+      <select class="finput" id="ev-tipo">
+        <option value="os">🔧 OS agendada</option>
+        <option value="visita">🚗 Visita técnica</option>
+        <option value="cobranca">💰 Lembrete de cobrança</option>
+        <option value="geral">📌 Compromisso geral</option>
+      </select>
+      <label class="flabel">Técnico</label>
+      <select class="finput" id="ev-tecnico">
+        <option value="">Sem técnico</option>
+      </select>
+      <label class="flabel">Descrição</label>
+      <textarea class="finput" id="ev-desc" rows="2" placeholder="Detalhes do evento..."></textarea>
+      <div class="brow" style="margin-top:8px">
+        <button class="btn btn-ghost" onclick="UI.closeModal('modal-evento')">Cancelar</button>
+        <button class="btn btn-primary" onclick="Agenda.salvar()">💾 Salvar</button>
+      </div>
+    </div>
   </div>
-  <div id="compContent"></div>
 </div>
 
+<!-- Conta Financeiro Modal -->
+<div class="mwrap" id="modal-conta">
+  <div class="mwrap-bg" onclick="UI.closeModal('modal-conta')"></div>
+  <div class="msheet">
+    <div class="mhandle" onclick="UI.closeModal('modal-conta')"></div>
+    <div class="mbody">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <h2 style="font-size:18px;font-weight:800" id="conta-modal-title">Nova conta</h2>
+        <button class="btn btn-ghost btn-sm" onclick="UI.closeModal('modal-conta')">✕</button>
+      </div>
+      <input type="hidden" id="conta-tipo">
+      <label class="flabel req">Descrição</label>
+      <input class="finput" id="conta-desc" placeholder="Ex: Aluguel do mês">
+      <div class="frow">
+        <div>
+          <label class="flabel req">Valor</label>
+          <input class="finput" id="conta-valor" type="number" placeholder="0,00" min="0" step="0.01">
+        </div>
+        <div>
+          <label class="flabel req">Vencimento</label>
+          <input class="finput" id="conta-venc" type="date">
+        </div>
+      </div>
+      <label class="flabel">Categoria</label>
+      <input class="finput" id="conta-cat" placeholder="Ex: Aluguel, Fornecedor...">
+      <div class="brow" style="margin-top:8px">
+        <button class="btn btn-ghost" onclick="UI.closeModal('modal-conta')">Cancelar</button>
+        <button class="btn btn-primary" onclick="Caixa.salvarConta()">💾 Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Saída Caixa Modal -->
+<div class="mwrap" id="modal-saida">
+  <div class="mwrap-bg" onclick="UI.closeModal('modal-saida')"></div>
+  <div class="msheet">
+    <div class="mhandle" onclick="UI.closeModal('modal-saida')"></div>
+    <div class="mbody">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <h2 style="font-size:18px;font-weight:800">Registrar Saída</h2>
+        <button class="btn btn-ghost btn-sm" onclick="UI.closeModal('modal-saida')">✕</button>
+      </div>
+      <label class="flabel req">Descrição</label>
+      <input class="finput" id="saida-desc" placeholder="Ex: Compra de peças, Aluguel...">
+      <label class="flabel req">Valor</label>
+      <input class="finput" id="saida-val" type="number" placeholder="R$ 0,00" min="0" step="0.01">
+      <label class="flabel">Categoria</label>
+      <select class="finput" id="saida-cat">
+        <option value="compras">🛒 Compra de peças</option>
+        <option value="despesa">📋 Despesa fixa</option>
+        <option value="salario">👷 Salário/Pagamento</option>
+        <option value="outro">📌 Outro</option>
+      </select>
+      <label class="flabel">Data</label>
+      <input class="finput" id="saida-data" type="date">
+      <div class="brow" style="margin-top:8px">
+        <button class="btn btn-ghost" onclick="UI.closeModal('modal-saida')">Cancelar</button>
+        <button class="btn btn-red" onclick="Caixa.salvarSaida()">➖ Registrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Funcionário Modal -->
+<div class="mwrap" id="modal-funcionario">
+  <div class="mwrap-bg" onclick="UI.closeModal('modal-funcionario')"></div>
+  <div class="msheet">
+    <div class="mhandle" onclick="UI.closeModal('modal-funcionario')"></div>
+    <div class="mbody">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <h2 style="font-size:18px;font-weight:800" id="func-modal-title">Novo Funcionário</h2>
+        <button class="btn btn-ghost btn-sm" onclick="UI.closeModal('modal-funcionario')">✕</button>
+      </div>
+      <input type="hidden" id="func-id">
+      <label class="flabel req">Nome</label>
+      <input class="finput" id="func-nome" placeholder="Nome do funcionário">
+      <label class="flabel req">Função</label>
+      <input class="finput" id="func-funcao" placeholder="Ex: Técnico, Atendente...">
+      <label class="flabel req">PIN (4 dígitos)</label>
+      <input class="finput" id="func-pin" type="password" maxlength="4" placeholder="••••"
+        inputmode="numeric" style="font-size:24px;letter-spacing:8px;text-align:center">
+      <label class="flabel" style="margin-top:4px">Permissões</label>
+      <div id="func-perms" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;background:var(--bg2);border-radius:var(--r-md);padding:12px;border:1px solid var(--b1)">
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer">
+          <input type="checkbox" name="perm" value="criar_os" checked> Criar OS
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer">
+          <input type="checkbox" name="perm" value="ver_todas_os"> Ver todas OS
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer">
+          <input type="checkbox" name="perm" value="deletar_os"> Deletar OS
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer">
+          <input type="checkbox" name="perm" value="ver_caixa"> Ver Caixa
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer">
+          <input type="checkbox" name="perm" value="ver_analytics"> Ver Analytics
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer">
+          <input type="checkbox" name="perm" value="gerenciar_estoque" checked> Estoque
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer">
+          <input type="checkbox" name="perm" value="ver_clientes" checked> Clientes
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer">
+          <input type="checkbox" name="perm" value="editar_config"> Config
+        </label>
+      </div>
+      <div class="brow" style="margin-top:16px">
+        <button class="btn btn-ghost" onclick="UI.closeModal('modal-funcionario')">Cancelar</button>
+        <button class="btn btn-primary" onclick="Funcionarios.salvar()">💾 Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Scanner Modal -->
+<div class="mwrap" id="modal-scanner">
+  <div class="mwrap-bg" onclick="Scanner.close()"></div>
+  <div class="msheet" style="max-height:70vh">
+    <div class="mhandle" onclick="Scanner.close()"></div>
+    <div class="mbody" style="text-align:center">
+      <h3 style="margin-bottom:16px;font-size:16px;font-weight:700">📷 Scanner</h3>
+      <div id="scanner-preview" style="width:100%;max-width:340px;height:240px;background:var(--bg);border-radius:var(--r-lg);overflow:hidden;margin:0 auto 16px;position:relative;display:flex;align-items:center;justify-content:center">
+        <video id="scanner-video" style="width:100%;height:100%;object-fit:cover"></video>
+        <div style="position:absolute;inset:0;border:2px solid var(--blue);border-radius:var(--r-lg);pointer-events:none"></div>
+        <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:80%;height:2px;background:rgba(59,130,246,.6);animation:scan 2s linear infinite"></div>
+      </div>
+      <div id="scanner-result" style="font-family:var(--mono);font-size:14px;color:var(--muted);margin-bottom:12px">Aponte para o código...</div>
+      <button class="btn btn-ghost btn-full" onclick="Scanner.close()">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Comprovante View -->
+<div id="compView" style="display:none">
+  <div style="max-width:440px;margin:0 auto">
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <button class="btn btn-ghost btn-sm" onclick="Comp.fechar()">← Voltar</button>
+      <button class="btn btn-blue btn-sm" onclick="Comp.pdf()">📄 PDF</button>
+      <button class="btn btn-green btn-sm" onclick="Comp.whatsapp()">📱 WhatsApp</button>
+      <button class="btn btn-ghost btn-sm" onclick="window.print()">🖨️ Imprimir</button>
+    </div>
+    <div class="comp-paper" id="comp-paper">
+    </div>
+  </div>
+</div>
+
+<!-- Notificações Panel -->
 <div id="notifPanel">
-  <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--b1)">
-    <span style="font-weight:700;font-size:14px">Notificações</span>
-    <button class="btn btn-ghost btn-sm" onclick="marcarTodasLidas()">✓ Marcar lidas</button>
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--b1)">
+    <span style="font-size:14px;font-weight:700">Notificações</span>
+    <button style="font-size:12px;color:var(--muted)" onclick="Notif.markAll()">Marcar lidas</button>
   </div>
-  <div id="notifList"></div>
+  <div id="notif-list" style="max-height:380px;overflow-y:auto">
+    <div class="empty"><div class="empty-ico">🔔</div><p>Sem notificações</p></div>
+  </div>
 </div>
 
+<!-- User Menu -->
 <div id="userMenu">
-  <div style="padding:16px;border-bottom:1px solid var(--b1)">
-    <div style="font-weight:700" id="umNome">—</div>
-    <div style="font-size:12px;color:var(--muted);font-family:var(--mono)" id="umEmail">—</div>
-    <div style="margin-top:6px" id="umPlano"></div>
+  <div style="padding:14px 16px;border-bottom:1px solid var(--b1)">
+    <div style="font-size:13px;font-weight:700" id="um-name">—</div>
+    <div style="font-size:11px;color:var(--muted);font-family:var(--mono)" id="um-email">—</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:4px" id="um-empresa">—</div>
   </div>
-  <div class="umenu-item" onclick="goP(7);UI.closeMenus()">⚙️ Configurações</div>
-  <div class="umenu-item" onclick="toggleTheme();UI.closeMenus()">🌙 Alternar tema</div>
+  <div class="umenu-item" onclick="Nav.go('config');UI.closeUserMenu()">⚙️ Configurações</div>
+  <div class="umenu-item" id="um-master" style="display:none" onclick="Nav.go('master');UI.closeUserMenu()">👑 Master Admin</div>
   <div class="umenu-sep"></div>
-  <div class="umenu-item danger" onclick="doLogout()">🚪 Sair da conta</div>
+  <div class="umenu-item danger" onclick="Auth.logout()">🚪 Sair</div>
 </div>
 
+<!-- Global Search Results -->
+<div id="gsearch-panel" class="gone" style="position:fixed;top:calc(var(--header-h) + 4px);left:20px;right:20px;max-width:520px;background:var(--bg3);border:1px solid var(--b1);border-radius:var(--r-xl);box-shadow:var(--shadow-lg);z-index:200;max-height:400px;overflow-y:auto">
+  <div id="gsearch-results" style="padding:8px"></div>
+</div>
+
+<!-- Toast -->
 <div id="toast"></div>
 
+<!-- Toggle Switch Styles -->
+<style>
+.toggle-sw { position:relative; display:inline-flex; align-items:center; cursor:pointer; }
+.toggle-sw input { display:none; }
+.ts-track {
+  width:44px; height:24px; background:var(--b2);
+  border-radius:99px; transition:var(--trans); position:relative;
+}
+.ts-track::after {
+  content:''; position:absolute; top:3px; left:3px;
+  width:18px; height:18px; border-radius:50%;
+  background:#fff; transition:var(--trans);
+}
+.toggle-sw input:checked + .ts-track { background:var(--blue-d); }
+.toggle-sw input:checked + .ts-track::after { transform:translateX(20px); }
+
+@keyframes scan {
+  0%   { top: 20%; }
+  50%  { top: 80%; }
+  100% { top: 20%; }
+}
+</style>
+
+<!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="api.js"></script>
 <script src="auth.js"></script>
 <script src="app.js"></script>
-<script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js');
-}
-</script>
 </body>
 </html>
