@@ -1,153 +1,117 @@
-// ═══════════════════════════════════════════════════════════
-// NEXOS v2.0 — AUTH.JS
-// ═══════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════
+   NEXOS v3.0 — AUTH.JS
+   ═══════════════════════════════════════════════ */
 
-const Auth = (() => {
+// Supabase init
+const SB_URL = 'https://twxotfzlronfjfjyaklx.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR3eG90Znpscm9uZmpmanlha2x4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1NzA5NjAsImV4cCI6MjA4ODE0Njk2MH0.QqOg_dFtoGJfNJ_-l58AMeWeynYJL8wIczO5QU-nY1A';
+window.sb = supabase.createClient(SB_URL, SB_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true }
+});
 
-  // ── UI helpers internos ──
-  const $       = (id)       => document.getElementById(id);
-  const show    = (id)       => $( id)?.classList.remove('gone');
-  const hide    = (id)       => $(id)?.classList.add('gone');
-  const val     = (id)       => $(id)?.value?.trim() ?? '';
-  const setBtn  = (id, txt, disabled) => { const b = $(id); if (b) { b.textContent = txt; b.disabled = disabled; } };
+const Auth = {
+  showScreen() {
+    document.getElementById('auth-screen').classList.remove('gone');
+    document.getElementById('app').classList.add('gone');
+    document.getElementById('bottom-nav').classList.add('gone');
+    document.getElementById('fab-btn').classList.add('gone');
+    document.getElementById('onboarding').classList.add('gone');
+  },
 
-  function showErr(msg) {
-    const el = $('authErr');
-    if (el) { el.textContent = msg; el.classList.add('show'); }
-  }
-  function showOk(msg) {
-    const el = $('authOk');
-    if (el) { el.textContent = msg; el.classList.add('show'); }
-  }
-  function clearMsg() {
-    $('authErr')?.classList.remove('show');
-    $('authOk')?.classList.remove('show');
-  }
+  tab(t) {
+    document.getElementById('auth-login').classList.toggle('gone', t !== 'login');
+    document.getElementById('auth-register').classList.toggle('gone', t !== 'register');
+    document.getElementById('auth-pin').classList.toggle('gone', t !== 'pin');
+    ['tab-login','tab-reg','tab-pin'].forEach(id => document.getElementById(id).classList.remove('on'));
+    document.getElementById('tab-' + (t === 'register' ? 'reg' : t === 'pin' ? 'pin' : 'login')).classList.add('on');
+  },
 
-  // ── Alternar abas Login / Cadastro ──
-  function switchTab(tab) {
-    const isLogin = tab === 'login';
-    document.querySelectorAll('.auth-tab').forEach((el, i) =>
-      el.classList.toggle('on', isLogin ? i === 0 : i === 1)
-    );
-    $('loginForm').style.display    = isLogin ? 'block' : 'none';
-    $('registerForm').style.display = isLogin ? 'none'  : 'block';
-    $('forgotForm').style.display   = 'none';
-    clearMsg();
-  }
+  showErr(id, msg) {
+    const el = document.getElementById(id);
+    el.textContent = msg; el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 4000);
+  },
 
-  // ── Mostrar tela de recuperação ──
-  function showForgot() {
-    $('loginForm').style.display  = 'none';
-    $('forgotForm').style.display = 'block';
-    clearMsg();
-  }
-
-  // ── Mostrar / esconder senha ──
-  function togglePass(inputId, btn) {
-    const el = $(inputId);
+  showOk(id, msg) {
+    const el = document.getElementById(id);
     if (!el) return;
-    el.type     = el.type === 'password' ? 'text' : 'password';
-    btn.textContent = el.type === 'password' ? '👁' : '🙈';
-  }
+    el.textContent = msg; el.classList.add('show');
+  },
 
-  // ── Login ──
-  async function login() {
-    clearMsg();
-    const email = val('loginEmail');
-    const pw    = val('loginPass');
-    if (!email || !pw) { showErr('Preencha email e senha'); return; }
+  async login() {
+    const email = document.getElementById('li-email').value.trim();
+    const pass = document.getElementById('li-pass').value;
+    if (!email || !pass) { Auth.showErr('auth-err-login', '⚠️ Preencha email e senha'); return; }
+    document.querySelector('#auth-login .btn-auth-primary').textContent = '⏳ Entrando...';
+    const { error } = await window.sb.auth.signInWithPassword({ email, password: pass });
+    document.querySelector('#auth-login .btn-auth-primary').innerHTML = '<span>Entrar</span><span>→</span>';
+    if (error) Auth.showErr('auth-err-login', '❌ ' + (error.message === 'Invalid login credentials' ? 'Email ou senha incorretos' : error.message));
+  },
 
-    setBtn('btnLogin', '⏳ Entrando...', true);
+  async register() {
+    const name = document.getElementById('rg-name').value.trim();
+    const email = document.getElementById('rg-email').value.trim();
+    const pass = document.getElementById('rg-pass').value;
+    if (!name || !email || !pass) { Auth.showErr('auth-err-reg', '⚠️ Preencha todos os campos'); return; }
+    if (pass.length < 6) { Auth.showErr('auth-err-reg', '⚠️ Senha deve ter no mínimo 6 caracteres'); return; }
+    document.querySelector('#auth-register .btn-auth-primary').textContent = '⏳ Criando conta...';
+    const { error } = await window.sb.auth.signUp({ email, password: pass, options: { data: { full_name: name } } });
+    document.querySelector('#auth-register .btn-auth-primary').innerHTML = '<span>Criar conta</span><span>→</span>';
+    if (error) Auth.showErr('auth-err-reg', '❌ ' + error.message);
+    else Auth.showOk('auth-ok-login', '✅ Conta criada! Verifique seu email.');
+  },
 
-    const { error } = await API.auth.signIn(email, pw);
+  async loginGoogle() {
+    const { error } = await window.sb.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.href }
+    });
+    if (error) Auth.showErr('auth-err-login', '❌ ' + error.message);
+  },
 
-    if (error) {
-      showErr(
-        error.message === 'Invalid login credentials'
-          ? 'Email ou senha incorretos'
-          : 'Erro ao entrar. Tente novamente.'
-      );
-      setBtn('btnLogin', '🔐 Entrar no sistema', false);
+  async pinLogin() {
+    const codigo = document.getElementById('pin-empresa').value.trim();
+    const pin = document.getElementById('pin-code').value.trim();
+    if (!codigo || pin.length < 4) { Auth.showErr('auth-err-pin', '⚠️ Informe o código e o PIN'); return; }
+    try {
+      const { data: emp } = await window.sb.from('empresas')
+        .select('id,nome').eq('codigo', codigo).single();
+      if (!emp) { Auth.showErr('auth-err-pin', '❌ Empresa não encontrada'); return; }
+      const { data: func } = await window.sb.from('funcionarios')
+        .select('*').eq('empresa_id', emp.id).eq('pin_hash', btoa(pin)).eq('ativo', true).single();
+      if (!func) { Auth.showErr('auth-err-pin', '❌ PIN incorreto ou funcionário inativo'); return; }
+      // Login via PIN — usar conta da empresa
+      UI.toast('✅ Bem-vindo, ' + func.nome + '!');
+      // Modo funcionário (sem auth Supabase, sessão local)
+      STATE.funcionario = func;
+      // TODO: implementar modo funcionário completo
+      Auth.showErr('auth-err-pin', '⚠️ Login por PIN em breve!');
+    } catch(e) {
+      Auth.showErr('auth-err-pin', '❌ Erro: ' + e.message);
     }
-    // sucesso → onAuthStateChange cuida do resto
-  }
+  },
 
-  // ── Cadastro ──
-  async function register() {
-    clearMsg();
-    const nome    = val('regNome');
-    const empresa = val('regEmpresa');
-    const email   = val('regEmail');
-    const pw      = val('regPass');
-
-    if (!nome || !empresa || !email || !pw) {
-      showErr('Preencha todos os campos'); return;
+  async forgot() {
+    const email = document.getElementById('li-email').value.trim();
+    if (!email) { Auth.showErr('auth-err-login', '⚠️ Informe o email primeiro'); return; }
+    const { error } = await window.sb.auth.resetPasswordForEmail(email);
+    if (error) Auth.showErr('auth-err-login', '❌ ' + error.message);
+    else {
+      document.getElementById('auth-ok-login').textContent = '✅ Email de redefinição enviado!';
+      document.getElementById('auth-ok-login').classList.add('show');
     }
-    if (pw.length < 6) {
-      showErr('Senha deve ter no mínimo 6 caracteres'); return;
-    }
+  },
 
-    setBtn('btnRegister', '⏳ Criando conta...', true);
+  async logout() {
+    if (!confirm('Sair do NexOS?')) return;
+    await window.sb.auth.signOut();
+    location.reload();
+  },
+};
 
-    const { data, error } = await API.auth.signUp(email, pw, { nome, empresa_nome: empresa });
+// Google login button
+document.getElementById('btn-google')?.addEventListener('click', Auth.loginGoogle);
 
-    if (error) {
-      showErr(error.message);
-      setBtn('btnRegister', '🚀 Criar minha conta grátis', false);
-      return;
-    }
-
-    if (data?.user) {
-      await API.perfil.registrarEmpresa(empresa, nome, data.user.id);
-      showOk('✅ Conta criada! Verifique seu email para confirmar.');
-    }
-
-    setBtn('btnRegister', '🚀 Criar minha conta grátis', false);
-  }
-
-  // ── Google OAuth ──
-  async function google() {
-    await API.auth.google(window.location.href);
-  }
-
-  // ── Recuperar senha ──
-  async function forgot() {
-    clearMsg();
-    const email = val('forgotEmail');
-    if (!email) { showErr('Digite seu email'); return; }
-
-    const { error } = await API.auth.resetPw(email, window.location.href);
-    if (error) showErr(error.message);
-    else showOk('✅ Link enviado! Verifique sua caixa de entrada.');
-  }
-
-  // ── Logout ──
-  async function logout() {
-    await API.auth.signOut();
-    UI.toast('👋 Até logo!');
-  }
-
-  // ── Exibir tela de auth ──
-  function showScreen() {
-    hide('loading-screen');
-    hide('onboarding');
-    show('auth-screen');
-  }
-
-  // ── API pública do módulo ──
-  return { switchTab, showForgot, togglePass, login, register, google, forgot, logout, showScreen };
-
-})();
-
-window.Auth = Auth;
-
-// ── Atalhos globais chamados via onclick no HTML ──
-window.authTab       = (t)       => Auth.switchTab(t);
-window.showForgot    = ()        => Auth.showForgot();
-window.togglePass    = (id, btn) => Auth.togglePass(id, btn);
-window.doLogin       = ()        => Auth.login();
-window.doRegister    = ()        => Auth.register();
-window.doGoogleLogin = ()        => Auth.google();
-window.doForgot      = ()        => Auth.forgot();
-window.doLogout      = ()        => Auth.logout();
+// Enter key on login
+document.getElementById('li-pass')?.addEventListener('keydown', e => { if(e.key==='Enter') Auth.login(); });
+document.getElementById('rg-pass')?.addEventListener('keydown', e => { if(e.key==='Enter') Auth.register(); });
