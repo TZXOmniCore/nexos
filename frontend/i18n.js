@@ -22,16 +22,26 @@ const I18N = {
     this.apply();
   },
 
-  t(key) {
-    const keys = key.split('.');
-    let obj = this.translations[this._lang];
-    for (const k of keys) {
-      if (!obj) return key;
-      obj = obj[k];
-    }
-    return obj || this.translations['pt'][key] || key;
-  },
+.translations['pt'][key] || key;
+  }, t(key) {
 
+  if (typeof key !== 'string') return '';
+
+  if (!this.data) return key;
+
+  const parts = key.split('.');
+
+  let value = this.data;
+
+  for (const p of parts) {
+    if (value === undefined || value === null) {
+      return key;
+    }
+    value = value[p];
+  }
+
+  return value ?? key;
+}
   apply() {
     document.querySelectorAll('[data-i18n]').forEach(el => {
       const key = el.getAttribute('data-i18n');
