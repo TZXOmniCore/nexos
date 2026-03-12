@@ -454,11 +454,12 @@ function buildOSModal(os) {
   ).join('');
 
   const renderField = (f) => {
-    const label = seg.labels[lang]?.[f.label_key] || I18N.t(f.label_key) || f.id;
-    const ph    = seg.labels[lang]?.[f.placeholder_key] || '';
+    if (!f || !f.type) return '';
+    const label = (f.label_key ? (seg.labels[lang]?.[f.label_key] || I18N.t(f.label_key)) : null) || f.label || f.id || '';
+    const ph    = (f.placeholder_key ? (seg.labels[lang]?.[f.placeholder_key] || I18N.t(f.placeholder_key)) : null) || f.placeholder || '';
     const val   = os?.[f.id] || '';
 
-    if (!label) return '';
+    if (!label && f.type === 'text') return '';
 
     switch(f.type) {
       case 'client_select': return `
