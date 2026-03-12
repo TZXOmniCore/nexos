@@ -445,6 +445,21 @@ function buildOSModal(os) {
   const prefs  = JSON.parse(localStorage.getItem('nexos_prefs')||'{}');
   const title  = os ? 'Editar ' + seg.labels[lang].os_single : seg.labels[lang].os_new;
 
+  // Mapa de IDs do segments.js → colunas reais do banco
+  const FIELD_DB = {
+    item:       'item',
+    defect:     'defeito',
+    diagnosis:  'diagnostico',
+    technician: 'tecnico_id',
+    warranty:   'garantia_dias',
+    extra_1:    'extra_1',
+    extra_2:    'extra_2',
+    extra_3:    'extra_3',
+    notes:      'observacoes',
+    delivery:   'data_entrega',
+    priority:   'prioridade',
+  };
+
   const funcsOpts = APP.funcionarios.map(f =>
     `<option value="${f.id}" ${os?.tecnico_id===f.id?'selected':''}>${f.nome}</option>`
   ).join('');
@@ -457,7 +472,8 @@ function buildOSModal(os) {
     if (!f || !f.type) return '';
     const label = (f.label_key ? (seg.labels[lang]?.[f.label_key] || I18N.t(f.label_key)) : null) || f.label || f.id || '';
     const ph    = (f.placeholder_key ? (seg.labels[lang]?.[f.placeholder_key] || I18N.t(f.placeholder_key)) : null) || f.placeholder || '';
-    const val   = os?.[f.id] || '';
+    const dbKey = FIELD_DB[f.id] || f.id;
+    const val   = os?.[dbKey] || '';
 
     if (!label && f.type === 'text') return '';
 
