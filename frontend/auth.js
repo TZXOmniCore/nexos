@@ -153,7 +153,7 @@ const Auth = {
       .from('funcionarios')
       .select('id, nome, funcao')
       .eq('empresa_id', empresa.id)
-      .eq('ativo', true);
+      .eq('ativa', true);
 
     const wrap = document.getElementById('pin-profiles');
     const inputWrap = document.getElementById('pin-inputs-wrap');
@@ -262,7 +262,7 @@ const Auth = {
       let { data: perfil } = await window.sb
         .from('usuarios')
         .select('*, empresas(*)')
-        .eq('user_id', supabaseUser.id)
+        .eq('id', supabaseUser.id)
         .maybeSingle();
 
       // 2. Se não tem perfil, pode ser master ou novo usuário
