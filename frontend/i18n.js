@@ -1043,13 +1043,21 @@ const I18N = {
   },
 
   t(key) {
+    if (!key || typeof key !== 'string') return key ?? '';
     const parts = key.split('.');
     let value = this.translations[this._lang] || this.translations['pt'];
     for (const p of parts) {
       if (value == null) return key;
       value = value[p];
     }
-    return value ?? (this.translations['pt'][key] ?? key);
+    if (value != null && typeof value !== 'object') return value;
+    // fallback para PT
+    let fallback = this.translations['pt'];
+    for (const p of parts) {
+      if (fallback == null) return key;
+      fallback = fallback[p];
+    }
+    return (fallback != null && typeof fallback !== 'object') ? fallback : key;
   },
 
   apply() {
