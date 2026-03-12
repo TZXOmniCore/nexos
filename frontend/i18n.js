@@ -7,7 +7,13 @@ const I18N = {
 
   _lang: 'pt',
 
-  get lang() { return this._lang; },
+  translations: {
+    pt: {}
+  },
+
+  get lang() { 
+    return this._lang; 
+  },
 
   set(lang) {
     if (!this.translations[lang]) return;
@@ -22,39 +28,44 @@ const I18N = {
     this.apply();
   },
 
-.translations['pt'][key] || key;
-  }, t(key) {
+  t(key) {
 
-  if (typeof key !== 'string') return '';
+    if (typeof key !== 'string') return '';
 
-  if (!this.data) return key;
+    const parts = key.split('.');
 
-  const parts = key.split('.');
+    let value = this.translations[this._lang];
 
-  let value = this.data;
-
-  for (const p of parts) {
-    if (value === undefined || value === null) {
-      return key;
+    for (const p of parts) {
+      if (value === undefined || value === null) {
+        return key;
+      }
+      value = value[p];
     }
-    value = value[p];
-  }
 
-  return value ?? key;
-}
+    return value ?? key;
+  },
+
   apply() {
     document.querySelectorAll('[data-i18n]').forEach(el => {
       const key = el.getAttribute('data-i18n');
       el.textContent = this.t(key);
     });
+
     document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
       el.placeholder = this.t(el.getAttribute('data-i18n-placeholder'));
     });
+
     document.querySelectorAll('[data-i18n-title]').forEach(el => {
       el.title = this.t(el.getAttribute('data-i18n-title'));
     });
+
     document.documentElement.lang = this._lang;
-  },
+  }
+
+};
+
+window.I18N = I18N;
 
   // ── TRADUÇÕES ──────────────────────────────────────────────
   translations: {
