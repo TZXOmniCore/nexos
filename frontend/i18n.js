@@ -8,11 +8,20 @@ const I18N = {
   _lang: 'pt',
 
   translations: {
-    pt: {}
+    pt: {
+      app: {
+        name: "NexOS"
+      }
+    },
+    en: {
+      app: {
+        name: "NexOS"
+      }
+    }
   },
 
-  get lang() { 
-    return this._lang; 
+  get lang() {
+    return this._lang;
   },
 
   set(lang) {
@@ -37,9 +46,7 @@ const I18N = {
     let value = this.translations[this._lang];
 
     for (const p of parts) {
-      if (value === undefined || value === null) {
-        return key;
-      }
+      if (!value) return key;
       value = value[p];
     }
 
@@ -47,6 +54,7 @@ const I18N = {
   },
 
   apply() {
+
     document.querySelectorAll('[data-i18n]').forEach(el => {
       const key = el.getAttribute('data-i18n');
       el.textContent = this.t(key);
