@@ -3,7 +3,7 @@
    Sistema de internacionalização (PT-BR, EN, ES)
    ============================================================ */
 
-cconst I18N = {
+const I18N = {
   _lang: 'pt',
 
   translations: {
