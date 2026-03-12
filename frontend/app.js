@@ -1,1860 +1,2123 @@
-/* ═══════════════════════════════════════════════
-   NEXOS v3.0 — APP.JS
-   ═══════════════════════════════════════════════ */
+/* ============================================================
+   NexOS v3.0 — app.js
+   ============================================================ */
 
-// ── STATE ──
-const STATE = {
-  user: null, empresa: null, perfil: null,
-  funcionario: null, // se for login por PIN
-  os: [], clientes: [], produtos: [], notifs: [],
-  eventos: [], contas_pagar: [], contas_receber: [],
-  os_items: [], os_pay: '', os_cli_id: null,
-  os_editing: null,
-  config: {},
-  chartFat: null, chartMensal: null, chartPag: null,
-  agendaMes: new Date().getMonth(), agendaAno: new Date().getFullYear(),
-  agendaDia: new Date().getDate(),
-  range: 30, anPeriodo: 'mes',
-  caixaTab: 'mov', caixaPeriodo: 'hoje',
+// ── APP STATE LOCAL ────────────────────────────────────────
+const APP = {
+  os:           [],
+  clientes:     [],
+  produtos:     [],
+  notifs:       [],
+  funcionarios: [],
+  agenda:       [],
+  contasPagar:  [],
+  contasReceber:[],
+  charts:       {},
+  calDate:      new Date(),
+  calView:      'month',
+  osFiltro:     'all',
+  osSearch:     '',
+  anPeriodo:    'month',
+  settingsTab:  'company',
+  realtimeSubs: [],
 };
 
-// ── UTILS ──
-const fmt = v => 'R$ ' + (parseFloat(v)||0).toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.');
-const today = () => new Date().toISOString().split('T')[0];
-const avatarColor = n => { const c=['#3b82f6','#8b5cf6','#10b981','#f59e0b','#ef4444','#06b6d4','#ec4899']; let h=0; for(let i=0;i<(n||'').length;i++) h+=n.charCodeAt(i); return c[h%c.length]; };
-const initials = n => (n||'?').split(' ').map(x=>x[0]).join('').toUpperCase().slice(0,2);
-const fmtDate = d => d ? new Date(d+'T12:00:00').toLocaleDateString('pt-BR') : '—';
-const statusLabel = s => ({aberta:'🟡 Aguardando',em_andamento:'🔵 Em andamento',pronta:'🟠 Pronta',paga:'🟢 Concluída',fiado:'🟣 Fiado',cancelada:'🔴 Cancelada',orcamento:'📝 Orçamento'}[s]||s);
-const payLabel = p => ({dinheiro:'💵 Dinheiro',pix:'🟢 PIX',credito:'💳 Crédito',debito:'💳 Débito',fiado:'🤝 Fiado',carne:'📋 Carnê',transferencia:'🏦 Transferência',orcamento:'📝 Orçamento'}[p]||p||'—');
+// ── BOOT ───────────────────────────────────────────────────
+const App = {
 
-// ── UI ──
-const UI = {
-  setLoading(msg) {
-    document.getElementById('ls-msg').textContent = msg || 'Carregando...';
-    document.getElementById('loading-screen').style.display = 'flex';
+  async init() {
+    const emp = STATE.empresa;
+    if (!emp) return;
+
+    UI.loading(true, 'Carregando...');
+    try {
+      await App._loadInitialData();
+      App._setupRealtime();
+      App._setupCalendar();
+      App._setGreeting();
+      Auth.enforcePermissions();
+      goPage(localStorage.getItem('nexos_page') || 'dashboard');
+    } catch(e) {
+      console.error('Erro ao inicializar app:', e);
+      UI.toast('Erro ao carregar dados', 'error');
+    } finally {
+      UI.loading(false);
+    }
   },
-  hideLoading() { document.getElementById('loading-screen').style.display = 'none'; },
-  toast(msg, err=false) {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.style.borderColor = err ? 'rgba(239,68,68,.4)' : 'var(--b2)';
-    t.classList.add('show');
-    clearTimeout(UI._tt);
-    UI._tt = setTimeout(() => t.classList.remove('show'), 3000);
+
+  async bootAsFuncionario(func) {
+    STATE.empresa = await API.getEmpresa(func.empresa_id);
+    await App.init();
   },
-  openModal(id) {
-    document.getElementById(id).classList.add('open');
-    document.body.style.overflow = 'hidden';
+
+  async _loadInitialData() {
+    const empId = STATE.empresa.id;
+    const [os, clientes, produtos, notifs, funcs] = await Promise.all([
+      API.getOS(empId),
+      API.getClientes(empId),
+      API.getProdutos(empId),
+      API.getNotificacoes(empId),
+      API.getFuncionarios(empId),
+    ]);
+    APP.os           = os;
+    APP.clientes     = clientes;
+    APP.produtos     = produtos;
+    APP.notifs       = notifs;
+    APP.funcionarios = funcs;
+
+    App._updateNotifBadge();
+    App._updateOSBadge();
   },
-  closeModal(id) {
-    if (id) { document.getElementById(id).classList.remove('open'); }
-    else { document.querySelectorAll('.mwrap.open').forEach(m => m.classList.remove('open')); }
-    document.body.style.overflow = '';
+
+  _setupRealtime() {
+    const empId = STATE.empresa.id;
+    APP.realtimeSubs.forEach(s => s.unsubscribe?.());
+    APP.realtimeSubs = [
+      API.subscribeOS(empId, async () => {
+        APP.os = await API.getOS(empId);
+        App._updateOSBadge();
+        if (document.getElementById('page-os')?.classList.contains('active')) renderOSList();
+        if (document.getElementById('page-dashboard')?.classList.contains('active')) renderDashOS();
+      }),
+      API.subscribeNotifs(empId, async (payload) => {
+        APP.notifs = await API.getNotificacoes(empId);
+        App._updateNotifBadge();
+        if (payload.new) UI.toast('🔔 ' + payload.new.titulo, 'info');
+      }),
+    ];
   },
-  toggleNotif() {
-    document.getElementById('notifPanel').classList.toggle('open');
-    document.getElementById('userMenu').classList.remove('open');
+
+  _updateNotifBadge() {
+    const unread = APP.notifs.filter(n => !n.lida).length;
+    UI.badge('notif-badge', unread);
+    UI.badge('mobile-notif-badge', unread);
+    const dot = document.getElementById('notif-dot');
+    if (dot) dot.style.display = unread > 0 ? 'block' : 'none';
+    const countEl = document.getElementById('notif-count');
+    if (countEl) countEl.textContent = unread + ' não lidas';
   },
-  toggleUserMenu() {
-    document.getElementById('userMenu').classList.toggle('open');
-    document.getElementById('notifPanel').classList.remove('open');
+
+  _updateOSBadge() {
+    const abertas = APP.os.filter(o => ['aguardando','andamento'].includes(o.status)).length;
+    UI.badge('nav-os-badge', abertas);
   },
-  closeUserMenu() { document.getElementById('userMenu').classList.remove('open'); },
-  toggleMore() {
-    document.getElementById('more-menu').classList.toggle('gone');
-    document.getElementById('more-overlay').classList.toggle('gone');
+
+  _setGreeting() {
+    const h = new Date().getHours();
+    const nome = STATE.funcionario?.nome?.split(' ')[0] || STATE.perfil?.nome?.split(' ')[0] || '';
+    const saudacao = h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite';
+    const el = document.getElementById('dash-greeting');
+    if (el) el.textContent = saudacao + (nome ? ', ' + nome + '!' : '!');
   },
-  closeMore() {
-    document.getElementById('more-menu').classList.add('gone');
-    document.getElementById('more-overlay').classList.add('gone');
+
+  _setupCalendar() {
+    renderCalendar();
+    const el = document.getElementById('schedule-period');
+    if (el) el.textContent = APP.calDate.toLocaleDateString('pt-BR', { month:'long', year:'numeric' });
   },
-  toggleDescricao(id) {
-    const el = document.getElementById(id);
-    el.style.display = el.style.display === 'none' ? '' : 'none';
-  },
-  toggleEye(id, btn) {
-    const inp = document.getElementById(id);
-    inp.type = inp.type === 'password' ? 'text' : 'password';
-    btn.textContent = inp.type === 'password' ? '👁' : '🙈';
-  },
-  showApp() {
-    document.getElementById('app').classList.remove('gone');
-    document.getElementById('bottom-nav').classList.remove('gone');
-    document.getElementById('fab-btn').classList.remove('gone');
-    document.getElementById('auth-screen').classList.add('gone');
-    document.getElementById('onboarding').classList.add('gone');
-  },
-  setMasterVisible(v) {
-    document.getElementById('sb-master').style.display = v ? 'flex' : 'none';
-    document.getElementById('um-master').style.display = v ? 'flex' : 'none';
-    document.getElementById('more-master').style.display = v ? 'flex' : 'none';
-  },
-  updateUserUI(u, empresa) {
-    const name = u.nome || u.email?.split('@')[0] || '?';
-    const role = u.perfil || 'Usuário';
-    const av = initials(name);
-    document.getElementById('sb-av').textContent = av;
-    document.getElementById('sb-av').style.background = `linear-gradient(135deg,${avatarColor(name)},${avatarColor(name+'x')})`;
-    document.getElementById('sb-uname').textContent = name;
-    document.getElementById('sb-urole').textContent = role;
-    document.getElementById('th-av').textContent = av;
-    document.getElementById('th-uname').textContent = name;
-    document.getElementById('um-name').textContent = name;
-    document.getElementById('um-email').textContent = u.email || '';
-    document.getElementById('um-empresa').textContent = empresa?.nome || '';
+
+  globalSearch(q) {
+    if (!q) return;
+    const lower = q.toLowerCase();
+    const osMatch = APP.os.filter(o =>
+      o.numero?.includes(q) ||
+      o.item?.toLowerCase().includes(lower) ||
+      o.clientes?.nome?.toLowerCase().includes(lower)
+    );
+    if (osMatch.length > 0) {
+      goPage('os');
+      document.getElementById('os-search').value = q;
+      filterOS();
+    }
   },
 };
 
-// ── NAV ──
-const Nav = {
-  go(page) {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('on'));
-    document.querySelectorAll('.sb-item').forEach(i => i.classList.remove('on'));
-    document.querySelectorAll('.bn-item').forEach(i => i.classList.remove('on'));
-    const pg = document.getElementById('pg-' + page);
-    if (pg) pg.classList.add('on');
-    document.querySelectorAll('[data-page="'+page+'"]').forEach(i => i.classList.add('on'));
-    localStorage.setItem('nexos_page', page);
-    UI.closeMore();
-    // Carregar dados da página
-    if (page === 'dashboard') Dashboard.load();
-    if (page === 'os') { OS.load(); OS.renderList(); }
-    if (page === 'clientes') Clientes.load();
-    if (page === 'agenda') Agenda.render();
-    if (page === 'caixa') Caixa.load();
-    if (page === 'estoque') Estoque.load();
-    if (page === 'analytics') Analytics.load();
-    if (page === 'config') Config.load();
-    if (page === 'master') Master.load();
-    window.scrollTo(0,0);
-  }
-};
+// ── NAVEGAÇÃO ──────────────────────────────────────────────
+function goPage(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item[data-nav], .mobile-nav-item[data-nav]').forEach(n => n.classList.remove('active'));
 
-// ── BOOT ──
-window.addEventListener('DOMContentLoaded', async () => {
-  UI.setLoading('Verificando sessão...');
+  const pageEl = document.getElementById('page-' + page);
+  if (!pageEl) return;
+  pageEl.classList.add('active');
 
-  // Tema
-  const savedTheme = localStorage.getItem('nexos_theme');
-  if (savedTheme === 'light') document.documentElement.setAttribute('data-theme','light');
+  document.querySelectorAll(`[data-nav="${page}"]`).forEach(n => n.classList.add('active'));
+  localStorage.setItem('nexos_page', page);
 
-  // Scanner button visibility
-  const scannerOn = localStorage.getItem('nexos_scanner') === '1';
-  if (scannerOn) {
-    document.querySelectorAll('[id$="-btn"]').forEach(b => {
-      if (b.id.includes('scanner')) b.classList.remove('gone');
-    });
-  }
+  UI.setPageTitle({
+    dashboard:     'Dashboard',
+    os:            SEGMENTS.t('os_module'),
+    clients:       I18N.t('nav_clients'),
+    stock:         I18N.t('nav_stock'),
+    cash:          I18N.t('nav_cash'),
+    schedule:      I18N.t('nav_schedule'),
+    analytics:     I18N.t('nav_analytics'),
+    ai:            I18N.t('nav_ai'),
+    notifications: I18N.t('nav_notifications'),
+    settings:      I18N.t('nav_settings'),
+  }[page] || page);
 
+  // Fechar mobile more se aberto
+  if (typeof moreOpen !== 'undefined' && moreOpen) toggleMobileMore();
+
+  // Renderiza página
+  const renders = {
+    dashboard:     renderDashboard,
+    os:            renderOSList,
+    clients:       renderClients,
+    stock:         renderStock,
+    cash:          renderCash,
+    schedule:      renderCalendar,
+    analytics:     renderAnalytics,
+    ai:            renderAI,
+    notifications: renderNotifications,
+    settings:      () => renderSettings(APP.settingsTab),
+    master:        renderMaster,
+  };
+  renders[page]?.();
+
+  if (window.lucide) setTimeout(() => lucide.createIcons(), 50);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── DASHBOARD ──────────────────────────────────────────────
+async function renderDashboard() {
+  if (!STATE.empresa) return;
   try {
-    const { data: { session } } = await window.sb.auth.getSession();
-    if (session?.user) {
-      await carregarUsuario(session.user);
-    } else {
-      UI.hideLoading();
-      Auth.showScreen();
+    const data = await API.getDashboardData(STATE.empresa.id);
+
+    // KPIs
+    document.getElementById('kpi-revenue').textContent  = fmt(data.faturamento_mes);
+    document.getElementById('kpi-os').textContent       = data.os_abertas;
+    document.getElementById('kpi-done').textContent     = data.os_concluidas_mes;
+    document.getElementById('kpi-profit').textContent   = fmt(data.faturamento_mes * 0.35); // estimativa
+
+    if (data.delta_pct !== null) {
+      const deltaEl = document.getElementById('kpi-revenue-delta');
+      if (deltaEl) {
+        const up = parseFloat(data.delta_pct) >= 0;
+        deltaEl.textContent = (up?'+':'') + data.delta_pct + '%';
+        deltaEl.className = 'kpi-delta ' + (up ? 'up' : 'down');
+      }
     }
+
+    // Alertas
+    renderDashAlerts(data);
+
+    // Ranking clientes
+    renderDashRanking(data.top_clientes);
+
+    // Agenda hoje
+    renderDashAgenda(data.agenda_hoje);
+
+    // OS recentes
+    renderDashOS();
+
+    // Gráfico
+    await renderDashChart(7);
+
   } catch(e) {
-    UI.hideLoading();
-    Auth.showScreen();
-  }
-
-  window.sb.auth.onAuthStateChange((event, session) => {
-    if (event === 'SIGNED_IN' && !STATE.user) {
-      carregarUsuario(session.user);
-    } else if (event === 'SIGNED_OUT') {
-      Object.assign(STATE, { user:null, empresa:null, perfil:null });
-      localStorage.removeItem('nexos_page');
-      Auth.showScreen();
-    }
-  });
-
-  // Fechar menus ao clicar fora
-  document.addEventListener('click', e => {
-    if (!e.target.closest('#notif-btn') && !e.target.closest('#notifPanel'))
-      document.getElementById('notifPanel').classList.remove('open');
-    if (!e.target.closest('.th-user-chip') && !e.target.closest('.sb-user') && !e.target.closest('#userMenu'))
-      document.getElementById('userMenu').classList.remove('open');
-    if (!e.target.closest('#global-search') && !e.target.closest('#gsearch-panel'))
-      document.getElementById('gsearch-panel').classList.add('gone');
-  });
-});
-
-async function carregarUsuario(user) {
-  try {
-    UI.setLoading('Carregando perfil...');
-    const { data: perfil } = await window.sb.from('usuarios')
-      .select('*').eq('id', user.id).single();
-
-    if (!perfil || !perfil.empresa_id) {
-      // Verificar se é master
-      const isMaster = user.email === 'master@nexos.app' ||
-        localStorage.getItem('nexos_master') === user.id;
-      STATE.user = { ...user, nome: user.user_metadata?.full_name || user.email?.split('@')[0], perfil: isMaster ? 'master' : 'dono', email: user.email };
-      UI.hideLoading();
-      // Onboarding para novo usuário
-      document.getElementById('onboarding').classList.remove('gone');
-      document.getElementById('auth-screen').classList.add('gone');
-      return;
-    }
-
-    const { data: empresa } = await window.sb.from('empresas')
-      .select('*').eq('id', perfil.empresa_id).single();
-
-    STATE.user = { ...user, ...perfil, nome: perfil.nome || user.user_metadata?.full_name || user.email?.split('@')[0], email: user.email };
-    STATE.empresa = empresa;
-    STATE.config = empresa?.config || {};
-    STATE.perfil = perfil.perfil || 'dono';
-
-    // Config toggles
-    if (STATE.config.assinatura) document.getElementById('cfg-sig').checked = true;
-    if (STATE.config.fotos) { document.getElementById('cfg-foto').checked = true; document.getElementById('os-foto-section').classList.remove('gone'); }
-    if (STATE.config.scanner) {
-      document.getElementById('cfg-scanner').checked = true;
-      document.querySelectorAll('[id$="-btn"]').forEach(b => { if(b.id.includes('scanner')) b.classList.remove('gone'); });
-    }
-    if (savedTheme === 'light') document.getElementById('cfg-theme').checked = false;
-    else document.getElementById('cfg-theme').checked = true;
-
-    UI.updateUserUI(STATE.user, STATE.empresa);
-    UI.setMasterVisible(STATE.perfil === 'master' || STATE.perfil === 'dono');
-
-    // Carregar OS e outros dados
-    await Promise.all([OS.load(), Clientes.load(), Estoque.loadAll(), Notif.load()]);
-
-    UI.showApp();
-    UI.hideLoading();
-
-    const lastPage = localStorage.getItem('nexos_page') || 'dashboard';
-    Nav.go(lastPage);
-
-    if (STATE.config.assinatura !== false) Sig.init();
-  } catch(e) {
-    console.error('carregarUsuario error:', e);
-    UI.hideLoading();
-    Auth.showScreen();
+    console.error('Erro dashboard:', e);
   }
 }
 
-const savedTheme = localStorage.getItem('nexos_theme');
+function renderDashAlerts(data) {
+  const wrap = document.getElementById('dash-alerts');
+  if (!wrap) return;
+  const alerts = [];
 
-// ── ONBOARDING ──
-const OB = {
-  next(step) {
-    document.querySelectorAll('.onboard-step').forEach((s,i) => {
-      s.classList.toggle('on', i === step);
-      const dot = document.getElementById('ob-dot-'+i);
-      if (dot) { dot.classList.toggle('done', i <= step); }
-    });
-  },
-  async finish(usaSig) {
-    const nome = document.getElementById('ob-empresa').value.trim();
-    if (!nome) { UI.toast('⚠️ Informe o nome da empresa', true); OB.next(1); return; }
-    UI.setLoading('Configurando empresa...');
-    try {
-      // Criar empresa
-      const { data: emp } = await window.sb.from('empresas').insert({
-        nome,
-        telefone: document.getElementById('ob-tel').value,
-        pix: document.getElementById('ob-pix').value,
-        config: { assinatura: usaSig, fotos: false, scanner: false }
-      }).select().single();
+  if (data.estoques_baixos > 0)
+    alerts.push({ icon:'alert-triangle', color:'var(--orange)', text: data.estoques_baixos + ' produto(s) com estoque baixo', page:'stock' });
+  if (data.parcelas_vencidas > 0)
+    alerts.push({ icon:'clock', color:'var(--red)', text: data.parcelas_vencidas + ' parcela(s) vencida(s)', page:'cash' });
+  if (data.aniversarios?.length > 0)
+    alerts.push({ icon:'cake', color:'var(--purple)', text: data.aniversarios.map(a=>a.nome.split(' ')[0]).join(', ') + ' fazem aniversário hoje!', page:'clients' });
 
-      // Atualizar usuário
-      const { data: { user } } = await window.sb.auth.getUser();
-      await window.sb.from('usuarios').upsert({
-        id: user.id,
-        email: user.email,
-        nome: user.user_metadata?.full_name || user.email?.split('@')[0],
-        empresa_id: emp.id,
-        perfil: 'dono'
-      });
+  wrap.innerHTML = alerts.map(a => `
+    <div onclick="goPage('${a.page}')" style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg-2);border:1px solid var(--border);border-left:3px solid ${a.color};border-radius:var(--radius-md);cursor:pointer;font-size:.8rem;color:var(--text-1);flex:1;min-width:200px;transition:all .15s">
+      <i data-lucide="${a.icon}" style="width:14px;height:14px;color:${a.color};flex-shrink:0"></i>
+      ${a.text}
+    </div>
+  `).join('');
+  if (alerts.length && window.lucide) lucide.createIcons();
+}
 
-      await carregarUsuario(user);
-    } catch(e) {
-      UI.hideLoading();
-      UI.toast('Erro ao configurar: ' + e.message, true);
-    }
+function renderDashRanking(clientes) {
+  const wrap = document.getElementById('dash-ranking');
+  if (!wrap) return;
+  if (!clientes?.length) {
+    wrap.innerHTML = '<div class="empty-state" style="padding:20px 0"><div class="empty-text">Sem dados ainda</div></div>';
+    return;
   }
-};
-
-// ── OS ──
-const OS = {
-  _filtroStatus: '', _search: '',
-
-  async load() {
-    if (!STATE.empresa) return;
-    const { data } = await window.sb.from('ordens')
-      .select('*').eq('empresa_id', STATE.empresa.id)
-      .order('criado_em', { ascending: false });
-    STATE.os = data || [];
-    // Atualizar badge
-    const ab = STATE.os.filter(o => o.status === 'aberta' || o.status === 'em_andamento').length;
-    const badge = document.getElementById('sb-os-badge');
-    if (ab > 0) { badge.style.display = ''; badge.textContent = ab; }
-    else badge.style.display = 'none';
-    OS.renderList();
-    Dashboard.load();
-  },
-
-  filter() {
-    OS._search = document.getElementById('os-search').value.toLowerCase();
-    OS.renderList();
-  },
-
-  setStatus(s, el) {
-    OS._filtroStatus = s;
-    document.querySelectorAll('#os-chips .chip').forEach(c => c.classList.remove('on'));
-    el.classList.add('on');
-    OS.renderList();
-  },
-
-  renderList() {
-    let list = STATE.os;
-    if (OS._filtroStatus) list = list.filter(o => o.status === OS._filtroStatus);
-    if (OS._search) list = list.filter(o =>
-      (o.cliente_nome||'').toLowerCase().includes(OS._search) ||
-      (o.equipamento||'').toLowerCase().includes(OS._search) ||
-      (o.defeito||'').toLowerCase().includes(OS._search) ||
-      String(o.numero||'').includes(OS._search)
-    );
-    const el = document.getElementById('os-list');
-    if (!list.length) { el.innerHTML = '<div class="empty"><div class="empty-ico">🔍</div><p>Nenhuma OS encontrada</p></div>'; return; }
-    el.innerHTML = list.map(o => OS.cardHTML(o)).join('');
-  },
-
-  cardHTML(o) {
-    const cor = avatarColor(o.cliente_nome || '?');
-    return `<div class="os-item os-${o.status}" onclick="OS.ver('${o.id}')">
-      <div class="osi-top">
-        <span class="osi-num">#${String(o.numero||'?').padStart(4,'0')}</span>
-        <div class="osi-avatar" style="background:${cor}">${initials(o.cliente_nome||'?')}</div>
-        <span class="osi-name">${o.cliente_nome||'Sem nome'}</span>
-        <span class="sbadge sb-${o.status}">${statusLabel(o.status)}</span>
+  wrap.innerHTML = clientes.map((c, i) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;${i < clientes.length-1?'border-bottom:1px solid var(--border)':''}">
+      <div style="width:22px;height:22px;border-radius:50%;background:${['var(--yellow)','var(--text-2)','var(--orange)'][i]||'var(--bg-3)'};display:flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:800;color:var(--bg);flex-shrink:0">${i+1}</div>
+      <div style="width:32px;height:32px;border-radius:50%;background:${avatarColor(c.nome)};display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;color:#fff;flex-shrink:0">${initials(c.nome)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:.84rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nome}</div>
+        <div style="font-size:.72rem;color:var(--text-3)">${c.count} serviço(s)</div>
       </div>
-      <div class="osi-desc">${o.equipamento||''} — ${o.defeito||''}</div>
-      <div class="osi-meta">
-        <span>📅 ${fmtDate(o.criado_em?.split('T')[0])}</span>
-        ${o.tecnico_nome ? `<span>👤 ${o.tecnico_nome}</span>` : ''}
-        <span class="pay-pill pp-${o.forma_pagamento||''}">${payLabel(o.forma_pagamento)}</span>
-        <span style="font-weight:800;color:var(--green);font-family:var(--mono)">${fmt(o.total||0)}</span>
-        ${o.prioridade === 'urgente' ? '<span style="color:var(--red);font-weight:700">🔴 URGENTE</span>' : ''}
-        ${o.prioridade === 'alta' ? '<span style="color:var(--orange);font-weight:700">🟠 ALTA</span>' : ''}
+      <div style="font-size:.82rem;font-weight:700;color:var(--green);flex-shrink:0">${fmt(c.total)}</div>
+    </div>
+  `).join('');
+}
+
+function renderDashAgenda(eventos) {
+  const wrap = document.getElementById('dash-agenda');
+  if (!wrap) return;
+  if (!eventos?.length) {
+    wrap.innerHTML = '<div class="empty-state" style="padding:20px 0"><div class="empty-text">Sem compromissos hoje</div></div>';
+    return;
+  }
+  wrap.innerHTML = eventos.map(e => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="width:4px;height:36px;border-radius:2px;background:${e.cor||'var(--blue)'};flex-shrink:0"></div>
+      <div style="flex:1">
+        <div style="font-size:.84rem;font-weight:600">${e.titulo}</div>
+        <div style="font-size:.74rem;color:var(--text-3)">${e.data_inicio ? new Date(e.data_inicio).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : ''} · ${e.clientes?.nome||''}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderDashOS() {
+  const wrap = document.getElementById('dash-os-list');
+  if (!wrap) return;
+  const recentes = APP.os.slice(0, 5);
+  if (!recentes.length) {
+    wrap.innerHTML = '<div class="empty-state"><div class="empty-text">Nenhuma OS ainda</div></div>';
+    return;
+  }
+  wrap.innerHTML = recentes.map(os => osCard(os, true)).join('');
+  if (window.lucide) lucide.createIcons();
+}
+
+async function renderDashChart(days) {
+  const data = await API.getFaturamentoDiario(STATE.empresa.id, days);
+  const canvas = document.getElementById('dash-chart');
+  if (!canvas) return;
+
+  APP.charts.dash?.destroy();
+  APP.charts.dash = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: data.map(d => {
+        const dt = new Date(d.date + 'T12:00:00');
+        return dt.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' });
+      }),
+      datasets: [{
+        data: data.map(d => d.value),
+        borderColor: '#38BDF8',
+        backgroundColor: 'rgba(56,189,248,.08)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 3,
+        pointBackgroundColor: '#38BDF8',
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color:'rgba(255,255,255,.04)' }, ticks: { color:'#6B7280', font:{ size:10 } } },
+        y: { grid: { color:'rgba(255,255,255,.04)' }, ticks: { color:'#6B7280', font:{ size:10 }, callback: v => 'R$'+v.toLocaleString('pt-BR') } }
+      }
+    }
+  });
+}
+
+function setChartPeriod(days, btn) {
+  document.querySelectorAll('.chart-header .filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderDashChart(days);
+}
+
+function openDashCustomize() {
+  UI.toast('Personalização de widgets em breve!', 'info');
+}
+
+// ── OS — LISTA ─────────────────────────────────────────────
+function renderOSList() {
+  const list = document.getElementById('os-list');
+  if (!list) return;
+
+  let filtrado = APP.os;
+
+  if (APP.osFiltro !== 'all')
+    filtrado = filtrado.filter(o => o.status === APP.osFiltro);
+
+  if (APP.osSearch) {
+    const q = APP.osSearch.toLowerCase();
+    filtrado = filtrado.filter(o =>
+      o.numero?.includes(APP.osSearch) ||
+      o.item?.toLowerCase().includes(q) ||
+      o.extra_1?.toLowerCase().includes(q) ||
+      o.clientes?.nome?.toLowerCase().includes(q)
+    );
+  }
+
+  const count = document.getElementById('os-page-count');
+  if (count) count.textContent = filtrado.length + ' registro' + (filtrado.length!==1?'s':'');
+
+  if (!filtrado.length) {
+    list.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon"><i data-lucide="clipboard-list" style="width:36px;height:36px"></i></div>
+        <div class="empty-title">${APP.osFiltro==='all' ? 'Nenhuma OS ainda' : 'Sem OS com este status'}</div>
+        <div class="empty-text">${APP.osFiltro==='all' ? 'Toque em "Nova OS" para começar' : 'Tente outro filtro'}</div>
+        ${APP.osFiltro==='all'?`<button class="btn btn-primary mt-3" onclick="openNewOS()"><i data-lucide="plus" style="width:14px;height:14px"></i> Nova OS</button>`:''}
+      </div>`;
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+
+  list.innerHTML = filtrado.map(o => osCard(o)).join('');
+  if (window.lucide) lucide.createIcons();
+}
+
+function osCard(os, compact = false) {
+  const st   = STATUS_CONFIG[os.status] || {};
+  const cli  = os.clientes?.nome || 'Sem cadastro';
+  const data = fmtDate(os.created_at);
+  const seg  = SEGMENTS.current;
+  const itemLabel = seg?.labels?.[I18N.lang]?.item_field || 'Equipamento';
+
+  return `
+    <div class="os-card" data-status="${os.status}" onclick="openViewOS('${os.id}')">
+      <div class="os-card-left">
+        <div class="os-card-num">#${os.numero||'?'}</div>
+        <div class="os-card-info">
+          <div class="os-card-title">${os.item||'–'}</div>
+          ${os.extra_1 ? `<div class="os-card-sub">${os.extra_1}</div>` : ''}
+          <div class="os-card-meta">
+            <i data-lucide="user" style="width:11px;height:11px"></i> ${cli}
+            ${os.funcionarios ? `<span style="margin-left:8px"><i data-lucide="wrench" style="width:11px;height:11px"></i> ${os.funcionarios.nome}</span>` : ''}
+          </div>
+        </div>
+      </div>
+      <div class="os-card-right">
+        <span class="badge" style="background:${st.color}22;color:${st.color};border-color:${st.color}33;white-space:nowrap">
+          ${st.label||os.status}
+        </span>
+        <div class="os-card-value">${fmt(os.valor_total)}</div>
+        <div class="os-card-date">${data}</div>
       </div>
     </div>`;
-  },
+}
 
-  searchCli(q) {
-    const dd = document.getElementById('os-cli-dropdown');
-    if (!q) { dd.classList.add('gone'); return; }
-    const r = STATE.clientes.filter(c => c.nome.toLowerCase().includes(q.toLowerCase())).slice(0,6);
-    if (!r.length) { dd.classList.add('gone'); return; }
-    dd.classList.remove('gone');
-    dd.innerHTML = r.map(c => `<div onclick="OS.selectCli('${c.id}','${c.nome.replace(/'/g,"\\'")}','${c.telefone||''}')"
-      style="padding:10px 14px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--b1)"
-      onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-      <div style="width:28px;height:28px;border-radius:50%;background:${avatarColor(c.nome)};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">${initials(c.nome)}</div>
-      <div><div style="font-weight:700">${c.nome}</div><div style="font-size:11px;color:var(--muted)">${c.telefone||''}</div></div>
-    </div>`).join('');
-  },
+function filterOS() {
+  APP.osSearch = document.getElementById('os-search')?.value || '';
+  renderOSList();
+}
 
-  selectCli(id, nome, tel) {
-    STATE.os_cli_id = id;
-    document.getElementById('os-cli-chip').classList.remove('gone');
-    document.getElementById('os-sem-cad').classList.add('gone');
-    document.getElementById('os-cli-name').textContent = nome;
-    document.getElementById('os-cli-dropdown').classList.add('gone');
-    document.getElementById('os-cli-search').value = '';
-    document.getElementById('os-cli-search').placeholder = nome;
-  },
+function filterOSStatus(status, btn) {
+  APP.osFiltro = status;
+  document.querySelectorAll('#os-status-filters .filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderOSList();
+}
 
-  clearCli() {
-    STATE.os_cli_id = null;
-    document.getElementById('os-cli-chip').classList.add('gone');
-    document.getElementById('os-cli-search').placeholder = 'Buscar cliente cadastrado...';
-    document.getElementById('os-cli-search').value = '';
-  },
+// ── OS — MODAL NOVA/EDITAR ─────────────────────────────────
+let _osModalId = null;
 
-  semCadastro() {
-    OS.clearCli();
-    document.getElementById('os-sem-cad').classList.remove('gone');
-  },
+function openNewOS() {
+  _osModalId = null;
+  buildOSModal(null);
+}
 
-  setPay(p, el) {
-    STATE.os_pay = p;
-    document.querySelectorAll('.pchip').forEach(c => { c.className = 'pchip'; });
-    el.classList.add('on-'+p);
-    // Mostrar parcelas
-    document.getElementById('cred-parcelas').classList.toggle('gone', p !== 'credito');
-    document.getElementById('carne-config').classList.toggle('gone', p !== 'carne');
-    // Se orcamento ou fiado — não requer pagamento imediato
-    if (p === 'orcamento' || p === 'fiado') {
-      document.getElementById('os-status').value = p === 'orcamento' ? 'orcamento' : 'fiado';
+async function openViewOS(id) {
+  const os = await API.getOSById(id);
+  if (!os) return;
+  buildOSViewModal(os);
+}
+
+async function openEditOS(id) {
+  const os = await API.getOSById(id);
+  _osModalId = id;
+  buildOSModal(os);
+}
+
+function buildOSModal(os) {
+  const seg    = SEGMENTS.current;
+  const fields = seg.os_form_fields;
+  const lang   = I18N.lang;
+  const prefs  = JSON.parse(localStorage.getItem('nexos_prefs')||'{}');
+  const title  = os ? 'Editar ' + seg.labels[lang].os_single : seg.labels[lang].os_new;
+
+  const funcsOpts = APP.funcionarios.map(f =>
+    `<option value="${f.id}" ${os?.tecnico_id===f.id?'selected':''}>${f.nome}</option>`
+  ).join('');
+
+  const clientesOpts = APP.clientes.map(c =>
+    `<option value="${c.id}" ${os?.cliente_id===c.id?'selected':''}>${c.nome}</option>`
+  ).join('');
+
+  const renderField = (f) => {
+    const label = seg.labels[lang]?.[f.label_key] || I18N.t(f.label_key) || f.id;
+    const ph    = seg.labels[lang]?.[f.placeholder_key] || '';
+    const val   = os?.[f.id] || '';
+
+    if (!label) return '';
+
+    switch(f.type) {
+      case 'client_select': return `
+        <div class="form-group">
+          <label class="form-label">${I18N.t('os_client')}</label>
+          <div style="display:flex;gap:8px">
+            <select id="os-f-cliente_id" class="form-control" style="flex:1">
+              <option value="">Sem cadastro (venda rápida)</option>
+              ${clientesOpts}
+            </select>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="openNewClientInline()" title="Novo cliente">
+              <i data-lucide="user-plus" style="width:14px;height:14px"></i>
+            </button>
+          </div>
+        </div>`;
+
+      case 'text': return `
+        <div class="form-group">
+          <label class="form-label">${label}${f.required?'<span style="color:var(--red)"> *</span>':''}</label>
+          <div style="position:relative">
+            <input type="text" id="os-f-${f.id}" class="form-control" value="${val}" placeholder="${ph}" ${f.required?'required':''}>
+            ${f.id==='extra_1' ? `<button type="button" class="scanner-btn" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);padding:4px 8px;font-size:.72rem" onclick="openScanner('os-f-${f.id}')"><i data-lucide="scan-barcode" style="width:12px;height:12px"></i></button>` : ''}
+          </div>
+        </div>`;
+
+      case 'textarea': return `
+        <div class="form-group">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <label class="form-label" style="margin:0">${label}</label>
+            ${f.minimizable ? `<button type="button" onclick="toggleFieldMin('os-f-${f.id}-wrap')" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:.72rem;display:flex;align-items:center;gap:4px"><i data-lucide="minimize-2" style="width:12px;height:12px"></i> Minimizar</button>` : ''}
+          </div>
+          <div id="os-f-${f.id}-wrap">
+            <textarea id="os-f-${f.id}" class="form-control" rows="3" placeholder="${ph}">${val}</textarea>
+          </div>
+        </div>`;
+
+      case 'number': return `
+        <div class="form-group">
+          <label class="form-label">${label}</label>
+          <input type="number" id="os-f-${f.id}" class="form-control" value="${val||f.default||''}" min="0">
+        </div>`;
+
+      case 'date': return `
+        <div class="form-group">
+          <label class="form-label">${label}</label>
+          <input type="date" id="os-f-${f.id}" class="form-control" value="${val}">
+        </div>`;
+
+      case 'staff_select': return `
+        <div class="form-group">
+          <label class="form-label">${label}</label>
+          <select id="os-f-tecnico_id" class="form-control">
+            <option value="">Sem atribuição</option>
+            ${funcsOpts}
+          </select>
+        </div>`;
+
+      case 'priority_select': return `
+        <div class="form-group">
+          <label class="form-label">${I18N.t('os_priority')}</label>
+          <select id="os-f-prioridade" class="form-control">
+            <option value="normal" ${os?.prioridade==='normal'||!os?'selected':''}>Normal</option>
+            <option value="alta" ${os?.prioridade==='alta'?'selected':''}>Alta</option>
+            <option value="urgente" ${os?.prioridade==='urgente'?'selected':''}>Urgente</option>
+          </select>
+        </div>`;
+
+      case 'payment_select': return `
+        <div class="form-group">
+          <label class="form-label">${I18N.t('os_payment')}</label>
+          <select id="os-f-forma_pagamento" class="form-control" onchange="onPaymentChange(this.value)">
+            <option value="">Selecionar...</option>
+            ${Object.entries(PAY_CONFIG).map(([k,v])=>`<option value="${k}" ${os?.forma_pagamento===k?'selected':''}>${v.label}</option>`).join('')}
+          </select>
+          <div id="parcelas-wrap" style="display:none;margin-top:8px">
+            <label class="form-label">Nº de Parcelas</label>
+            <select id="os-f-n_parcelas" class="form-control">
+              ${[2,3,4,5,6,7,8,9,10,11,12].map(n=>`<option value="${n}">${n}x</option>`).join('')}
+            </select>
+          </div>
+        </div>`;
+
+      case 'parts_list': return `
+        <div class="form-group">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <label class="form-label" style="margin:0">${seg.labels[lang].parts_field||'Itens'}</label>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="addOSItem()">
+              <i data-lucide="plus" style="width:13px;height:13px"></i> Adicionar
+            </button>
+          </div>
+          <div id="os-items-list"></div>
+          <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-size:.74rem;color:var(--text-3)">Mão de obra</div>
+              <input type="number" id="os-f-valor_mao_obra" class="form-control" style="width:130px;margin-top:4px" placeholder="0,00" value="${os?.valor_mao_obra||''}" min="0" step="0.01" oninput="recalcTotal()">
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:.74rem;color:var(--text-3)">Total</div>
+              <div style="font-size:1.1rem;font-weight:800;color:var(--green)" id="os-total-display">${fmt(os?.valor_total||0)}</div>
+            </div>
+          </div>
+        </div>`;
+
+      case 'photo_upload':
+        if (!prefs.photos_enabled && !os) return '';
+        return `
+          <div class="form-group">
+            <label class="form-label">${I18N.t('photos')}</label>
+            <div class="photo-grid" id="os-photos-grid">
+              <label class="photo-add-btn" for="os-photo-input">
+                <i data-lucide="camera" style="width:20px;height:20px"></i>
+                <span>Adicionar foto</span>
+                <input type="file" id="os-photo-input" accept="image/*" multiple style="display:none" onchange="addOSPhotos(this)">
+              </label>
+            </div>
+          </div>`;
+
+      case 'signature_pad':
+        if (!prefs.signature_enabled && !os) return '';
+        return `
+          <div class="form-group">
+            <label class="form-label">${I18N.t('signature')}</label>
+            <canvas id="sig-pad" style="width:100%;height:120px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius-md);touch-action:none"></canvas>
+            <button type="button" onclick="clearSignature()" class="btn btn-ghost btn-sm" style="margin-top:4px">Limpar</button>
+          </div>`;
+
+      default: return '';
     }
-    if (p === 'pix' && STATE.empresa?.pix) {
-      // Gerar QR PIX automático será no comprovante
-    }
-  },
+  };
 
-  addItem() {
-    const desc = document.getElementById('item-desc').value.trim();
-    const qty = parseFloat(document.getElementById('item-qty').value) || 1;
-    const val = parseFloat(document.getElementById('item-val').value) || 0;
-    if (!desc) { UI.toast('⚠️ Informe a descrição', true); return; }
-    STATE.os_items.push({ desc, qty, val, total: qty * val });
-    document.getElementById('item-desc').value = '';
-    document.getElementById('item-qty').value = '1';
-    document.getElementById('item-val').value = '';
-    OS.renderItems();
-    document.getElementById('item-desc').focus();
-  },
+  const modal = document.createElement('div');
+  modal.id = 'os-modal';
+  modal.className = 'modal-wrap open';
+  modal.innerHTML = `
+    <div class="modal" style="max-width:600px">
+      <div class="modal-header">
+        <h3 class="modal-title">${title}</h3>
+        <button class="modal-close" onclick="UI.closeModal('os-modal');document.getElementById('os-modal').remove()">
+          <i data-lucide="x" style="width:16px;height:16px"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <!-- Status (só na edição) -->
+        ${os ? `
+        <div class="form-group">
+          <label class="form-label">${I18N.t('os_status')}</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap" id="os-status-btns">
+            ${Object.entries(STATUS_CONFIG).map(([k,v])=>`
+              <button type="button" class="filter-btn ${os.status===k?'active':''}" onclick="setOSStatus('${k}',this)"
+                style="border-color:${os.status===k?v.color:'var(--border)'};${os.status===k?'color:'+v.color+';background:'+v.color+'22':''}">
+                ${v.label}
+              </button>`).join('')}
+          </div>
+        </div>` : ''}
 
-  removeItem(i) {
-    STATE.os_items.splice(i, 1);
-    OS.renderItems();
-  },
+        ${fields.map(f => renderField(f)).join('')}
 
-  renderItems() {
-    const total = STATE.os_items.reduce((s,i) => s + i.total, 0);
-    document.getElementById('items-list').innerHTML = STATE.os_items.map((it,i) =>
-      `<div class="it-row">
-        <span class="it-name">${it.desc}</span>
-        <span class="it-qty">${it.qty}</span>
-        <span class="it-price">${fmt(it.total)}</span>
-        <button class="it-del" onclick="OS.removeItem(${i})">✕</button>
-      </div>`).join('');
-    document.getElementById('items-total').textContent = fmt(total);
-    OS.calcParcelas();
-  },
+        <!-- Notas -->
+        <div class="form-group">
+          <label class="form-label">${I18N.t('notes')}</label>
+          <textarea id="os-f-observacoes" class="form-control" rows="2" placeholder="Observações internas...">${os?.observacoes||''}</textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="document.getElementById('os-modal').remove();document.body.style.overflow=''">
+          ${I18N.t('cancel')}
+        </button>
+        ${os ? `
+        <button class="btn btn-secondary" onclick="openGenerateDocs('${os.id}')">
+          <i data-lucide="file-text" style="width:14px;height:14px"></i> Documentos
+        </button>` : ''}
+        <button class="btn btn-primary" onclick="saveOS()">
+          <i data-lucide="save" style="width:14px;height:14px"></i>
+          ${I18N.t('save')}
+        </button>
+      </div>
+    </div>`;
 
-  calcParcelas() {
-    const total = STATE.os_items.reduce((s,i) => s + i.total, 0);
-    const n = parseInt(document.getElementById('os-parcelas')?.value || document.getElementById('carne-num')?.value || 2);
-    const parc = total / n;
-    const preview = `${n}x de ${fmt(parc)} = ${fmt(total)}`;
-    const p1 = document.getElementById('carne-preview');
-    const p2 = document.getElementById('carne-preview-2');
-    if (p1) p1.textContent = preview;
-    if (p2) p2.textContent = preview;
-  },
+  document.body.appendChild(modal);
+  document.body.style.overflow = 'hidden';
 
-  async openNew() {
-    STATE.os_items = [];
-    STATE.os_pay = '';
-    STATE.os_cli_id = null;
-    STATE.os_editing = null;
-    document.getElementById('os-id').value = '';
-    document.getElementById('os-modal-title').textContent = 'Nova OS';
-    document.getElementById('btn-salvar-os').textContent = '💾 Salvar OS';
-    // Reset fields
-    ['os-cli-search','os-equip','os-defeito','os-diag','os-obs','os-entrega','os-garantia'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.value = '';
-    });
-    document.getElementById('os-cli-avulso').value = '';
-    document.getElementById('os-sem-cad').classList.add('gone');
-    document.getElementById('os-cli-chip').classList.add('gone');
-    document.getElementById('os-cli-search').placeholder = 'Buscar cliente cadastrado...';
-    document.getElementById('os-status').value = 'aberta';
-    document.getElementById('os-prioridade').value = 'normal';
-    document.getElementById('cred-parcelas').classList.add('gone');
-    document.getElementById('carne-config').classList.add('gone');
-    document.querySelectorAll('.pchip').forEach(c => c.className = 'pchip');
-
-    // Número automático
-    const num = (STATE.os.length ? Math.max(...STATE.os.map(o=>o.numero||0)) : 0) + 1;
-    document.getElementById('os-num').value = '#' + String(num).padStart(4,'0');
-
-    // Data de hoje
-    document.getElementById('os-entrega').value = '';
-
-    // Técnicos
-    await OS.loadTecnicos('os-tecnico');
-
-    OS.renderItems();
-    UI.openModal('modal-os');
-
-    // Fotos
-    if (STATE.config?.fotos) document.getElementById('os-foto-section').classList.remove('gone');
-    else document.getElementById('os-foto-section').classList.add('gone');
-
-    // Assinatura
-    if (STATE.config?.assinatura) document.getElementById('os-sig-section').classList.remove('gone');
-    else document.getElementById('os-sig-section').classList.add('gone');
-  },
-
-  async loadTecnicos(selectId) {
-    const sel = document.getElementById(selectId);
-    if (!sel) return;
-    sel.innerHTML = '<option value="">Sem técnico</option>';
-    if (!STATE.empresa) return;
-    const { data } = await window.sb.from('funcionarios')
-      .select('id,nome,funcao').eq('empresa_id', STATE.empresa.id).eq('ativo', true);
-    if (data) data.forEach(f => {
-      const o = document.createElement('option');
-      o.value = f.id; o.textContent = f.nome + ' — ' + f.funcao;
-      sel.appendChild(o);
-    });
-    // Carregar no modal de evento também
-    const evSel = document.getElementById('ev-tecnico');
-    if (evSel) {
-      evSel.innerHTML = '<option value="">Sem técnico</option>';
-      if (data) data.forEach(f => {
-        const o = document.createElement('option');
-        o.value = f.id; o.textContent = f.nome;
-        evSel.appendChild(o);
-      });
-    }
-  },
-
-  async salvar() {
-    const equip = document.getElementById('os-equip').value.trim();
-    const defeito = document.getElementById('os-defeito').value.trim();
-    if (!equip || !defeito) { UI.toast('⚠️ Preencha equipamento e defeito', true); return; }
-
-    const btn = document.getElementById('btn-salvar-os');
-    btn.textContent = '⏳ Salvando...'; btn.disabled = true;
-
-    const tecSel = document.getElementById('os-tecnico');
-    const tecId = tecSel?.value || null;
-    const tecNome = tecId ? tecSel.options[tecSel.selectedIndex]?.text?.split(' —')[0] : null;
-
-    const total = STATE.os_items.reduce((s,i) => s + i.total, 0);
-    const status = document.getElementById('os-status').value;
-    const cliNome = STATE.os_cli_id
-      ? STATE.clientes.find(c=>c.id===STATE.os_cli_id)?.nome
-      : (document.getElementById('os-cli-avulso').value || null);
-
-    const num = (STATE.os.length ? Math.max(...STATE.os.map(o=>o.numero||0)) : 0) + 1;
-
-    // Assinatura
-    let sig = null;
-    if (STATE.config?.assinatura) {
-      try { sig = document.getElementById('sig-canvas').toDataURL(); } catch(e) {}
-    }
-
-    const payload = {
-      empresa_id: STATE.empresa.id,
-      numero: STATE.os_editing ? undefined : num,
-      cliente_id: STATE.os_cli_id || null,
-      cliente_nome: cliNome,
-      equipamento: equip,
-      defeito,
-      diagnostico: document.getElementById('os-diag').value || null,
-      observacoes: document.getElementById('os-obs').value || null,
-      status,
-      prioridade: document.getElementById('os-prioridade').value,
-      forma_pagamento: STATE.os_pay || null,
-      total,
-      items: STATE.os_items,
-      garantia_dias: parseInt(document.getElementById('os-garantia').value) || null,
-      data_entrega: document.getElementById('os-entrega').value || null,
-      tecnico_id: tecId,
-      tecnico_nome: tecNome,
-      assinatura: sig,
-    };
-
+  // Popula itens se editando
+  if (os?.itens) {
     try {
-      if (STATE.os_editing) {
-        await window.sb.from('ordens').update(payload).eq('id', STATE.os_editing);
-        // Histórico
-        await window.sb.from('ordens_historico').insert({ ordem_id: STATE.os_editing, status, usuario_nome: STATE.user.nome, descricao: 'Status atualizado: ' + statusLabel(status) });
+      const itens = JSON.parse(os.itens);
+      _osItems = itens;
+      renderOSItems();
+    } catch {}
+  } else {
+    _osItems = [];
+  }
+
+  _osStatus = os?.status || 'aguardando';
+
+  if (window.lucide) setTimeout(() => lucide.createIcons(), 50);
+  if (typeof initSignaturePad === 'function') initSignaturePad();
+}
+
+// Itens da OS
+let _osItems = [];
+let _osStatus = 'aguardando';
+
+function setOSStatus(status, btn) {
+  _osStatus = status;
+  document.querySelectorAll('#os-status-btns .filter-btn').forEach(b => {
+    b.classList.remove('active');
+    b.style.borderColor = 'var(--border)';
+    b.style.color = '';
+    b.style.background = '';
+  });
+  const st = STATUS_CONFIG[status];
+  btn.classList.add('active');
+  btn.style.borderColor = st.color;
+  btn.style.color = st.color;
+  btn.style.background = st.color + '22';
+}
+
+function addOSItem() {
+  _osItems.push({ descricao: '', quantidade: 1, valor_unit: 0 });
+  renderOSItems();
+}
+
+function renderOSItems() {
+  const wrap = document.getElementById('os-items-list');
+  if (!wrap) return;
+  if (!_osItems.length) {
+    wrap.innerHTML = '<div style="font-size:.78rem;color:var(--text-3);padding:8px 0">Nenhum item adicionado</div>';
+    recalcTotal();
+    return;
+  }
+  wrap.innerHTML = _osItems.map((item, i) => `
+    <div style="display:grid;grid-template-columns:1fr 60px 90px 28px;gap:6px;align-items:center;margin-bottom:6px">
+      <input type="text" class="form-control" style="font-size:.82rem" placeholder="Descrição" value="${item.descricao||''}"
+        oninput="_osItems[${i}].descricao=this.value">
+      <input type="number" class="form-control" style="font-size:.82rem;text-align:center" placeholder="Qtd" value="${item.quantidade||1}" min="1"
+        oninput="_osItems[${i}].quantidade=+this.value;recalcTotal()">
+      <input type="number" class="form-control" style="font-size:.82rem;text-align:right" placeholder="0,00" value="${item.valor_unit||''}" min="0" step="0.01"
+        oninput="_osItems[${i}].valor_unit=+this.value;recalcTotal()">
+      <button type="button" onclick="_osItems.splice(${i},1);renderOSItems()" style="background:none;border:none;cursor:pointer;color:var(--red);padding:4px">
+        <i data-lucide="x" style="width:14px;height:14px"></i>
+      </button>
+    </div>
+  `).join('');
+  recalcTotal();
+  if (window.lucide) lucide.createIcons();
+}
+
+function recalcTotal() {
+  const itensTotal = _osItems.reduce((s, i) => s + ((i.quantidade||1) * (i.valor_unit||0)), 0);
+  const maoObra    = parseFloat(document.getElementById('os-f-valor_mao_obra')?.value) || 0;
+  const total      = itensTotal + maoObra;
+  const el = document.getElementById('os-total-display');
+  if (el) el.textContent = fmt(total);
+}
+
+function onPaymentChange(val) {
+  const wrap = document.getElementById('parcelas-wrap');
+  if (wrap) wrap.style.display = val === 'parcelado' ? 'block' : 'none';
+
+  // Orçamento → status automático
+  if (val === 'orcamento') {
+    _osStatus = 'orcamento';
+    document.querySelectorAll('#os-status-btns .filter-btn').forEach(b => b.classList.remove('active'));
+    const orcBtn = document.querySelector('#os-status-btns .filter-btn[onclick*="orcamento"]');
+    if (orcBtn) orcBtn.click();
+  }
+}
+
+function toggleFieldMin(wrapId) {
+  const wrap = document.getElementById(wrapId);
+  if (!wrap) return;
+  const hidden = wrap.style.display === 'none';
+  wrap.style.display = hidden ? '' : 'none';
+}
+
+async function saveOS() {
+  const seg = SEGMENTS.current;
+  const lang = I18N.lang;
+
+  const item = document.getElementById('os-f-item')?.value?.trim();
+  if (!item) {
+    UI.toast('⚠ Preencha o campo ' + (seg.labels[lang].item_field||'equipamento'), 'warning');
+    return;
+  }
+
+  const itensTotal = _osItems.reduce((s, i) => s + ((i.quantidade||1) * (i.valor_unit||0)), 0);
+  const maoObra    = parseFloat(document.getElementById('os-f-valor_mao_obra')?.value) || 0;
+  const total      = itensTotal + maoObra;
+
+  const osData = {
+    status:           _osStatus || 'aguardando',
+    cliente_id:       document.getElementById('os-f-cliente_id')?.value || null,
+    item:             item,
+    extra_1:          document.getElementById('os-f-extra_1')?.value || null,
+    extra_2:          document.getElementById('os-f-extra_2')?.value || null,
+    extra_3:          document.getElementById('os-f-extra_3')?.value || null,
+    defeito:          document.getElementById('os-f-defect')?.value || null,
+    diagnostico:      document.getElementById('os-f-diagnosis')?.value || null,
+    tecnico_id:       document.getElementById('os-f-tecnico_id')?.value || null,
+    garantia_dias:    parseInt(document.getElementById('os-f-warranty')?.value) || null,
+    prioridade:       document.getElementById('os-f-prioridade')?.value || 'normal',
+    data_entrega:     document.getElementById('os-f-delivery')?.value || null,
+    forma_pagamento:  document.getElementById('os-f-forma_pagamento')?.value || null,
+    n_parcelas:       parseInt(document.getElementById('os-f-n_parcelas')?.value) || null,
+    valor_mao_obra:   maoObra,
+    valor_total:      total,
+    itens:            JSON.stringify(_osItems),
+    observacoes:      document.getElementById('os-f-observacoes')?.value || null,
+  };
+
+  const btn = document.querySelector('#os-modal .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
+
+  try {
+    let saved;
+    if (_osModalId) {
+      saved = await API.updateOS(_osModalId, osData);
+      await API.addHistoricoOS(_osModalId, `Status alterado para: ${statusLabel(osData.status)}`);
+    } else {
+      saved = await API.createOS(STATE.empresa.id, osData);
+
+      // Cria parcelas se parcelado
+      if (osData.forma_pagamento === 'parcelado' && osData.n_parcelas > 1) {
+        await API.createParcelas(STATE.empresa.id, saved.id, total, osData.n_parcelas, today());
+      }
+
+      // Registra no caixa se pago
+      if (!['orcamento','fiado','parcelado'].includes(osData.forma_pagamento) && total > 0) {
+        await API.addCaixaEntry(STATE.empresa.id, {
+          tipo:      'entrada',
+          descricao: `OS #${saved.numero} - ${item}`,
+          valor:     total,
+          forma:     osData.forma_pagamento,
+          ordem_id:  saved.id,
+        });
+      }
+    }
+
+    // Notificação ao cliente via WhatsApp (se concluído/pronto)
+    if (['concluido','retirada'].includes(osData.status)) {
+      const cli = APP.clientes.find(c => c.id === osData.cliente_id);
+      if (cli?.telefone) {
+        const msg = `Olá ${cli.nome}, sua ${seg.labels[lang].os_single} #${saved.numero} está ${statusLabel(osData.status)}! 🎉`;
+        const link = API.buildWhatsAppLink(cli.telefone, msg);
+        UI.toast('✅ OS salva! <a href="' + link + '" target="_blank" style="color:var(--green)">Avisar cliente</a>', 'success');
       } else {
-        const { data: novaOS } = await window.sb.from('ordens').insert({ ...payload, numero: num }).select().single();
-        // Se pago, registrar no caixa
-        if (status === 'paga' && total > 0) {
-          await window.sb.from('caixa').insert({ empresa_id: STATE.empresa.id, descricao: 'OS #'+String(num).padStart(4,'0')+' - '+(cliNome||'Cliente'), valor: total, tipo: 'entrada', forma_pagamento: STATE.os_pay, ordem_id: novaOS?.id });
-        }
-        // Parcelas
-        if (STATE.os_pay === 'carne' || STATE.os_pay === 'credito') {
-          const nParcelas = parseInt(document.getElementById(STATE.os_pay==='carne'?'carne-num':'os-parcelas')?.value || 2);
-          const valParc = total / nParcelas;
-          const parcelas = [];
-          for (let i=0; i<nParcelas; i++) {
-            const d = new Date(); d.setMonth(d.getMonth()+i);
-            parcelas.push({ empresa_id: STATE.empresa.id, ordem_id: novaOS?.id, numero: i+1, total: nParcelas, valor: valParc, vencimento: d.toISOString().split('T')[0], pago: i===0 && status==='paga' });
-          }
-          await window.sb.from('parcelas').insert(parcelas);
-        }
+        UI.toast('✅ OS salva com sucesso!', 'success');
       }
-      btn.textContent = '💾 Salvar OS'; btn.disabled = false;
-      UI.closeModal('modal-os');
-      await OS.load();
-      UI.toast(STATE.os_editing ? '✅ OS atualizada' : '✅ OS criada com sucesso');
+    } else {
+      UI.toast('✅ OS salva!', 'success');
+    }
+
+    document.getElementById('os-modal')?.remove();
+    document.body.style.overflow = '';
+    APP.os = await API.getOS(STATE.empresa.id);
+    renderOSList();
+    App._updateOSBadge();
+
+  } catch(e) {
+    console.error('Erro ao salvar OS:', e);
+    UI.toast('❌ Erro ao salvar: ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i data-lucide="save" style="width:14px;height:14px"></i> Salvar'; lucide.createIcons(); }
+  }
+}
+
+function buildOSViewModal(os) {
+  const seg  = SEGMENTS.current;
+  const lang = I18N.lang;
+  const st   = STATUS_CONFIG[os.status] || {};
+  const itens = (() => { try { return JSON.parse(os.itens||'[]'); } catch { return []; } })();
+
+  const modal = document.createElement('div');
+  modal.id = 'os-view-modal';
+  modal.className = 'modal-wrap open';
+  modal.innerHTML = `
+    <div class="modal" style="max-width:580px">
+      <div class="modal-header">
+        <div>
+          <h3 class="modal-title">${seg.labels[lang].os_single} #${os.numero}</h3>
+          <span class="badge" style="background:${st.color}22;color:${st.color};border-color:${st.color}33">${st.label}</span>
+        </div>
+        <button class="modal-close" onclick="document.getElementById('os-view-modal').remove();document.body.style.overflow=''">
+          <i data-lucide="x" style="width:16px;height:16px"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+          <div>
+            <div style="font-size:.72rem;color:var(--text-3);margin-bottom:2px">${seg.labels[lang].item_field}</div>
+            <div style="font-weight:600">${os.item||'–'}</div>
+          </div>
+          ${os.extra_1 ? `<div><div style="font-size:.72rem;color:var(--text-3);margin-bottom:2px">${seg.labels[lang].extra_field_1||'Info'}</div><div style="font-weight:600">${os.extra_1}</div></div>` : ''}
+          ${os.clientes ? `<div><div style="font-size:.72rem;color:var(--text-3);margin-bottom:2px">Cliente</div><div style="font-weight:600">${os.clientes.nome}</div>${os.clientes.telefone?`<div style="font-size:.78rem;color:var(--text-3)">${os.clientes.telefone}</div>`:''}</div>` : ''}
+          ${os.funcionarios ? `<div><div style="font-size:.72rem;color:var(--text-3);margin-bottom:2px">${seg.labels[lang].staff_field}</div><div style="font-weight:600">${os.funcionarios.nome}</div></div>` : ''}
+        </div>
+
+        ${os.defeito ? `<div style="margin-bottom:12px"><div style="font-size:.72rem;color:var(--text-3);margin-bottom:4px">${seg.labels[lang].defect_field}</div><div style="background:var(--bg-2);border-radius:var(--radius-md);padding:10px;font-size:.86rem;line-height:1.5">${os.defeito}</div></div>` : ''}
+        ${os.diagnostico ? `<div style="margin-bottom:12px"><div style="font-size:.72rem;color:var(--text-3);margin-bottom:4px">${seg.labels[lang].diagnosis_field}</div><div style="background:var(--bg-2);border-radius:var(--radius-md);padding:10px;font-size:.86rem;line-height:1.5">${os.diagnostico}</div></div>` : ''}
+
+        ${itens.length ? `
+        <div style="margin-bottom:12px">
+          <div style="font-size:.72rem;color:var(--text-3);margin-bottom:8px">${seg.labels[lang].parts_field}</div>
+          ${itens.map(i=>`
+            <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:.84rem">
+              <span>${i.descricao} × ${i.quantidade}</span>
+              <span style="font-weight:600">${fmt(i.quantidade*i.valor_unit)}</span>
+            </div>`).join('')}
+          ${os.valor_mao_obra>0 ? `<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:.84rem;color:var(--text-2)"><span>Mão de obra</span><span>${fmt(os.valor_mao_obra)}</span></div>` : ''}
+          <div style="display:flex;justify-content:space-between;padding:10px 0 0;font-weight:800;font-size:1rem">
+            <span>Total</span><span style="color:var(--green)">${fmt(os.valor_total)}</span>
+          </div>
+        </div>` : `<div style="display:flex;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border);font-weight:800"><span>Total</span><span style="color:var(--green)">${fmt(os.valor_total)}</span></div>`}
+
+        ${os.forma_pagamento ? `<div style="font-size:.82rem;color:var(--text-2)">Pagamento: ${payLabel(os.forma_pagamento)}</div>` : ''}
+        ${os.observacoes ? `<div style="margin-top:12px;padding:10px;background:var(--bg-2);border-radius:var(--radius-md);font-size:.82rem;color:var(--text-2)">${os.observacoes}</div>` : ''}
+
+        <!-- Histórico -->
+        ${os.ordens_historico?.length ? `
+        <div style="margin-top:16px">
+          <div style="font-size:.72rem;color:var(--text-3);margin-bottom:8px">${I18N.t('os_history')}</div>
+          ${os.ordens_historico.slice().reverse().map(h=>`
+            <div style="font-size:.78rem;padding:6px 0;border-bottom:1px solid var(--border);display:flex;gap:8px">
+              <span style="color:var(--text-3);white-space:nowrap">${fmtDatetime(h.created_at)}</span>
+              <span>${h.texto}</span>
+            </div>`).join('')}
+        </div>` : ''}
+      </div>
+      <div class="modal-footer" style="flex-wrap:wrap;gap:6px">
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('os-view-modal').remove();document.body.style.overflow=''">Fechar</button>
+        ${os.clientes?.telefone ? `
+        <button class="btn btn-secondary btn-sm" onclick="openWhatsApp('${os.clientes.telefone}','${os.clientes.nome}','${os.numero}','${st.label}')">
+          <i data-lucide="message-circle" style="width:13px;height:13px"></i> WhatsApp
+        </button>` : ''}
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('os-view-modal').remove();openGenerateDocs('${os.id}')">
+          <i data-lucide="file-text" style="width:13px;height:13px"></i> PDF
+        </button>
+        ${os.empresa?.pix||STATE.empresa?.pix ? `
+        <button class="btn btn-secondary btn-sm" onclick="openPIX('${os.id}','${os.valor_total}')">
+          <i data-lucide="zap" style="width:13px;height:13px"></i> PIX
+        </button>` : ''}
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('os-view-modal').remove();openEditOS('${os.id}')">
+          <i data-lucide="pencil" style="width:13px;height:13px"></i> Editar
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="confirmDeleteOS('${os.id}','${os.numero}')">
+          <i data-lucide="trash-2" style="width:13px;height:13px"></i>
+        </button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+  document.body.style.overflow = 'hidden';
+  if (window.lucide) setTimeout(() => lucide.createIcons(), 50);
+}
+
+function confirmDeleteOS(id, numero) {
+  document.getElementById('os-view-modal')?.remove();
+  UI.confirm(`Excluir OS #${numero}? Esta ação não pode ser desfeita.`, async () => {
+    try {
+      await API.deleteOS(id);
+      APP.os = await API.getOS(STATE.empresa.id);
+      renderOSList();
+      App._updateOSBadge();
+      UI.toast('🗑 OS excluída', 'info');
     } catch(e) {
-      btn.textContent = '💾 Salvar OS'; btn.disabled = false;
-      UI.toast('Erro: ' + e.message, true);
+      UI.toast('❌ Erro ao excluir: ' + e.message, 'error');
     }
-  },
+  });
+}
 
-  async ver(id) {
-    const o = STATE.os.find(x => x.id === id);
-    if (!o) return;
-    const body = document.getElementById('os-detail-body');
-    const hist = await OS.loadHistorico(id);
-    body.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
-        <div style="width:42px;height:42px;border-radius:50%;background:${avatarColor(o.cliente_nome||'?')};display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff">${initials(o.cliente_nome||'?')}</div>
-        <div style="flex:1">
-          <div style="font-size:18px;font-weight:800">${o.cliente_nome||'Sem nome'}</div>
-          <div style="font-size:12px;color:var(--muted)">OS #${String(o.numero||'?').padStart(4,'0')} — ${fmtDate(o.criado_em?.split('T')[0])}</div>
-        </div>
-        <span class="sbadge sb-${o.status}">${statusLabel(o.status)}</span>
-        <button onclick="UI.closeModal('modal-os-detail')" style="color:var(--muted);font-size:18px;padding:4px">✕</button>
-      </div>
+function openWhatsApp(tel, nome, numero, status) {
+  const seg = SEGMENTS.current;
+  const lang = I18N.lang;
+  const msg = `Olá ${nome}! Sua ${seg.labels[lang].os_single} #${numero} está com status: *${status}*.\nQualquer dúvida, estamos à disposição! 😊`;
+  window.open(API.buildWhatsAppLink(tel, msg), '_blank');
+}
 
-      <div class="card">
-        <div class="ir"><div class="irl">Equipamento</div><div class="irv">${o.equipamento||'—'}</div></div>
-        <div class="ir"><div class="irl">Defeito</div><div class="irv">${o.defeito||'—'}</div></div>
-        ${o.diagnostico?`<div class="ir"><div class="irl">Diagnóstico</div><div class="irv" style="font-size:12px">${o.diagnostico}</div></div>`:''}
-        ${o.tecnico_nome?`<div class="ir"><div class="irl">Técnico</div><div class="irv">👤 ${o.tecnico_nome}</div></div>`:''}
-        ${o.data_entrega?`<div class="ir"><div class="irl">Previsão entrega</div><div class="irv">${fmtDate(o.data_entrega)}</div></div>`:''}
-        ${o.garantia_dias?`<div class="ir"><div class="irl">Garantia</div><div class="irv">${o.garantia_dias} dias</div></div>`:''}
-      </div>
+function openPIX(osId, valor) {
+  UI.toast('Gerando QR PIX... (em breve)', 'info');
+}
 
-      ${(o.items||[]).length ? `
-      <div class="card">
-        <div class="card-title"><div class="card-title-left"><div class="card-bar"></div> Itens / Serviços</div></div>
-        ${(o.items||[]).map(it=>`<div class="it-row"><span class="it-name">${it.desc}</span><span class="it-qty">${it.qty}</span><span class="it-price">${fmt(it.total)}</span><span></span></div>`).join('')}
-        <div class="it-total-row"><span class="it-total-label">TOTAL</span><span class="it-total-val">${fmt(o.total||0)}</span></div>
-      </div>` : ''}
+function openGenerateDocs(osId) {
+  UI.toast('Gerador de documentos em breve!', 'info');
+}
 
-      <div class="card">
-        <div class="card-title"><div class="card-title-left"><div class="card-bar"></div> Pagamento</div></div>
-        <div class="ir"><div class="irl">Forma</div><div class="irv">${payLabel(o.forma_pagamento)}</div></div>
-        <div class="ir"><div class="irl">Total</div><div class="irv txt-green fw-800">${fmt(o.total||0)}</div></div>
-        ${o.status==='fiado'?`<button class="btn btn-green btn-sm btn-full" onclick="OS.marcarPago('${o.id}')" style="margin-top:8px">✅ Marcar como pago</button>`:''}
-      </div>
+function openOSBatch() {
+  UI.toast('Criação em lote em breve!', 'info');
+}
 
-      <div class="card">
-        <label class="flabel">Atualizar status</label>
-        <select class="finput" id="det-status" onchange="OS.updateStatus('${o.id}',this.value)">
-          <option value="aberta" ${o.status==='aberta'?'selected':''}>🟡 Aguardando</option>
-          <option value="em_andamento" ${o.status==='em_andamento'?'selected':''}>🔵 Em andamento</option>
-          <option value="pronta" ${o.status==='pronta'?'selected':''}>🟠 Pronta p/ retirada</option>
-          <option value="paga" ${o.status==='paga'?'selected':''}>🟢 Concluída/Paga</option>
-          <option value="fiado" ${o.status==='fiado'?'selected':''}>🟣 Fiado</option>
-          <option value="cancelada" ${o.status==='cancelada'?'selected':''}>🔴 Cancelada</option>
-        </select>
-      </div>
-
-      <div class="brow">
-        <button class="btn btn-ghost btn-sm" onclick="OS.editar('${o.id}')">✏️ Editar</button>
-        <button class="btn btn-blue btn-sm" onclick="Comp.ver('${o.id}')">📄 Comprovante</button>
-        <button class="btn btn-ghost btn-sm" onclick="OS.duplicar('${o.id}')">📋 Duplicar</button>
-        <button class="btn btn-red btn-sm" onclick="OS.del('${o.id}')">🗑️ Excluir</button>
-      </div>
-
-      ${hist.length ? `
-      <div class="card" style="margin-top:14px">
-        <div class="card-title"><div class="card-title-left"><div class="card-bar"></div> Histórico</div></div>
-        ${hist.map(h=>`<div class="mov-item"><div><div class="mov-desc">${h.descricao||''}</div><div class="mov-meta">${h.usuario_nome||''}</div></div><div class="mov-meta">${fmtDate(h.criado_em?.split('T')[0])}</div></div>`).join('')}
-      </div>` : ''}
-    `;
-    UI.openModal('modal-os-detail');
-  },
-
-  async loadHistorico(id) {
-    const { data } = await window.sb.from('ordens_historico').select('*').eq('ordem_id', id).order('criado_em');
-    return data || [];
-  },
-
-  async updateStatus(id, status) {
-    await window.sb.from('ordens').update({ status }).eq('id', id);
-    await window.sb.from('ordens_historico').insert({ ordem_id: id, status, usuario_nome: STATE.user.nome, descricao: 'Status: ' + statusLabel(status) });
-    if (status === 'paga') {
-      const o = STATE.os.find(x => x.id === id);
-      if (o && o.status !== 'paga' && o.total > 0) {
-        await window.sb.from('caixa').insert({ empresa_id: STATE.empresa.id, descricao: 'OS #'+String(o.numero||'').padStart(4,'0')+' paga', valor: o.total, tipo: 'entrada', forma_pagamento: o.forma_pagamento, ordem_id: id });
-      }
+function openNewClientInline() {
+  const nome = prompt('Nome do novo cliente:');
+  if (!nome) return;
+  API.createCliente(STATE.empresa.id, { nome }).then(c => {
+    APP.clientes.push(c);
+    const sel = document.getElementById('os-f-cliente_id');
+    if (sel) {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.nome;
+      opt.selected = true;
+      sel.appendChild(opt);
     }
-    await OS.load();
-    UI.toast('✅ Status atualizado');
-    UI.closeModal('modal-os-detail');
-  },
+    UI.toast('✅ Cliente criado!', 'success');
+  });
+}
 
-  async marcarPago(id) {
-    OS.updateStatus(id, 'paga');
-  },
+function openScanner(targetId) {
+  UI.toast('Scanner de câmera em breve!', 'info');
+}
 
-  async editar(id) {
-    UI.closeModal('modal-os-detail');
-    const o = STATE.os.find(x => x.id === id);
-    if (!o) return;
-    STATE.os_editing = id;
-    STATE.os_items = [...(o.items||[])];
-    STATE.os_pay = o.forma_pagamento || '';
-    STATE.os_cli_id = o.cliente_id;
+// ── CLIENTES ───────────────────────────────────────────────
+function renderClients() {
+  const wrap = document.getElementById('clients-list');
+  if (!wrap) return;
 
-    await OS.loadTecnicos('os-tecnico');
+  const q = (document.getElementById('client-search')?.value || '').toLowerCase();
+  let lista = APP.clientes;
+  if (q) lista = lista.filter(c => c.nome?.toLowerCase().includes(q) || c.telefone?.includes(q) || c.cpf?.includes(q));
 
-    document.getElementById('os-modal-title').textContent = 'Editar OS #' + String(o.numero||'?').padStart(4,'0');
-    document.getElementById('os-id').value = id;
-    document.getElementById('os-equip').value = o.equipamento || '';
-    document.getElementById('os-defeito').value = o.defeito || '';
-    document.getElementById('os-diag').value = o.diagnostico || '';
-    document.getElementById('os-obs').value = o.observacoes || '';
-    document.getElementById('os-status').value = o.status || 'aberta';
-    document.getElementById('os-prioridade').value = o.prioridade || 'normal';
-    document.getElementById('os-garantia').value = o.garantia_dias || '';
-    document.getElementById('os-entrega').value = o.data_entrega || '';
-    document.getElementById('os-tecnico').value = o.tecnico_id || '';
-    document.getElementById('os-num').value = '#' + String(o.numero||'?').padStart(4,'0');
+  const count = document.getElementById('clients-count');
+  if (count) count.textContent = lista.length + ' cadastrado' + (lista.length!==1?'s':'');
 
-    if (o.cliente_nome) OS.selectCli(o.cliente_id||'', o.cliente_nome, '');
-    OS.renderItems();
+  if (!lista.length) {
+    wrap.innerHTML = `<div class="empty-state"><div class="empty-icon"><i data-lucide="users" style="width:36px;height:36px"></i></div><div class="empty-title">Nenhum cliente encontrado</div><button class="btn btn-primary mt-3" onclick="openNewClient()"><i data-lucide="user-plus" style="width:14px;height:14px"></i> Novo Cliente</button></div>`;
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
 
-    if (STATE.os_pay) {
-      const chip = document.querySelector(`.pchip[data-pay="${STATE.os_pay}"]`);
-      if (chip) { chip.classList.add('on-'+STATE.os_pay); }
-    }
-
-    if (STATE.config?.fotos) document.getElementById('os-foto-section').classList.remove('gone');
-    if (STATE.config?.assinatura) document.getElementById('os-sig-section').classList.remove('gone');
-
-    document.getElementById('btn-salvar-os').textContent = '💾 Atualizar OS';
-    UI.openModal('modal-os');
-  },
-
-  async duplicar(id) {
-    const o = STATE.os.find(x => x.id === id);
-    if (!o) return;
-    UI.closeModal('modal-os-detail');
-    STATE.os_items = [...(o.items||[])];
-    STATE.os_pay = o.forma_pagamento || '';
-    STATE.os_cli_id = o.cliente_id;
-    STATE.os_editing = null;
-    const num = (STATE.os.length ? Math.max(...STATE.os.map(x=>x.numero||0)) : 0) + 1;
-    await OS.loadTecnicos('os-tecnico');
-    document.getElementById('os-modal-title').textContent = 'Duplicar OS';
-    document.getElementById('os-equip').value = o.equipamento || '';
-    document.getElementById('os-defeito').value = o.defeito || '';
-    document.getElementById('os-num').value = '#' + String(num).padStart(4,'0');
-    document.getElementById('os-status').value = 'aberta';
-    if (o.cliente_nome) OS.selectCli(o.cliente_id||'', o.cliente_nome, '');
-    OS.renderItems();
-    UI.openModal('modal-os');
-    UI.toast('📋 OS duplicada — salve para criar');
-  },
-
-  async del(id) {
-    if (!confirm('Excluir esta OS permanentemente?')) return;
-    await window.sb.from('caixa').delete().eq('ordem_id', id);
-    await window.sb.from('parcelas').delete().eq('ordem_id', id);
-    await window.sb.from('ordens_historico').delete().eq('ordem_id', id);
-    const { error } = await window.sb.from('ordens').delete().eq('id', id);
-    if (error) { UI.toast('Erro: ' + error.message, true); return; }
-    UI.closeModal('modal-os-detail');
-    await OS.load();
-    UI.toast('🗑️ OS excluída');
-  },
-
-  usarTemplate() { UI.toast('Em breve: templates de OS 📋'); },
-
-  addFotos(inp) {
-    const grid = document.getElementById('os-fotos');
-    [...inp.files].forEach(f => {
-      const r = new FileReader();
-      r.onload = e => {
-        const img = document.createElement('img');
-        img.src = e.target.result;
-        img.style = 'width:100%;height:80px;object-fit:cover;border-radius:8px;border:1px solid var(--b1)';
-        grid.appendChild(img);
-      };
-      r.readAsDataURL(f);
-    });
-  },
-};
-
-// ── CLIENTES ──
-const Clientes = {
-  _filtro: '', _nivel: '',
-
-  async load() {
-    if (!STATE.empresa) return;
-    const { data } = await window.sb.from('clientes')
-      .select('*').eq('empresa_id', STATE.empresa.id)
-      .order('nome');
-    STATE.clientes = data || [];
-    Clientes.render();
-  },
-
-  filter() {
-    Clientes._filtro = document.getElementById('cli-search').value.toLowerCase();
-    Clientes.render();
-  },
-
-  setNivel(n, el) {
-    Clientes._nivel = n;
-    document.querySelectorAll('#pg-clientes .chip').forEach(c=>c.classList.remove('on'));
-    el.classList.add('on');
-    Clientes.render();
-  },
-
-  render() {
-    let list = STATE.clientes;
-    if (Clientes._filtro) list = list.filter(c =>
-      (c.nome||'').toLowerCase().includes(Clientes._filtro) ||
-      (c.telefone||'').includes(Clientes._filtro) ||
-      (c.cpf||'').includes(Clientes._filtro)
-    );
-    if (Clientes._nivel) list = list.filter(c => c.nivel === Clientes._nivel);
-    const el = document.getElementById('cli-list');
-    if (!list.length) { el.innerHTML = '<div class="empty"><div class="empty-ico">👥</div><p>Nenhum cliente</p></div>'; return; }
-    el.innerHTML = list.map(c => {
-      const osCount = STATE.os.filter(o => o.cliente_id === c.id).length;
-      const total = STATE.os.filter(o=>o.cliente_id===c.id&&o.status==='paga').reduce((s,o)=>s+(o.total||0),0);
-      return `<div class="os-item" onclick="Clientes.ver('${c.id}')" style="padding-left:20px">
-        <div class="osi-top">
-          <div class="osi-avatar" style="background:${avatarColor(c.nome)}">${initials(c.nome)}</div>
-          <div style="flex:1">
-            <div class="osi-name">${c.nome} ${c.nivel==='vip'?'⭐':c.nivel==='premium'?'💎':''}</div>
-            <div style="font-size:11px;color:var(--muted)">${c.telefone||'Sem telefone'} ${c.cpf?'· '+c.cpf:''}</div>
+  wrap.innerHTML = `<div style="display:grid;gap:8px">${lista.map(c => `
+    <div class="card card-sm" style="cursor:pointer;transition:border-color .15s" onclick="openViewClient('${c.id}')" onmouseover="this.style.borderColor='var(--border-md)'" onmouseout="this.style.borderColor=''">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:42px;height:42px;border-radius:50%;background:${avatarColor(c.nome)};display:flex;align-items:center;justify-content:center;font-size:.84rem;font-weight:700;color:#fff;flex-shrink:0">${initials(c.nome)}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:.9rem;display:flex;align-items:center;gap:6px">
+            ${c.nome}
+            ${c.nivel==='vip'?'<span class="badge badge-warning">⭐ VIP</span>':''}
+            ${c.nivel==='premium'?'<span class="badge badge-purple">💎 Premium</span>':''}
           </div>
-          <div style="text-align:right">
-            <div style="font-family:var(--mono);font-size:12px;font-weight:700;color:var(--green)">${fmt(total)}</div>
-            <div style="font-size:10px;color:var(--muted)">${osCount} OS</div>
+          <div style="font-size:.78rem;color:var(--text-3)">${c.telefone||'Sem telefone'}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          ${c.total_gasto ? `<div style="font-size:.82rem;font-weight:700;color:var(--green)">${fmt(c.total_gasto)}</div>` : ''}
+          <div style="font-size:.72rem;color:var(--text-3)">${c.aniversario ? '🎂 ' + fmtDate(c.aniversario) : ''}</div>
+        </div>
+      </div>
+    </div>
+  `).join('')}</div>`;
+  if (window.lucide) lucide.createIcons();
+}
+
+function filterClients() { renderClients(); }
+function filterClientLevel(nivel) { /* TODO */ }
+function sortClients(by) { /* TODO */ }
+
+function openNewClient() { buildClientModal(null); }
+
+async function openViewClient(id) {
+  const c = APP.clientes.find(x => x.id === id);
+  if (!c) return;
+  const historico = await API.getHistoricoCliente(id);
+  buildClientViewModal(c, historico);
+}
+
+function buildClientModal(client) {
+  const modal = document.createElement('div');
+  modal.id = 'client-modal';
+  modal.className = 'modal-wrap open';
+  modal.innerHTML = `
+    <div class="modal" style="max-width:480px">
+      <div class="modal-header">
+        <h3 class="modal-title">${client ? 'Editar Cliente' : I18N.t('client_new')}</h3>
+        <button class="modal-close" onclick="document.getElementById('client-modal').remove();document.body.style.overflow=''"><i data-lucide="x" style="width:16px;height:16px"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group"><label class="form-label">${I18N.t('client_name')} *</label><input type="text" id="cli-nome" class="form-control" value="${client?.nome||''}" placeholder="Nome completo"></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">${I18N.t('client_phone')}</label><input type="tel" id="cli-tel" class="form-control" value="${client?.telefone||''}" placeholder="(11) 99999-9999"></div>
+          <div class="form-group"><label class="form-label">${I18N.t('client_cpf')}</label><input type="text" id="cli-cpf" class="form-control" value="${client?.cpf||''}" placeholder="000.000.000-00"></div>
+        </div>
+        <div class="form-group"><label class="form-label">${I18N.t('client_email')}</label><input type="email" id="cli-email" class="form-control" value="${client?.email||''}" placeholder="email@exemplo.com"></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">${I18N.t('client_birthday')}</label><input type="date" id="cli-aniv" class="form-control" value="${client?.aniversario||''}"></div>
+          <div class="form-group"><label class="form-label">${I18N.t('client_level')}</label><select id="cli-nivel" class="form-control"><option value="normal" ${!client?.nivel||client?.nivel==='normal'?'selected':''}>Normal</option><option value="vip" ${client?.nivel==='vip'?'selected':''}>⭐ VIP</option><option value="premium" ${client?.nivel==='premium'?'selected':''}>💎 Premium</option></select></div>
+        </div>
+        <div class="form-group"><label class="form-label">${I18N.t('client_address')}</label><input type="text" id="cli-end" class="form-control" value="${client?.endereco||''}" placeholder="Rua, Nº, Bairro, Cidade"></div>
+        <div class="form-group"><label class="form-label">${I18N.t('client_credit_limit')}</label><input type="number" id="cli-limite" class="form-control" value="${client?.limite_credito||''}" placeholder="0,00" min="0" step="0.01"></div>
+        <div class="form-group"><label class="form-label">${I18N.t('notes')}</label><textarea id="cli-obs" class="form-control" rows="2" placeholder="Observações...">${client?.observacoes||''}</textarea></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="document.getElementById('client-modal').remove();document.body.style.overflow=''">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveClient('${client?.id||''}')"><i data-lucide="save" style="width:14px;height:14px"></i> Salvar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  document.body.style.overflow = 'hidden';
+  if (window.lucide) setTimeout(() => lucide.createIcons(), 50);
+}
+
+async function saveClient(id) {
+  const nome = document.getElementById('cli-nome')?.value?.trim();
+  if (!nome) { UI.toast('⚠ Nome obrigatório', 'warning'); return; }
+
+  const dados = {
+    nome, telefone: document.getElementById('cli-tel')?.value||null,
+    cpf: document.getElementById('cli-cpf')?.value||null,
+    email: document.getElementById('cli-email')?.value||null,
+    aniversario: document.getElementById('cli-aniv')?.value||null,
+    nivel: document.getElementById('cli-nivel')?.value||'normal',
+    endereco: document.getElementById('cli-end')?.value||null,
+    limite_credito: parseFloat(document.getElementById('cli-limite')?.value)||null,
+    observacoes: document.getElementById('cli-obs')?.value||null,
+  };
+
+  try {
+    if (id) {
+      const updated = await API.updateCliente(id, dados);
+      const idx = APP.clientes.findIndex(c => c.id === id);
+      if (idx >= 0) APP.clientes[idx] = updated;
+    } else {
+      const novo = await API.createCliente(STATE.empresa.id, dados);
+      APP.clientes.push(novo);
+    }
+    document.getElementById('client-modal').remove();
+    document.body.style.overflow = '';
+    renderClients();
+    UI.toast('✅ Cliente salvo!', 'success');
+  } catch(e) {
+    UI.toast('❌ ' + e.message, 'error');
+  }
+}
+
+function buildClientViewModal(c, historico) {
+  const modal = document.createElement('div');
+  modal.id = 'client-view-modal';
+  modal.className = 'modal-wrap open';
+  modal.innerHTML = `
+    <div class="modal" style="max-width:520px">
+      <div class="modal-header">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:44px;height:44px;border-radius:50%;background:${avatarColor(c.nome)};display:flex;align-items:center;justify-content:center;font-size:.9rem;font-weight:700;color:#fff">${initials(c.nome)}</div>
+          <div>
+            <h3 class="modal-title" style="margin:0">${c.nome} ${c.nivel!=='normal'?`<span class="badge badge-warning">${c.nivel==='vip'?'⭐ VIP':'💎 Premium'}</span>`:''}</h3>
+            <div style="font-size:.78rem;color:var(--text-3)">${c.telefone||''}</div>
           </div>
         </div>
+        <button class="modal-close" onclick="document.getElementById('client-view-modal').remove();document.body.style.overflow=''"><i data-lucide="x" style="width:16px;height:16px"></i></button>
+      </div>
+      <div class="modal-body">
+        ${c.email ? `<div style="font-size:.84rem;color:var(--text-2);margin-bottom:6px"><i data-lucide="mail" style="width:12px;height:12px;margin-right:4px"></i>${c.email}</div>` : ''}
+        ${c.endereco ? `<div style="font-size:.84rem;color:var(--text-2);margin-bottom:6px"><i data-lucide="map-pin" style="width:12px;height:12px;margin-right:4px"></i>${c.endereco}</div>` : ''}
+        ${c.aniversario ? `<div style="font-size:.84rem;color:var(--text-2);margin-bottom:12px"><i data-lucide="cake" style="width:12px;height:12px;margin-right:4px"></i>Aniversário: ${fmtDate(c.aniversario)}</div>` : ''}
+
+        <div style="margin-bottom:16px">
+          <div style="font-size:.72rem;color:var(--text-3);margin-bottom:8px">HISTÓRICO (${historico.length})</div>
+          ${historico.length ? historico.map(o=>`
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:.82rem;cursor:pointer" onclick="document.getElementById('client-view-modal').remove();openViewOS('${o.id}')">
+              <div><span style="color:var(--text-3)">#${o.numero}</span> ${o.item}</div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span class="badge" style="font-size:.68rem">${statusLabel(o.status)}</span>
+                <span style="font-weight:600;color:var(--green)">${fmt(o.valor_total)}</span>
+              </div>
+            </div>`).join('') : '<div style="font-size:.82rem;color:var(--text-3);padding:8px 0">Sem histórico</div>'}
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="document.getElementById('client-view-modal').remove();document.body.style.overflow=''">Fechar</button>
+        ${c.telefone ? `<button class="btn btn-secondary btn-sm" onclick="window.open('${API.buildWhatsAppLink(c.telefone,'Olá '+c.nome+'!')}','_blank')"><i data-lucide="message-circle" style="width:13px;height:13px"></i> WhatsApp</button>` : ''}
+        <button class="btn btn-primary" onclick="document.getElementById('client-view-modal').remove();buildClientModal(${JSON.stringify(c).replace(/"/g,'&quot;')})"><i data-lucide="pencil" style="width:13px;height:13px"></i> Editar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  document.body.style.overflow = 'hidden';
+  if (window.lucide) setTimeout(() => lucide.createIcons(), 50);
+}
+
+// ── ESTOQUE ────────────────────────────────────────────────
+function renderStock() {
+  const tbody = document.getElementById('stock-tbody');
+  if (!tbody) return;
+
+  const q = (document.getElementById('stock-search')?.value || '').toLowerCase();
+  let lista = APP.produtos;
+  if (q) lista = lista.filter(p => p.nome?.toLowerCase().includes(q) || p.codigo?.toLowerCase().includes(q) || p.codigo_barras?.includes(q));
+
+  const count = document.getElementById('stock-count');
+  if (count) count.textContent = lista.length + ' produto' + (lista.length!==1?'s':'');
+
+  if (!lista.length) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:48px;color:var(--text-3)"><i data-lucide="package" style="width:32px;height:32px;display:block;margin:0 auto 12px;opacity:.3"></i>Nenhum produto encontrado</td></tr>`;
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+
+  tbody.innerHTML = lista.map(p => {
+    const margin = p.preco_custo > 0 ? ((p.preco_venda - p.preco_custo) / p.preco_venda * 100).toFixed(0) : 0;
+    const baixo  = p.estoque_minimo > 0 && (p.quantidade||0) <= p.estoque_minimo;
+    return `
+      <tr ${baixo?'style="background:rgba(251,146,60,.05)"':''}>
+        <td>
+          <div style="font-weight:600;font-size:.86rem">${p.nome}</div>
+          ${p.codigo?`<div style="font-size:.72rem;color:var(--text-3)">${p.codigo}</div>`:''}
+          ${baixo?'<span class="badge badge-warning" style="font-size:.68rem">⚠ Baixo</span>':''}
+        </td>
+        <td style="font-family:'JetBrains Mono',monospace;font-weight:600;color:${baixo?'var(--orange)':'var(--text-1)'}">${p.quantidade||0}</td>
+        <td style="font-family:'JetBrains Mono',monospace;font-size:.82rem;color:var(--text-2)">${fmt(p.preco_custo)}</td>
+        <td style="font-family:'JetBrains Mono',monospace;font-weight:600">${fmt(p.preco_venda)}</td>
+        <td><span class="badge ${margin>=50?'badge-success':margin>=30?'badge-warning':''}" style="font-size:.72rem">${margin}%</span></td>
+        <td style="font-size:.78rem;color:var(--text-3)">${p.fornecedor||'–'}</td>
+        <td>
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-ghost btn-icon" onclick="openEditProduct('${p.id}')" title="Editar"><i data-lucide="pencil" style="width:13px;height:13px"></i></button>
+            <button class="btn btn-ghost btn-icon" onclick="confirmDeleteProduct('${p.id}','${p.nome}')" title="Excluir" style="color:var(--red)"><i data-lucide="trash-2" style="width:13px;height:13px"></i></button>
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+  if (window.lucide) lucide.createIcons();
+}
+
+function filterStock() { renderStock(); }
+function filterLowStock() { /* TODO toggle */ renderStock(); }
+
+function openNewProduct() { buildProductModal(null); }
+async function openEditProduct(id) {
+  const p = APP.produtos.find(x => x.id === id);
+  if (p) buildProductModal(p);
+}
+
+function buildProductModal(prod) {
+  const modal = document.createElement('div');
+  modal.id = 'product-modal';
+  modal.className = 'modal-wrap open';
+  modal.innerHTML = `
+    <div class="modal" style="max-width:480px">
+      <div class="modal-header">
+        <h3 class="modal-title">${prod ? 'Editar Produto' : I18N.t('stock_new')}</h3>
+        <button class="modal-close" onclick="document.getElementById('product-modal').remove();document.body.style.overflow=''"><i data-lucide="x" style="width:16px;height:16px"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group"><label class="form-label">${I18N.t('stock_name')} *</label><input type="text" id="prd-nome" class="form-control" value="${prod?.nome||''}" placeholder="Nome do produto"></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">${I18N.t('stock_code')}</label><input type="text" id="prd-cod" class="form-control" value="${prod?.codigo||''}" placeholder="SKU-001"></div>
+          <div class="form-group"><label class="form-label">${I18N.t('stock_barcode')}</label>
+            <div style="position:relative">
+              <input type="text" id="prd-barcode" class="form-control" value="${prod?.codigo_barras||''}" placeholder="0000000000000" style="padding-right:36px">
+              <button type="button" onclick="openScanner('prd-barcode')" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-3)"><i data-lucide="scan-barcode" style="width:14px;height:14px"></i></button>
+            </div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">${I18N.t('stock_cost')}</label><input type="number" id="prd-custo" class="form-control" value="${prod?.preco_custo||''}" placeholder="0,00" min="0" step="0.01" oninput="calcMargemProd()"></div>
+          <div class="form-group"><label class="form-label">${I18N.t('stock_price')}</label><input type="number" id="prd-venda" class="form-control" value="${prod?.preco_venda||''}" placeholder="0,00" min="0" step="0.01" oninput="calcMargemProd()"></div>
+        </div>
+        <div id="prd-margin-display" style="font-size:.78rem;color:var(--text-3);margin-bottom:12px;padding:6px 10px;background:var(--bg-2);border-radius:var(--radius-sm)">Margem: –</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">${I18N.t('stock_quantity')}</label><input type="number" id="prd-qtd" class="form-control" value="${prod?.quantidade||0}" min="0"></div>
+          <div class="form-group"><label class="form-label">${I18N.t('stock_min')}</label><input type="number" id="prd-min" class="form-control" value="${prod?.estoque_minimo||''}" placeholder="Ex: 5" min="0"></div>
+        </div>
+        <div class="form-group"><label class="form-label">${I18N.t('stock_category')}</label><input type="text" id="prd-cat" class="form-control" value="${prod?.categoria||''}" placeholder="Ex: Telas, Baterias..."></div>
+        <div class="form-group"><label class="form-label">${I18N.t('stock_supplier')}</label><input type="text" id="prd-forn" class="form-control" value="${prod?.fornecedor||''}" placeholder="Nome do fornecedor"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="document.getElementById('product-modal').remove();document.body.style.overflow=''">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveProduct('${prod?.id||''}')"><i data-lucide="save" style="width:14px;height:14px"></i> Salvar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  document.body.style.overflow = 'hidden';
+  if (window.lucide) setTimeout(() => { lucide.createIcons(); calcMargemProd(); }, 50);
+}
+
+function calcMargemProd() {
+  const custo = parseFloat(document.getElementById('prd-custo')?.value)||0;
+  const venda = parseFloat(document.getElementById('prd-venda')?.value)||0;
+  const el    = document.getElementById('prd-margin-display');
+  if (!el) return;
+  if (custo > 0 && venda > 0) {
+    const m = ((venda-custo)/venda*100).toFixed(1);
+    el.textContent = `Margem: ${m}% · Lucro: ${fmt(venda-custo)} por unidade`;
+    el.style.color = m >= 40 ? 'var(--green)' : m >= 20 ? 'var(--yellow)' : 'var(--red)';
+  } else {
+    el.textContent = 'Margem: –';
+  }
+}
+
+async function saveProduct(id) {
+  const nome = document.getElementById('prd-nome')?.value?.trim();
+  if (!nome) { UI.toast('⚠ Nome obrigatório', 'warning'); return; }
+
+  const dados = {
+    nome, codigo: document.getElementById('prd-cod')?.value||null,
+    codigo_barras: document.getElementById('prd-barcode')?.value||null,
+    preco_custo: parseFloat(document.getElementById('prd-custo')?.value)||0,
+    preco_venda: parseFloat(document.getElementById('prd-venda')?.value)||0,
+    quantidade: parseInt(document.getElementById('prd-qtd')?.value)||0,
+    estoque_minimo: parseInt(document.getElementById('prd-min')?.value)||0,
+    categoria: document.getElementById('prd-cat')?.value||null,
+    fornecedor: document.getElementById('prd-forn')?.value||null,
+  };
+
+  try {
+    if (id) {
+      const up = await API.updateProduto(id, dados);
+      const idx = APP.produtos.findIndex(p => p.id === id);
+      if (idx >= 0) APP.produtos[idx] = up;
+    } else {
+      const novo = await API.createProduto(STATE.empresa.id, dados);
+      APP.produtos.push(novo);
+    }
+    document.getElementById('product-modal').remove();
+    document.body.style.overflow = '';
+    renderStock();
+    UI.toast('✅ Produto salvo!', 'success');
+  } catch(e) {
+    UI.toast('❌ ' + e.message, 'error');
+  }
+}
+
+function confirmDeleteProduct(id, nome) {
+  UI.confirm(`Excluir "${nome}"?`, async () => {
+    await API.deleteProduto(id);
+    APP.produtos = APP.produtos.filter(p => p.id !== id);
+    renderStock();
+    UI.toast('🗑 Produto excluído', 'info');
+  });
+}
+
+function openSuppliers() { UI.toast('Fornecedores em breve!', 'info'); }
+
+// ── CAIXA ──────────────────────────────────────────────────
+async function renderCash() {
+  const from = today();
+  const data = await API.getCaixaSummary(STATE.empresa.id, from, from);
+
+  document.getElementById('cash-entries-val').textContent = fmt(data.entradas);
+  document.getElementById('cash-exits-val').textContent   = fmt(data.saidas);
+  document.getElementById('cash-balance-val').textContent = fmt(data.saldo);
+
+  const dateEl = document.getElementById('cash-date');
+  if (dateEl) dateEl.textContent = new Date().toLocaleDateString('pt-BR', { weekday:'long', day:'numeric', month:'long' });
+
+  renderCashTable(data.items);
+  renderContasPagar();
+  renderContasReceber();
+}
+
+function renderCashTable(items) {
+  const tbody = document.getElementById('cash-tbody');
+  if (!tbody) return;
+  if (!items.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text-3)">Sem movimentações hoje</td></tr>';
+    return;
+  }
+  tbody.innerHTML = items.map(i => `
+    <tr>
+      <td style="font-size:.78rem;color:var(--text-3);white-space:nowrap">${fmtDatetime(i.created_at)}</td>
+      <td style="font-size:.84rem">${i.descricao||'–'}</td>
+      <td style="font-family:'JetBrains Mono',monospace;font-weight:600;color:${i.tipo==='entrada'?'var(--green)':'var(--red)'}">${i.tipo==='entrada'?'+':'-'}${fmt(i.valor)}</td>
+      <td style="font-size:.78rem;color:var(--text-2)">${payLabel(i.forma)||'–'}</td>
+      <td style="font-size:.78rem;color:var(--text-3)">${i.ordem_id?'#OS':''}</td>
+    </tr>`).join('');
+}
+
+async function renderContasPagar() {
+  const lista = await API.getContasPagar(STATE.empresa.id);
+  APP.contasPagar = lista;
+  const tbody = document.getElementById('payable-tbody');
+  if (!tbody) return;
+  if (!lista.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text-3)">Nenhuma conta cadastrada</td></tr>';
+    return;
+  }
+  tbody.innerHTML = lista.map(c => {
+    const venc   = c.vencimento < today();
+    const status = c.pago ? '<span class="badge badge-success">Pago</span>' : venc ? '<span class="badge badge-danger">Vencido</span>' : '<span class="badge">Pendente</span>';
+    return `
+      <tr>
+        <td style="font-size:.86rem;font-weight:500">${c.descricao}</td>
+        <td style="font-weight:600;color:var(--red)">${fmt(c.valor)}</td>
+        <td style="font-size:.82rem;color:${venc&&!c.pago?'var(--red)':'var(--text-2)'}">${fmtDate(c.vencimento)}</td>
+        <td>${status}</td>
+        <td>
+          ${!c.pago ? `<button class="btn btn-ghost btn-sm" onclick="pagarConta('${c.id}','pagar')"><i data-lucide="check" style="width:12px;height:12px"></i></button>` : ''}
+          <button class="btn btn-ghost btn-icon" onclick="deleteContaPagar('${c.id}')" style="color:var(--red)"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button>
+        </td>
+      </tr>`;
+  }).join('');
+  if (window.lucide) lucide.createIcons();
+}
+
+async function renderContasReceber() {
+  const lista = await API.getContasReceber(STATE.empresa.id);
+  APP.contasReceber = lista;
+  const tbody = document.getElementById('receivable-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = lista.map(c => {
+    const venc   = c.vencimento < today();
+    const status = c.recebido ? '<span class="badge badge-success">Recebido</span>' : venc ? '<span class="badge badge-danger">Vencido</span>' : '<span class="badge">Pendente</span>';
+    return `
+      <tr>
+        <td style="font-size:.86rem;font-weight:500">${c.clientes?.nome||'–'}</td>
+        <td style="font-weight:600;color:var(--green)">${fmt(c.valor)}</td>
+        <td style="font-size:.82rem;color:${venc&&!c.recebido?'var(--red)':'var(--text-2)'}">${fmtDate(c.vencimento)}</td>
+        <td style="font-size:.78rem;color:var(--text-3)">${c.ordem_id?'#OS':''}</td>
+        <td>${status}</td>
+        <td>${!c.recebido ? `<button class="btn btn-ghost btn-sm" onclick="receberConta('${c.id}')"><i data-lucide="check" style="width:12px;height:12px"></i></button>` : ''}</td>
+      </tr>`;
+  }).join('');
+  if (window.lucide) lucide.createIcons();
+}
+
+function switchFinanceTab(tab, btn) {
+  ['cash','payable','receivable','cashflow'].forEach(t => {
+    const el = document.getElementById('finance-tab-' + t);
+    if (el) el.style.display = t === tab ? '' : 'none';
+  });
+  document.querySelectorAll('.finance-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (tab === 'cashflow') renderCashFlowChart();
+}
+
+async function renderCashFlowChart() {
+  const canvas = document.getElementById('cashflow-chart');
+  if (!canvas) return;
+  UI.toast('Carregando projeção...', 'info');
+  // Chart placeholder
+  APP.charts.cashflow?.destroy();
+  APP.charts.cashflow = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: Array.from({length:30},(_,i)=>{const d=new Date();d.setDate(d.getDate()+i);return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});}),
+      datasets: [
+        { label:'Entrada', data: Array.from({length:30},()=>Math.random()*500), backgroundColor:'rgba(52,211,153,.5)', borderColor:'#34D399', borderWidth:1 },
+        { label:'Saída',   data: Array.from({length:30},()=>Math.random()*200), backgroundColor:'rgba(248,113,113,.5)', borderColor:'#F87171', borderWidth:1 },
+      ]
+    },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ labels:{ color:'#9CA3AF', font:{size:11} } } }, scales:{ x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#6B7280',font:{size:9}}}, y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#6B7280',font:{size:10}}} } }
+  });
+}
+
+function openNewTransaction() {
+  const modal = document.createElement('div');
+  modal.id = 'transaction-modal';
+  modal.className = 'modal-wrap open';
+  modal.innerHTML = `
+    <div class="modal" style="max-width:400px">
+      <div class="modal-header"><h3 class="modal-title">Novo Lançamento</h3><button class="modal-close" onclick="document.getElementById('transaction-modal').remove();document.body.style.overflow=''"><i data-lucide="x" style="width:16px;height:16px"></i></button></div>
+      <div class="modal-body">
+        <div class="form-group"><label class="form-label">Tipo</label>
+          <div style="display:flex;gap:8px">
+            <button type="button" class="btn btn-primary flex-1" id="tipo-entrada" onclick="setTipoLanc('entrada')">+ Entrada</button>
+            <button type="button" class="btn btn-ghost flex-1" id="tipo-saida" onclick="setTipoLanc('saida')" style="color:var(--red);border-color:var(--red)">- Saída</button>
+          </div>
+        </div>
+        <div class="form-group"><label class="form-label">Descrição *</label><input type="text" id="lanc-desc" class="form-control" placeholder="Ex: Pagamento OS #0042"></div>
+        <div class="form-group"><label class="form-label">Valor *</label><input type="number" id="lanc-valor" class="form-control" placeholder="0,00" min="0" step="0.01"></div>
+        <div class="form-group"><label class="form-label">Forma de Pagamento</label><select id="lanc-forma" class="form-control">${Object.entries(PAY_CONFIG).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('')}</select></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="document.getElementById('transaction-modal').remove();document.body.style.overflow=''">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveLancamento()">Salvar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  document.body.style.overflow = 'hidden';
+  window._lancTipo = 'entrada';
+  if (window.lucide) setTimeout(() => lucide.createIcons(), 50);
+}
+
+function setTipoLanc(tipo) {
+  window._lancTipo = tipo;
+  document.getElementById('tipo-entrada').className = tipo==='entrada'?'btn btn-primary flex-1':'btn btn-ghost flex-1';
+  document.getElementById('tipo-saida').className   = tipo==='saida'  ?'btn btn-danger flex-1' :'btn btn-ghost flex-1';
+  if (tipo==='saida') { document.getElementById('tipo-saida').style.cssText='color:var(--red);border-color:var(--red)'; }
+}
+
+async function saveLancamento() {
+  const desc  = document.getElementById('lanc-desc')?.value?.trim();
+  const valor = parseFloat(document.getElementById('lanc-valor')?.value);
+  if (!desc || !valor) { UI.toast('⚠ Preencha todos os campos', 'warning'); return; }
+
+  await API.addCaixaEntry(STATE.empresa.id, {
+    tipo: window._lancTipo || 'entrada',
+    descricao: desc,
+    valor,
+    forma: document.getElementById('lanc-forma')?.value || 'dinheiro',
+  });
+  document.getElementById('transaction-modal').remove();
+  document.body.style.overflow = '';
+  renderCash();
+  UI.toast('✅ Lançamento registrado!', 'success');
+}
+
+function openCashBleed() {
+  const v = prompt('Valor da sangria (R$):');
+  if (!v || isNaN(parseFloat(v))) return;
+  API.addCaixaEntry(STATE.empresa.id, { tipo:'saida', descricao:'Sangria de caixa', valor:parseFloat(v), forma:'dinheiro' })
+    .then(() => { renderCash(); UI.toast('✅ Sangria registrada!', 'success'); });
+}
+
+function openNewPayable() {
+  const desc  = prompt('Descrição da conta:');
+  if (!desc) return;
+  const valor = prompt('Valor (R$):');
+  if (!valor || isNaN(parseFloat(valor))) return;
+  const venc  = prompt('Vencimento (AAAA-MM-DD):') || today();
+  API.createContaPagar(STATE.empresa.id, { descricao: desc, valor: parseFloat(valor), vencimento: venc })
+    .then(() => { renderContasPagar(); UI.toast('✅ Conta adicionada!', 'success'); });
+}
+
+async function pagarConta(id) {
+  await API.updateContaPagar(id, { pago: true, pago_em: today() });
+  renderContasPagar();
+  UI.toast('✅ Conta marcada como paga!', 'success');
+}
+
+async function deleteContaPagar(id) {
+  await API.deleteContaPagar(id);
+  renderContasPagar();
+  UI.toast('🗑 Conta removida', 'info');
+}
+
+async function receberConta(id) {
+  await API.updateContaReceber(id, { recebido: true, recebido_em: today() });
+  renderContasReceber();
+  UI.toast('✅ Recebimento confirmado!', 'success');
+}
+
+function generateCashFlowAI() { UI.toast('Gerando projeção com IA...', 'info'); }
+
+// ── AGENDA / CALENDÁRIO ────────────────────────────────────
+function renderCalendar() {
+  const wrap = document.getElementById('cal-grid-wrap');
+  const title = document.getElementById('cal-title');
+  if (!wrap) return;
+
+  const date = APP.calDate;
+  const year = date.getFullYear();
+  const month = date.getMonth();
+
+  if (title) title.textContent = date.toLocaleDateString('pt-BR', { month:'long', year:'numeric' });
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  const todayStr = today();
+  const dayNames = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+
+  const eventos = APP.agenda || [];
+  const eventosByDay = {};
+  eventos.forEach(e => {
+    const d = e.data_inicio?.split('T')[0];
+    if (d) { if (!eventosByDay[d]) eventosByDay[d] = []; eventosByDay[d].push(e); }
+  });
+
+  let html = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;margin-bottom:8px">
+    ${dayNames.map(d=>`<div style="text-align:center;font-size:.72rem;font-weight:600;color:var(--text-3);padding:8px 4px">${d}</div>`).join('')}
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">`;
+
+  // Células vazias antes do dia 1
+  for (let i=0; i<firstDay; i++) html += `<div style="height:60px;background:var(--bg);border-radius:6px"></div>`;
+
+  for (let d=1; d<=daysInMonth; d++) {
+    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isToday = dateStr === todayStr;
+    const evs     = eventosByDay[dateStr] || [];
+    html += `
+      <div onclick="selectCalDay('${dateStr}')" style="min-height:60px;background:${isToday?'var(--blue-dim)':'var(--bg-2)'};border:1px solid ${isToday?'var(--blue)':'var(--border)'};border-radius:6px;padding:5px;cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='var(--border-md)'" onmouseout="this.style.borderColor='${isToday?'var(--blue)':'var(--border)'}'">
+        <div style="font-size:.78rem;font-weight:${isToday?'800':'500'};color:${isToday?'var(--blue)':'var(--text-2)'};margin-bottom:3px">${d}</div>
+        ${evs.slice(0,2).map(e=>`<div style="font-size:.66rem;padding:2px 4px;border-radius:3px;background:${e.cor||'var(--blue)'}33;color:${e.cor||'var(--blue)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:1px">${e.titulo}</div>`).join('')}
+        ${evs.length>2?`<div style="font-size:.62rem;color:var(--text-3)">+${evs.length-2}</div>`:''}
       </div>`;
-    }).join('');
-  },
+  }
 
-  ver(id) {
-    const c = STATE.clientes.find(x=>x.id===id);
-    if (!c) return;
-    const osCliente = STATE.os.filter(o=>o.cliente_id===id).slice(0,5);
-    const totalGasto = STATE.os.filter(o=>o.cliente_id===id&&o.status==='paga').reduce((s,o)=>s+(o.total||0),0);
-    const body = `<div style="text-align:center;margin-bottom:20px">
-      <div style="width:72px;height:72px;border-radius:50%;background:${avatarColor(c.nome)};display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;color:#fff;margin:0 auto 10px">${initials(c.nome)}</div>
-      <div style="font-size:20px;font-weight:800">${c.nome} ${c.nivel==='vip'?'⭐':c.nivel==='premium'?'💎':''}</div>
-      ${c.telefone?`<a href="https://wa.me/55${c.telefone.replace(/\D/g,'')}" target="_blank" class="btn btn-green btn-sm" style="margin-top:8px">📱 WhatsApp</a>`:''}
+  html += '</div>';
+  wrap.innerHTML = html;
+
+  const periodoEl = document.getElementById('schedule-period');
+  if (periodoEl) periodoEl.textContent = date.toLocaleDateString('pt-BR', { month:'long', year:'numeric' });
+}
+
+async function selectCalDay(dateStr) {
+  const evs = APP.agenda.filter(e => e.data_inicio?.startsWith(dateStr));
+  if (evs.length === 0) {
+    openNewSchedule(dateStr);
+    return;
+  }
+  UI.toast(evs.length + ' evento(s) em ' + fmtDate(dateStr), 'info');
+}
+
+function calPrev() {
+  const d = APP.calDate;
+  APP.calDate = new Date(d.getFullYear(), d.getMonth()-1, 1);
+  renderCalendar();
+}
+
+function calNext() {
+  const d = APP.calDate;
+  APP.calDate = new Date(d.getFullYear(), d.getMonth()+1, 1);
+  renderCalendar();
+}
+
+function setCalView(view, btn) {
+  APP.calView = view;
+  document.querySelectorAll('.page-header .filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderCalendar();
+}
+
+function openNewSchedule(data) {
+  const modal = document.createElement('div');
+  modal.id = 'schedule-modal';
+  modal.className = 'modal-wrap open';
+  modal.innerHTML = `
+    <div class="modal" style="max-width:460px">
+      <div class="modal-header"><h3 class="modal-title">${I18N.t('schedule_new')}</h3><button class="modal-close" onclick="document.getElementById('schedule-modal').remove();document.body.style.overflow=''"><i data-lucide="x" style="width:16px;height:16px"></i></button></div>
+      <div class="modal-body">
+        <div class="form-group"><label class="form-label">${I18N.t('schedule_title')} *</label><input type="text" id="sched-titulo" class="form-control" placeholder="Ex: Visita técnica - João"></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">${I18N.t('schedule_type')}</label><select id="sched-tipo" class="form-control"><option value="os">OS Agendada</option><option value="visita">Visita Técnica</option><option value="cobranca">Cobrança</option><option value="geral">Geral</option></select></div>
+          <div class="form-group"><label class="form-label">Cor</label><input type="color" id="sched-cor" class="form-control" value="#38BDF8" style="height:42px;padding:4px"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">${I18N.t('schedule_date')} *</label><input type="date" id="sched-data" class="form-control" value="${data||today()}"></div>
+          <div class="form-group"><label class="form-label">${I18N.t('schedule_time')}</label><input type="time" id="sched-hora" class="form-control" value="09:00"></div>
+        </div>
+        <div class="form-group"><label class="form-label">${I18N.t('schedule_client')}</label><select id="sched-cliente" class="form-control"><option value="">Sem cliente</option>${APP.clientes.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('')}</select></div>
+        <div class="form-group"><label class="form-label">${I18N.t('schedule_technician')}</label><select id="sched-tecnico" class="form-control"><option value="">Sem atribuição</option>${APP.funcionarios.map(f=>`<option value="${f.id}">${f.nome}</option>`).join('')}</select></div>
+        <div class="form-group"><label class="form-label">${I18N.t('schedule_notes')}</label><textarea id="sched-obs" class="form-control" rows="2" placeholder="Observações..."></textarea></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="document.getElementById('schedule-modal').remove();document.body.style.overflow=''">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveSchedule()"><i data-lucide="save" style="width:14px;height:14px"></i> Salvar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  document.body.style.overflow = 'hidden';
+  if (window.lucide) setTimeout(() => lucide.createIcons(), 50);
+}
+
+async function saveSchedule() {
+  const titulo = document.getElementById('sched-titulo')?.value?.trim();
+  const data   = document.getElementById('sched-data')?.value;
+  if (!titulo || !data) { UI.toast('⚠ Preencha título e data', 'warning'); return; }
+  const hora = document.getElementById('sched-hora')?.value || '00:00';
+  const evento = {
+    titulo,
+    tipo:        document.getElementById('sched-tipo')?.value || 'geral',
+    cor:         document.getElementById('sched-cor')?.value || '#38BDF8',
+    data_inicio: data + 'T' + hora + ':00',
+    cliente_id:  document.getElementById('sched-cliente')?.value || null,
+    tecnico_id:  document.getElementById('sched-tecnico')?.value || null,
+    descricao:   document.getElementById('sched-obs')?.value || null,
+  };
+  const novo = await API.createEvento(STATE.empresa.id, evento);
+  APP.agenda.push(novo);
+  document.getElementById('schedule-modal').remove();
+  document.body.style.overflow = '';
+  renderCalendar();
+  UI.toast('✅ Evento criado!', 'success');
+}
+
+// ── ANALYTICS ──────────────────────────────────────────────
+async function renderAnalytics() {
+  const periodos = {
+    month:      { from: today().slice(0,7)+'-01', to: today() },
+    last_month: { from: (() => { const d=new Date(); d.setMonth(d.getMonth()-1); return d.toISOString().slice(0,7)+'-01'; })(), to: (() => { const d=new Date(); d.setMonth(d.getMonth()-1); return new Date(d.getFullYear(),d.getMonth()+1,0).toISOString().split('T')[0]; })() },
+    quarter:    { from: (() => { const d=new Date(); d.setMonth(d.getMonth()-2); return d.toISOString().slice(0,7)+'-01'; })(), to: today() },
+    year:       { from: today().slice(0,4)+'-01-01', to: today() },
+  };
+  const { from, to } = periodos[APP.anPeriodo] || periodos.month;
+  const data = await API.getAnalytics(STATE.empresa.id, from, to);
+
+  document.getElementById('an-revenue').textContent = fmt(data.faturamento);
+  document.getElementById('an-profit').textContent  = fmt(data.lucro);
+  document.getElementById('an-ticket').textContent  = fmt(data.ticket_medio);
+
+  // Meta progress
+  const metas = await API.getMetas(STATE.empresa.id);
+  const metaFat = metas.find(m => m.tipo === 'faturamento')?.valor_meta || 0;
+  const pct = metaFat > 0 ? Math.min(100, (data.faturamento / metaFat * 100)).toFixed(0) : 0;
+  document.getElementById('an-goal-pct').textContent = pct + '%';
+
+  // Gráfico por forma de pagamento
+  renderPaymentChart(data.by_payment);
+
+  // Top services
+  const tsWrap = document.getElementById('top-services-list');
+  if (tsWrap) {
+    tsWrap.innerHTML = data.top_services.map(([nome, count]) => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:.84rem">
+        <span>${nome}</span>
+        <span class="badge">${count}x</span>
+      </div>`).join('') || '<div style="color:var(--text-3);font-size:.82rem;padding:12px 0">Sem dados</div>';
+  }
+}
+
+function setAnalyticsPeriod(periodo, btn) {
+  APP.anPeriodo = periodo;
+  document.querySelectorAll('#page-analytics .filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderAnalytics();
+}
+
+function renderPaymentChart(byPayment) {
+  const canvas = document.getElementById('payment-chart');
+  if (!canvas || !Object.keys(byPayment).length) return;
+  APP.charts.payment?.destroy();
+  APP.charts.payment = new Chart(canvas, {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(byPayment).map(payLabel),
+      datasets: [{ data: Object.values(byPayment), backgroundColor: ['#38BDF8','#34D399','#A78BFA','#FB923C','#F472B6','#FBBF24','#60A5FA'], borderWidth:0 }]
+    },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom', labels:{ color:'#9CA3AF', font:{size:10}, padding:8, boxWidth:10 } } } }
+  });
+}
+
+function exportAnalytics() { UI.toast('Exportando relatório...', 'info'); }
+
+// ── IA ─────────────────────────────────────────────────────
+function renderAI() {
+  const wrap = document.getElementById('ai-cards');
+  if (!wrap) return;
+
+  const cards = [
+    { icon:'trending-up', color:'var(--blue)',   title:'Análise do Negócio',     desc:'Visão geral e pontos de melhoria com base nos seus dados',   action: () => askAI_business() },
+    { icon:'lightbulb',   color:'var(--yellow)', title:'Sugestões de Preço',     desc:'IA analisa sua margem e sugere ajustes nos preços',           action: () => askAI_pricing() },
+    { icon:'target',      color:'var(--green)',  title:'Meta do Próximo Mês',    desc:'Projeção inteligente baseada no histórico',                   action: () => askAI_goal() },
+    { icon:'message-circle',color:'var(--purple)','title':'Mensagem para Cliente', desc:'Gera mensagem personalizada de cobrança ou follow-up',       action: () => askAI_message() },
+    { icon:'package',     color:'var(--orange)', title:'Previsão de Estoque',    desc:'Quando reabastecer e quanto comprar de cada produto',         action: () => askAI_stock() },
+    { icon:'wrench',      color:'var(--text-2)', title:'Diagnóstico Técnico',    desc:'Descreva o defeito e a IA sugere o diagnóstico provável',     action: () => askAI_diagnosis() },
+  ];
+
+  wrap.innerHTML = cards.map((c, i) => `
+    <div class="card" style="cursor:pointer;transition:all .2s" onclick="ai_cards_run(${i})" onmouseover="this.style.borderColor='var(--border-md)';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='';this.style.transform=''">
+      <div style="width:44px;height:44px;border-radius:12px;background:${c.color}22;display:flex;align-items:center;justify-content:center;margin-bottom:14px">
+        <i data-lucide="${c.icon}" style="width:22px;height:22px;color:${c.color}"></i>
+      </div>
+      <div style="font-size:.92rem;font-weight:700;margin-bottom:6px">${c.title}</div>
+      <div style="font-size:.78rem;color:var(--text-2);line-height:1.5">${c.desc}</div>
+      <div style="margin-top:14px">
+        <span class="btn btn-secondary btn-sm" style="font-size:.74rem">
+          <i data-lucide="sparkles" style="width:12px;height:12px"></i> Gerar com IA
+        </span>
+      </div>
+    </div>
+  `).join('');
+  if (window.lucide) lucide.createIcons();
+}
+
+const _ai_actions = [
+  () => askAI_business(),
+  () => askAI_pricing(),
+  () => askAI_goal(),
+  () => askAI_message(),
+  () => askAI_stock(),
+  () => askAI_diagnosis(),
+];
+function ai_cards_run(i) { _ai_actions[i]?.(); }
+
+async function askAI_business() {
+  UI.toast('Analisando seu negócio...', 'info');
+  try {
+    const data = await API.getDashboardData(STATE.empresa.id);
+    const resp = await API.askAI(
+      `Analise estes dados do meu negócio e dê 3 sugestões práticas de melhoria:\n${JSON.stringify(data)}`,
+      { empresa: STATE.empresa?.nome, segmento: STATE.empresa?.segmento }
+    );
+    showAIResponse('Análise do Negócio', resp);
+  } catch(e) { UI.toast('❌ Erro ao consultar IA', 'error'); }
+}
+
+async function askAI_diagnosis() {
+  const defeito = prompt('Descreva o defeito ou problema:');
+  if (!defeito) return;
+  UI.toast('Consultando IA...', 'info');
+  try {
+    const resp = await API.askAI(
+      `Sou técnico de assistência. O cliente relatou: "${defeito}". Quais são os diagnósticos mais prováveis e como proceder?`,
+      { segmento: STATE.empresa?.segmento }
+    );
+    showAIResponse('Diagnóstico Técnico', resp);
+  } catch(e) { UI.toast('❌ Erro ao consultar IA', 'error'); }
+}
+
+async function askAI_goal() {
+  UI.toast('Calculando meta ideal...', 'info');
+  try {
+    const data = await API.getAnalytics(STATE.empresa.id, today().slice(0,7)+'-01', today());
+    const resp = await API.askAI(
+      `Com base no faturamento atual de ${fmt(data.faturamento)}, sugira uma meta realista para o próximo mês e estratégias para atingi-la.`
+    );
+    showAIResponse('Meta Sugerida', resp);
+  } catch(e) { UI.toast('❌ Erro ao consultar IA', 'error'); }
+}
+
+async function askAI_pricing()  { UI.toast('Analisando preços...', 'info'); setTimeout(() => UI.toast('Em desenvolvimento', 'info'), 800); }
+async function askAI_message()  { UI.toast('Gerando mensagem...', 'info'); setTimeout(() => UI.toast('Em desenvolvimento', 'info'), 800); }
+async function askAI_stock()    { UI.toast('Analisando estoque...', 'info'); setTimeout(() => UI.toast('Em desenvolvimento', 'info'), 800); }
+
+function showAIResponse(titulo, conteudo) {
+  const modal = document.createElement('div');
+  modal.className = 'modal-wrap open';
+  modal.innerHTML = `
+    <div class="modal" style="max-width:540px">
+      <div class="modal-header">
+        <h3 class="modal-title"><i data-lucide="sparkles" style="width:16px;height:16px;color:var(--purple);margin-right:6px"></i>${titulo}</h3>
+        <button class="modal-close" onclick="this.closest('.modal-wrap').remove();document.body.style.overflow=''"><i data-lucide="x" style="width:16px;height:16px"></i></button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size:.88rem;line-height:1.7;color:var(--text-1);white-space:pre-wrap">${conteudo}</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="this.closest('.modal-wrap').remove();document.body.style.overflow=''">Fechar</button>
+        <button class="btn btn-secondary" onclick="navigator.clipboard.writeText('${conteudo.replace(/'/g,"\\'")}');UI.toast('✅ Copiado!','success')"><i data-lucide="copy" style="width:14px;height:14px"></i> Copiar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  document.body.style.overflow = 'hidden';
+  if (window.lucide) setTimeout(() => lucide.createIcons(), 50);
+}
+
+// ── NOTIFICAÇÕES ───────────────────────────────────────────
+function renderNotifications() {
+  const wrap = document.getElementById('notif-list');
+  if (!wrap) return;
+
+  if (!APP.notifs.length) {
+    wrap.innerHTML = `<div class="empty-state"><div class="empty-icon"><i data-lucide="bell-off" style="width:32px;height:32px"></i></div><div class="empty-title">${I18N.t('notif_empty')}</div></div>`;
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+
+  const icons = { os_ready:'package-check', payment:'dollar-sign', low_stock:'alert-triangle', birthday:'cake', overdue:'clock', new_client:'user-plus' };
+
+  wrap.innerHTML = APP.notifs.map(n => `
+    <div onclick="markNotifRead('${n.id}',this)" style="display:flex;gap:12px;padding:14px 0;border-bottom:1px solid var(--border);cursor:pointer;opacity:${n.lida?'.6':'1'};transition:opacity .15s">
+      <div style="width:36px;height:36px;border-radius:10px;background:var(--blue-dim);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <i data-lucide="${icons[n.tipo]||'bell'}" style="width:16px;height:16px;color:var(--blue)"></i>
+      </div>
+      <div style="flex:1">
+        <div style="font-size:.86rem;font-weight:${n.lida?'400':'600'}">${n.titulo||n.mensagem}</div>
+        <div style="font-size:.76rem;color:var(--text-3);margin-top:2px">${fmtDatetime(n.created_at)}</div>
+      </div>
+      ${!n.lida ? '<div style="width:8px;height:8px;border-radius:50%;background:var(--blue);flex-shrink:0;margin-top:4px"></div>' : ''}
+    </div>
+  `).join('');
+  if (window.lucide) lucide.createIcons();
+}
+
+async function markNotifRead(id, el) {
+  await API.marcarNotifLida(id);
+  const n = APP.notifs.find(x => x.id === id);
+  if (n) n.lida = true;
+  if (el) el.style.opacity = '.6';
+  App._updateNotifBadge();
+}
+
+async function markAllNotifRead() {
+  await API.marcarTodasLidas(STATE.empresa.id);
+  APP.notifs.forEach(n => n.lida = true);
+  renderNotifications();
+  App._updateNotifBadge();
+  UI.toast('✅ Todas marcadas como lidas', 'success');
+}
+
+// ── CONFIGURAÇÕES ──────────────────────────────────────────
+function renderSettings(tab) {
+  APP.settingsTab = tab || 'company';
+
+  // Ativa item no nav
+  document.querySelectorAll('#settings-nav .nav-item').forEach(i => i.classList.remove('active'));
+  const active = document.querySelector(`#settings-nav .nav-item[onclick*="${APP.settingsTab}"]`);
+  if (active) active.classList.add('active');
+
+  const content = document.getElementById('settings-content');
+  if (!content) return;
+
+  const emp = STATE.empresa || {};
+  const prefs = JSON.parse(localStorage.getItem('nexos_prefs')||'{}');
+
+  const tabs = {
+    company: `
+      <div class="card">
+        <h4 style="font-size:.92rem;font-weight:700;margin-bottom:20px">${I18N.t('settings_company')}</h4>
+        <div class="form-group"><label class="form-label">${I18N.t('settings_company_name')}</label><input type="text" id="cfg-nome" class="form-control" value="${emp.nome||''}"></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">${I18N.t('settings_phone')}</label><input type="tel" id="cfg-tel" class="form-control" value="${emp.telefone||''}"></div>
+          <div class="form-group"><label class="form-label">${I18N.t('settings_cnpj')}</label><input type="text" id="cfg-cnpj" class="form-control" value="${emp.cnpj||''}"></div>
+        </div>
+        <div class="form-group"><label class="form-label">${I18N.t('settings_address')}</label><input type="text" id="cfg-end" class="form-control" value="${emp.endereco||''}" placeholder="Endereço completo"></div>
+        <div class="form-group"><label class="form-label">${I18N.t('settings_pix')}</label><input type="text" id="cfg-pix" class="form-control" value="${emp.pix||''}" placeholder="Chave PIX"></div>
+        <div class="form-group"><label class="form-label">${I18N.t('settings_warranty_text')}</label><textarea id="cfg-garantia" class="form-control" rows="3" placeholder="Texto padrão da garantia...">${emp.texto_garantia||''}</textarea></div>
+        <button class="btn btn-primary" onclick="saveEmpresaConfig()"><i data-lucide="save" style="width:14px;height:14px"></i> Salvar</button>
+      </div>`,
+
+    appearance: `
+      <div class="card">
+        <h4 style="font-size:.92rem;font-weight:700;margin-bottom:20px">Aparência</h4>
+        <div class="setting-row"><div class="setting-info"><div class="setting-label">${I18N.t('settings_language')}</div></div>
+          <select class="form-control" style="width:140px" onchange="I18N.set(this.value)">
+            <option value="pt" ${I18N.lang==='pt'?'selected':''}>🇧🇷 PT-BR</option>
+            <option value="en" ${I18N.lang==='en'?'selected':''}>🇺🇸 EN</option>
+            <option value="es" ${I18N.lang==='es'?'selected':''}>🇪🇸 ES</option>
+          </select>
+        </div>
+        <div class="setting-row"><div class="setting-info"><div class="setting-label">${I18N.t('settings_currency')}</div></div>
+          <select class="form-control" style="width:140px" onchange="STATE.currency=this.value">
+            <option value="BRL" ${STATE.currency==='BRL'?'selected':''}>R$ Real</option>
+            <option value="USD" ${STATE.currency==='USD'?'selected':''}>$ Dollar</option>
+            <option value="EUR" ${STATE.currency==='EUR'?'selected':''}>€ Euro</option>
+          </select>
+        </div>
+        <div class="setting-row"><div class="setting-info"><div class="setting-label">${I18N.t('settings_signature')}</div><div class="setting-desc">Coleta assinatura do cliente nas OS</div></div>
+          <label class="toggle"><input type="checkbox" ${prefs.signature_enabled?'checked':''} onchange="togglePref('signature_enabled',this.checked)"><span class="toggle-slider"></span></label>
+        </div>
+        <div class="setting-row"><div class="setting-info"><div class="setting-label">${I18N.t('settings_photos')}</div><div class="setting-desc">Permite fotos nas OS</div></div>
+          <label class="toggle"><input type="checkbox" ${prefs.photos_enabled?'checked':''} onchange="togglePref('photos_enabled',this.checked)"><span class="toggle-slider"></span></label>
+        </div>
+        <div class="setting-row"><div class="setting-info"><div class="setting-label">${I18N.t('settings_camera')}</div><div class="setting-desc">Scanner de câmera para código de barras</div></div>
+          <label class="toggle"><input type="checkbox" ${prefs.camera_enabled?'checked':''} onchange="togglePref('camera_enabled',this.checked)"><span class="toggle-slider"></span></label>
+        </div>
+      </div>`,
+
+    employees: `
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+          <h4 style="font-size:.92rem;font-weight:700;margin:0">${I18N.t('settings_employees')}</h4>
+          <button class="btn btn-primary btn-sm" onclick="openNewEmployee()"><i data-lucide="user-plus" style="width:13px;height:13px"></i> ${I18N.t('employee_new')}</button>
+        </div>
+        <div id="employees-list">${renderEmployeesList()}</div>
+      </div>`,
+
+    segment: `
+      <div class="card">
+        <h4 style="font-size:.92rem;font-weight:700;margin-bottom:20px">${I18N.t('settings_segment')}</h4>
+        <p style="font-size:.84rem;color:var(--text-2);margin-bottom:20px">Alterar o segmento adapta toda a interface do sistema.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          ${SEGMENTS.list.map(seg => `
+            <div class="segment-card ${STATE.empresa?.segmento===seg.id?'selected':''}" onclick="changeSegment('${seg.id}',this)">
+              <div class="segment-card-icon" style="background:${seg.color}22"><i data-lucide="${seg.icon}" style="width:22px;height:22px;color:${seg.color}"></i></div>
+              <div class="segment-card-name">${seg.labels[I18N.lang]?.name||seg.labels.pt.name}</div>
+              <div class="segment-card-desc">${seg.labels[I18N.lang]?.desc||seg.labels.pt.desc}</div>
+            </div>`).join('')}
+        </div>
+      </div>`,
+
+    goals: `
+      <div class="card">
+        <h4 style="font-size:.92rem;font-weight:700;margin-bottom:20px">${I18N.t('settings_goals')}</h4>
+        <div class="form-group"><label class="form-label">Meta de Faturamento Mensal</label><input type="number" id="meta-fat" class="form-control" placeholder="Ex: 10000" min="0" step="100"></div>
+        <div class="form-group"><label class="form-label">Meta de OS / Atendimentos</label><input type="number" id="meta-os" class="form-control" placeholder="Ex: 50" min="0"></div>
+        <button class="btn btn-primary" onclick="saveMetas()"><i data-lucide="save" style="width:14px;height:14px"></i> Salvar Metas</button>
+      </div>`,
+
+    about: `
+      <div class="card" style="text-align:center;padding:32px">
+        <img src="NexOS.png" alt="NexOS" style="width:64px;height:64px;border-radius:14px;margin-bottom:16px;box-shadow:0 8px 32px rgba(56,189,248,.2)">
+        <div style="font-size:1.4rem;font-weight:800;background:var(--grad-logo);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">NexOS</div>
+        <div style="font-size:.82rem;color:var(--text-3);margin-top:4px">Versão 3.0 · Gestão inteligente</div>
+        <div style="font-size:.78rem;color:var(--text-3);margin-top:20px;line-height:1.8">
+          Empresa: <strong style="color:var(--text-1)">${STATE.empresa?.nome||'–'}</strong><br>
+          Plano: <strong style="color:var(--blue)">${STATE.empresa?.plano||'Básico'}</strong><br>
+          ID: <code style="font-size:.72rem;color:var(--text-3)">${STATE.empresa?.id?.slice(0,8)||'–'}</code>
+        </div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:20px" onclick="Auth.logout()"><i data-lucide="log-out" style="width:13px;height:13px"></i> Sair</button>
+      </div>`,
+  };
+
+  content.innerHTML = tabs[APP.settingsTab] || '<div class="card"><div style="color:var(--text-3);padding:20px">Em breve...</div></div>';
+  if (window.lucide) setTimeout(() => lucide.createIcons(), 50);
+}
+
+function showSettingsTab(tab) {
+  APP.settingsTab = tab;
+  renderSettings(tab);
+  // Atualiza nav
+  document.querySelectorAll('#settings-nav .nav-item').forEach(i => i.classList.remove('active'));
+  const active = document.querySelector(`#settings-nav .nav-item[onclick*="${tab}"]`);
+  if (active) active.classList.add('active');
+}
+
+function renderEmployeesList() {
+  if (!APP.funcionarios.length)
+    return '<div style="font-size:.84rem;color:var(--text-3);padding:12px 0">Nenhum funcionário cadastrado</div>';
+
+  return APP.funcionarios.map(f => `
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="width:36px;height:36px;border-radius:50%;background:${avatarColor(f.nome)};display:flex;align-items:center;justify-content:center;font-size:.76rem;font-weight:700;color:#fff;flex-shrink:0">${initials(f.nome)}</div>
+      <div style="flex:1">
+        <div style="font-size:.88rem;font-weight:600">${f.nome}</div>
+        <div style="font-size:.74rem;color:var(--text-3)">${f.funcao||'Funcionário'}</div>
+      </div>
+      <button class="btn btn-ghost btn-icon" onclick="openEditEmployee('${f.id}')" title="Editar"><i data-lucide="pencil" style="width:13px;height:13px"></i></button>
+      <button class="btn btn-ghost btn-icon" onclick="confirmDeleteEmployee('${f.id}','${f.nome}')" style="color:var(--red)" title="Remover"><i data-lucide="user-x" style="width:13px;height:13px"></i></button>
+    </div>`).join('');
+}
+
+function togglePref(key, value) {
+  const prefs = JSON.parse(localStorage.getItem('nexos_prefs')||'{}');
+  prefs[key] = value;
+  localStorage.setItem('nexos_prefs', JSON.stringify(prefs));
+  UI.toast('✅ Preferência salva!', 'success');
+}
+
+async function saveEmpresaConfig() {
+  const updates = {
+    nome:          document.getElementById('cfg-nome')?.value?.trim(),
+    telefone:      document.getElementById('cfg-tel')?.value||null,
+    cnpj:          document.getElementById('cfg-cnpj')?.value||null,
+    endereco:      document.getElementById('cfg-end')?.value||null,
+    pix:           document.getElementById('cfg-pix')?.value||null,
+    texto_garantia:document.getElementById('cfg-garantia')?.value||null,
+  };
+  try {
+    await API.updateEmpresa(STATE.empresa.id, updates);
+    Object.assign(STATE.empresa, updates);
+    UI.toast('✅ Dados da empresa salvos!', 'success');
+  } catch(e) {
+    UI.toast('❌ ' + e.message, 'error');
+  }
+}
+
+function changeSegment(id, el) {
+  SEGMENTS.set(id);
+  API.updateEmpresa(STATE.empresa.id, { segmento: id });
+  document.querySelectorAll('#settings-content .segment-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  Auth._updateSegmentLabels();
+  UI.toast('✅ Segmento alterado!', 'success');
+}
+
+async function saveMetas() {
+  const fat = parseFloat(document.getElementById('meta-fat')?.value);
+  const os  = parseFloat(document.getElementById('meta-os')?.value);
+  if (fat) await API.setMeta(STATE.empresa.id, 'faturamento', fat);
+  if (os)  await API.setMeta(STATE.empresa.id, 'os', os);
+  UI.toast('✅ Metas salvas!', 'success');
+}
+
+function openNewEmployee() { buildEmployeeModal(null); }
+async function openEditEmployee(id) {
+  const f = APP.funcionarios.find(x => x.id === id);
+  if (f) buildEmployeeModal(f);
+}
+
+function buildEmployeeModal(func) {
+  const PERMS = ['criar_os','ver_todas_os','deletar_os','ver_caixa','ver_analytics','gerenciar_estoque','ver_clientes','editar_config','ver_valores'];
+  const perms = func?.permissoes || {};
+  const modal = document.createElement('div');
+  modal.id = 'employee-modal';
+  modal.className = 'modal-wrap open';
+  modal.innerHTML = `
+    <div class="modal" style="max-width:460px">
+      <div class="modal-header"><h3 class="modal-title">${func ? 'Editar Funcionário' : I18N.t('employee_new')}</h3><button class="modal-close" onclick="document.getElementById('employee-modal').remove();document.body.style.overflow=''"><i data-lucide="x" style="width:16px;height:16px"></i></button></div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">${I18N.t('employee_name')} *</label><input type="text" id="emp-nome" class="form-control" value="${func?.nome||''}"></div>
+          <div class="form-group"><label class="form-label">${I18N.t('employee_role')}</label><input type="text" id="emp-funcao" class="form-control" value="${func?.funcao||''}" placeholder="Ex: Técnico"></div>
+        </div>
+        <div class="form-group"><label class="form-label">${I18N.t('employee_pin')} ${func?'(deixe vazio para não alterar)':''}</label>
+          <div class="pin-inputs"><input class="pin-input" type="password" maxlength="1" inputmode="numeric"><input class="pin-input" type="password" maxlength="1" inputmode="numeric"><input class="pin-input" type="password" maxlength="1" inputmode="numeric"><input class="pin-input" type="password" maxlength="1" inputmode="numeric"></div>
+        </div>
+        <div style="font-size:.8rem;font-weight:600;color:var(--text-2);margin-bottom:10px">${I18N.t('employee_permissions')}</div>
+        <div style="display:grid;gap:6px">
+          ${PERMS.map(p => `
+            <div class="setting-row" style="padding:8px 0">
+              <div class="setting-label" style="font-size:.82rem">${I18N.t('perm_'+p.replace(/___/g,'_').replace('criar_os','create_os').replace('ver_todas_os','view_all_os').replace('deletar_os','delete_os').replace('ver_caixa','view_cash').replace('ver_analytics','view_analytics').replace('gerenciar_estoque','manage_stock').replace('ver_clientes','view_clients').replace('editar_config','edit_settings').replace('ver_valores','view_values'))||p}</div>
+              <label class="toggle"><input type="checkbox" id="perm-${p}" ${perms[p]?'checked':''}><span class="toggle-slider"></span></label>
+            </div>`).join('')}
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="document.getElementById('employee-modal').remove();document.body.style.overflow=''">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveEmployee('${func?.id||''}')"><i data-lucide="save" style="width:14px;height:14px"></i> Salvar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  document.body.style.overflow = 'hidden';
+
+  // PIN inputs behavior
+  const pinInputs = modal.querySelectorAll('.pin-input');
+  pinInputs.forEach((inp, i) => {
+    inp.oninput = e => { e.target.value = e.target.value.replace(/\D/g,''); if (e.target.value && pinInputs[i+1]) pinInputs[i+1].focus(); };
+    inp.onkeydown = e => { if (e.key==='Backspace' && !e.target.value && pinInputs[i-1]) pinInputs[i-1].focus(); };
+  });
+
+  if (window.lucide) setTimeout(() => lucide.createIcons(), 50);
+}
+
+async function saveEmployee(id) {
+  const nome = document.getElementById('emp-nome')?.value?.trim();
+  if (!nome) { UI.toast('⚠ Nome obrigatório', 'warning'); return; }
+
+  const pinInputs = document.querySelectorAll('#employee-modal .pin-input');
+  const pin = Array.from(pinInputs).map(i => i.value).join('');
+
+  const PERMS = ['criar_os','ver_todas_os','deletar_os','ver_caixa','ver_analytics','gerenciar_estoque','ver_clientes','editar_config','ver_valores'];
+  const permissoes = {};
+  PERMS.forEach(p => { permissoes[p] = document.getElementById('perm-'+p)?.checked || false; });
+
+  const dados = {
+    nome, funcao: document.getElementById('emp-funcao')?.value||null,
+    permissoes,
+    ...(pin.length === 4 ? { pin } : {}),
+  };
+
+  try {
+    if (id) {
+      const up = await API.updateFuncionario(id, dados);
+      const idx = APP.funcionarios.findIndex(f => f.id === id);
+      if (idx >= 0) APP.funcionarios[idx] = up;
+    } else {
+      if (pin.length !== 4) { UI.toast('⚠ PIN de 4 dígitos obrigatório', 'warning'); return; }
+      const novo = await API.createFuncionario(STATE.empresa.id, dados);
+      APP.funcionarios.push(novo);
+    }
+    document.getElementById('employee-modal').remove();
+    document.body.style.overflow = '';
+    renderSettings('employees');
+    UI.toast('✅ Funcionário salvo!', 'success');
+  } catch(e) {
+    UI.toast('❌ ' + e.message, 'error');
+  }
+}
+
+function confirmDeleteEmployee(id, nome) {
+  UI.confirm(`Desativar "${nome}"?`, async () => {
+    await API.deleteFuncionario(id);
+    APP.funcionarios = APP.funcionarios.filter(f => f.id !== id);
+    renderSettings('employees');
+    UI.toast('✅ Funcionário desativado', 'info');
+  });
+}
+
+// ── MASTER ADMIN ───────────────────────────────────────────
+async function renderMaster() {
+  if (!STATE.isMaster) return;
+  const content = document.getElementById('master-content');
+  if (!content) return;
+
+  const { data: empresas } = await window.sb.from('empresas').select('*').order('created_at', { ascending: false });
+
+  content.innerHTML = `
+    <div class="kpi-grid" style="margin-bottom:20px">
+      <div class="kpi-card blue"><div class="kpi-value">${empresas?.length||0}</div><div class="kpi-label">Empresas</div></div>
     </div>
     <div class="card">
-      ${c.email?`<div class="ir"><div class="irl">Email</div><div class="irv">${c.email}</div></div>`:''}
-      ${c.cpf?`<div class="ir"><div class="irl">CPF/CNPJ</div><div class="irv">${c.cpf}</div></div>`:''}
-      ${c.endereco?`<div class="ir"><div class="irl">Endereço</div><div class="irv">${c.endereco}</div></div>`:''}
-      ${c.nascimento?`<div class="ir"><div class="irl">Aniversário</div><div class="irv">${fmtDate(c.nascimento)}</div></div>`:''}
-      ${c.limite_credito?`<div class="ir"><div class="irl">Limite Fiado</div><div class="irv txt-orange">${fmt(c.limite_credito)}</div></div>`:''}
-      <div class="ir"><div class="irl">Total gasto</div><div class="irv txt-green fw-800">${fmt(totalGasto)}</div></div>
-    </div>
-    ${osCliente.length ? `<div class="card"><div class="card-title"><div class="card-title-left"><div class="card-bar"></div>Histórico de OS</div></div>${osCliente.map(o=>`<div class="mov-item" onclick="OS.ver('${o.id}');UI.closeModal('modal-cliente')"><div><div class="mov-desc">${o.equipamento||''}</div><div class="mov-meta">${statusLabel(o.status)}</div></div><div class="mov-val e">${fmt(o.total||0)}</div></div>`).join('')}</div>`:''}
-    <div class="brow" style="margin-top:8px">
-      <button class="btn btn-ghost btn-sm" onclick="UI.closeModal('modal-cliente')">Fechar</button>
-      <button class="btn btn-primary btn-sm" onclick="Clientes.abrirEditar('${c.id}')">✏️ Editar</button>
-      <button class="btn btn-red btn-sm" onclick="Clientes.del('${c.id}')">🗑️ Excluir</button>
+      <h4 style="font-size:.92rem;font-weight:700;margin-bottom:16px">Todas as Empresas</h4>
+      <div class="table-wrap"><table><thead><tr><th>Empresa</th><th>Segmento</th><th>Plano</th><th>Cadastro</th><th>Status</th></tr></thead>
+      <tbody>${(empresas||[]).map(e=>`
+        <tr>
+          <td><div style="font-weight:600;font-size:.86rem">${e.nome}</div><div style="font-size:.74rem;color:var(--text-3)">${e.id.slice(0,8)}</div></td>
+          <td style="font-size:.82rem">${e.segmento||'tech'}</td>
+          <td><span class="badge badge-${e.plano==='pro'?'success':'warning'}">${e.plano||'basico'}</span></td>
+          <td style="font-size:.78rem;color:var(--text-3)">${fmtDate(e.created_at)}</td>
+          <td><span class="badge ${e.ativo?'badge-success':'badge-danger'}">${e.ativo?'Ativo':'Inativo'}</span></td>
+        </tr>`).join('')}
+      </tbody></table></div>
     </div>`;
-    document.getElementById('cli-modal-title').textContent = c.nome;
-    document.getElementById('cli-id').value = id;
-    document.querySelector('#modal-cliente .mbody').innerHTML = body;
-    UI.openModal('modal-cliente');
-  },
-
-  abrirEditar(id) {
-    const c = STATE.clientes.find(x=>x.id===id);
-    if (!c) { openNovoCliente(); return; }
-    UI.closeModal('modal-cliente');
-    setTimeout(() => {
-      document.getElementById('cli-modal-title').textContent = 'Editar Cliente';
-      document.getElementById('cli-id').value = id;
-      document.getElementById('cli-nome').value = c.nome||'';
-      document.getElementById('cli-tel').value = c.telefone||'';
-      document.getElementById('cli-cpf').value = c.cpf||'';
-      document.getElementById('cli-email').value = c.email||'';
-      document.getElementById('cli-end').value = c.endereco||'';
-      document.getElementById('cli-nasc').value = c.nascimento||'';
-      document.getElementById('cli-nivel').value = c.nivel||'normal';
-      document.getElementById('cli-limite').value = c.limite_credito||'';
-      document.getElementById('cli-obs').value = c.observacoes||'';
-      UI.openModal('modal-cliente');
-    }, 200);
-  },
-
-  uploadFoto(inp) {
-    if (!inp.files[0]) return;
-    const r = new FileReader();
-    r.onload = e => {
-      const pv = document.getElementById('cli-foto-preview');
-      pv.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover">`;
-    };
-    r.readAsDataURL(inp.files[0]);
-  },
-
-  async salvar() {
-    const nome = document.getElementById('cli-nome').value.trim();
-    if (!nome) { UI.toast('⚠️ Informe o nome', true); return; }
-    const id = document.getElementById('cli-id').value;
-    const payload = {
-      empresa_id: STATE.empresa.id,
-      nome, telefone: document.getElementById('cli-tel').value,
-      cpf: document.getElementById('cli-cpf').value,
-      email: document.getElementById('cli-email').value,
-      endereco: document.getElementById('cli-end').value,
-      nascimento: document.getElementById('cli-nasc').value || null,
-      nivel: document.getElementById('cli-nivel').value,
-      limite_credito: parseFloat(document.getElementById('cli-limite').value) || null,
-      observacoes: document.getElementById('cli-obs').value,
-    };
-    try {
-      if (id) await window.sb.from('clientes').update(payload).eq('id', id);
-      else await window.sb.from('clientes').insert(payload);
-      UI.closeModal('modal-cliente');
-      await Clientes.load();
-      UI.toast(id ? '✅ Cliente atualizado' : '✅ Cliente cadastrado');
-    } catch(e) { UI.toast('Erro: ' + e.message, true); }
-  },
-
-  async del(id) {
-    if (!confirm('Excluir cliente?')) return;
-    await window.sb.from('clientes').delete().eq('id', id);
-    UI.closeModal('modal-cliente');
-    await Clientes.load();
-    UI.toast('🗑️ Cliente removido');
-  },
-};
-
-// ── CAIXA ──
-const Caixa = {
-  async load() {
-    if (!STATE.empresa) return;
-    const hoje = today();
-    let query = window.sb.from('caixa').select('*').eq('empresa_id', STATE.empresa.id);
-    if (Caixa._periodo === 'hoje') query = query.gte('criado_em', hoje);
-    else if (Caixa._periodo === 'semana') {
-      const d = new Date(); d.setDate(d.getDate()-7);
-      query = query.gte('criado_em', d.toISOString().split('T')[0]);
-    } else if (Caixa._periodo === 'mes') {
-      query = query.gte('criado_em', hoje.slice(0,7)+'-01');
-    }
-    const { data } = await query.order('criado_em', { ascending: false });
-    const movs = data || [];
-
-    const entrada = movs.filter(m=>m.tipo==='entrada').reduce((s,m)=>s+(m.valor||0),0);
-    const saida = movs.filter(m=>m.tipo==='saida').reduce((s,m)=>s+(m.valor||0),0);
-    const fiado = STATE.os.filter(o=>o.status==='fiado').reduce((s,o)=>s+(o.total||0),0);
-
-    document.getElementById('cx-entrada').textContent = fmt(entrada);
-    document.getElementById('cx-saida').textContent = fmt(saida);
-    document.getElementById('cx-saldo').textContent = fmt(entrada - saida);
-    document.getElementById('cx-fiado').textContent = fmt(fiado);
-
-    const el = document.getElementById('cx-movs');
-    if (!movs.length) { el.innerHTML = '<div class="empty"><div class="empty-ico">💰</div><p>Sem movimentações</p></div>'; return; }
-    el.innerHTML = movs.map(m => `<div class="mov-item">
-      <div>
-        <div class="mov-desc">${m.descricao||'Movimentação'}</div>
-        <div class="mov-meta">${fmtDate(m.criado_em?.split('T')[0])} · ${payLabel(m.forma_pagamento)}</div>
-      </div>
-      <div class="mov-val ${m.tipo==='entrada'?'e':'s'}">${m.tipo==='saida'?'-':''}${fmt(m.valor||0)}</div>
-    </div>`).join('');
-
-    // Carregar contas
-    await Caixa.loadContas();
-  },
-  _periodo: 'hoje',
-  setPeriodo(p, el) {
-    Caixa._periodo = p;
-    document.querySelectorAll('#pg-caixa .chip').forEach(c=>c.classList.remove('on'));
-    el.classList.add('on');
-    document.getElementById('cx-custom-range').classList.toggle('gone', p !== 'custom');
-    if (p !== 'custom') Caixa.load();
-  },
-  loadCustom() { Caixa.load(); },
-
-  setTab(tab, el) {
-    STATE.caixaTab = tab;
-    ['mov','pagar','receber'].forEach(t => {
-      document.getElementById('cx-tab-'+t+'-content').classList.toggle('gone', t !== tab);
-    });
-    document.querySelectorAll('.auth-tabs .auth-tab').forEach(b=>b.classList.remove('on'));
-    el.classList.add('on');
-  },
-
-  async loadContas() {
-    if (!STATE.empresa) return;
-    const { data: pagar } = await window.sb.from('contas_pagar').select('*').eq('empresa_id', STATE.empresa.id).eq('pago', false).order('vencimento');
-    const { data: receber } = await window.sb.from('contas_receber').select('*').eq('empresa_id', STATE.empresa.id).eq('recebido', false).order('vencimento');
-    STATE.contas_pagar = pagar || [];
-    STATE.contas_receber = receber || [];
-    Caixa.renderContas('pagar', pagar||[]);
-    Caixa.renderContas('receber', receber||[]);
-  },
-
-  renderContas(tipo, list) {
-    const el = document.getElementById('contas-'+tipo+'-list');
-    if (!list.length) { el.innerHTML = '<div class="empty"><div class="empty-ico">📋</div><p>Nenhuma conta</p></div>'; return; }
-    el.innerHTML = list.map(c => {
-      const venc = new Date(c.vencimento+'T12:00:00');
-      const hoje = new Date(); hoje.setHours(0,0,0,0);
-      const atrasado = venc < hoje;
-      return `<div class="mov-item">
-        <div>
-          <div class="mov-desc">${c.descricao}</div>
-          <div class="mov-meta ${atrasado?'txt-red':''}">📅 ${fmtDate(c.vencimento)} ${atrasado?'· VENCIDA':''} ${c.categoria?'· '+c.categoria:''}</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <div class="mov-val ${tipo==='pagar'?'s':'e'}">${fmt(c.valor)}</div>
-          <button class="btn btn-green btn-sm" onclick="Caixa.quitarConta('${c.id}','${tipo}')">✓</button>
-        </div>
-      </div>`;
-    }).join('');
-  },
-
-  async quitarConta(id, tipo) {
-    const table = tipo === 'pagar' ? 'contas_pagar' : 'contas_receber';
-    const field = tipo === 'pagar' ? 'pago' : 'recebido';
-    await window.sb.from(table).update({ [field]: true }).eq('id', id);
-    const conta = (tipo==='pagar'?STATE.contas_pagar:STATE.contas_receber).find(c=>c.id===id);
-    if (conta) {
-      await window.sb.from('caixa').insert({ empresa_id: STATE.empresa.id, descricao: conta.descricao, valor: conta.valor, tipo: tipo==='pagar'?'saida':'entrada', forma_pagamento: 'outro' });
-    }
-    await Caixa.loadContas();
-    UI.toast('✅ Conta quitada');
-  },
-
-  async salvarConta() {
-    const tipo = document.getElementById('conta-tipo').value;
-    const desc = document.getElementById('conta-desc').value.trim();
-    const valor = parseFloat(document.getElementById('conta-valor').value);
-    const venc = document.getElementById('conta-venc').value;
-    if (!desc || !valor || !venc) { UI.toast('⚠️ Preencha todos os campos', true); return; }
-    const table = tipo === 'pagar' ? 'contas_pagar' : 'contas_receber';
-    await window.sb.from(table).insert({ empresa_id: STATE.empresa.id, descricao: desc, valor, vencimento: venc, [tipo==='pagar'?'pago':'recebido']: false, categoria: document.getElementById('conta-cat').value });
-    UI.closeModal('modal-conta');
-    await Caixa.loadContas();
-    UI.toast('✅ Conta adicionada');
-  },
-
-  async salvarSaida() {
-    const desc = document.getElementById('saida-desc').value.trim();
-    const val = parseFloat(document.getElementById('saida-val').value);
-    if (!desc || !val) { UI.toast('⚠️ Preencha todos os campos', true); return; }
-    const data = document.getElementById('saida-data').value || today();
-    await window.sb.from('caixa').insert({ empresa_id: STATE.empresa.id, descricao: desc, valor: val, tipo: 'saida', categoria: document.getElementById('saida-cat').value, criado_em: data+'T12:00:00' });
-    UI.closeModal('modal-saida');
-    await Caixa.load();
-    UI.toast('➖ Saída registrada');
-  },
-
-  sangria() {
-    document.getElementById('saida-desc').value = 'Sangria de caixa';
-    document.getElementById('saida-cat').value = 'outro';
-    document.getElementById('saida-data').value = today();
-    UI.openModal('modal-saida');
-  },
-
-  fecharCaixa() {
-    const saldo = document.getElementById('cx-saldo').textContent;
-    if (confirm(`Fechar caixa do dia com saldo de ${saldo}?`)) {
-      UI.toast('🔒 Caixa fechado com saldo: ' + saldo);
-    }
-  },
-
-  exportPDF() {
-    UI.toast('📄 Gerando PDF...'); 
-    setTimeout(() => UI.toast('📄 PDF do caixa gerado'), 1500);
-  },
-};
-
-// ── ESTOQUE ──
-const Estoque = {
-  _filtro: '',
-
-  async loadAll() {
-    if (!STATE.empresa) return;
-    const { data } = await window.sb.from('produtos').select('*').eq('empresa_id', STATE.empresa.id).order('nome');
-    STATE.produtos = data || [];
-    // Badge estoque baixo
-    const baixo = STATE.produtos.filter(p => p.ativo !== false && (p.quantidade||0) <= (p.estoque_minimo||0)).length;
-    const badge = document.getElementById('sb-stock-badge');
-    if (baixo > 0) { badge.style.display = ''; badge.textContent = baixo + ' baixo'; }
-    else badge.style.display = 'none';
-  },
-
-  async load() {
-    await Estoque.loadAll();
-    Estoque.render();
-  },
-
-  filter() {
-    Estoque._filtro = document.getElementById('est-search').value.toLowerCase();
-    Estoque.render();
-  },
-
-  setFiltro(f, el) {
-    Estoque._filtroTipo = f;
-    document.querySelectorAll('#pg-estoque .chip').forEach(c=>c.classList.remove('on'));
-    el.classList.add('on');
-    Estoque.render();
-  },
-
-  render() {
-    let list = STATE.produtos;
-    if (Estoque._filtro) list = list.filter(p =>
-      (p.nome||'').toLowerCase().includes(Estoque._filtro) ||
-      (p.codigo_barras||'').includes(Estoque._filtro)
-    );
-    if (Estoque._filtroTipo === 'baixo') list = list.filter(p=>(p.quantidade||0)<=(p.estoque_minimo||0));
-    if (Estoque._filtroTipo === 'inativo') list = list.filter(p=>p.ativo===false);
-    else if (!Estoque._filtroTipo) list = list.filter(p=>p.ativo!==false);
-
-    const el = document.getElementById('est-list');
-    if (!list.length) { el.innerHTML = '<div class="empty"><div class="empty-ico">📦</div><p>Nenhum produto</p></div>'; return; }
-    el.innerHTML = list.map(p => {
-      const baixo = (p.quantidade||0) <= (p.estoque_minimo||0);
-      return `<div class="os-item" onclick="Estoque.ver('${p.id}')" style="padding-left:20px">
-        <div class="osi-top">
-          <span style="font-size:20px">📦</span>
-          <div style="flex:1">
-            <div class="osi-name">${p.nome}</div>
-            <div style="font-size:11px;color:var(--muted)">${p.categoria||''} ${p.codigo_barras?'· '+p.codigo_barras:''}</div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-family:var(--mono);font-size:13px;font-weight:700">${fmt(p.preco_venda||0)}</div>
-            <div style="font-size:11px;${baixo?'color:var(--red);font-weight:700':'color:var(--muted)'}">Estoque: ${p.quantidade||0} ${baixo?'⚠️':''}</div>
-          </div>
-        </div>
-      </div>`;
-    }).join('');
-  },
-
-  ver(id) {
-    const p = STATE.produtos.find(x=>x.id===id);
-    if (!p) return;
-    document.getElementById('prod-modal-title').textContent = 'Editar Produto';
-    document.getElementById('prod-id').value = id;
-    document.getElementById('prod-nome').value = p.nome||'';
-    document.getElementById('prod-barcode').value = p.codigo_barras||'';
-    document.getElementById('prod-custo').value = p.preco_custo||'';
-    document.getElementById('prod-venda').value = p.preco_venda||'';
-    document.getElementById('prod-qty').value = p.quantidade||'';
-    document.getElementById('prod-min').value = p.estoque_minimo||'';
-    document.getElementById('prod-cat').value = p.categoria||'';
-    document.getElementById('prod-forn').value = p.fornecedor||'';
-    Estoque.calcMargem();
-    UI.openModal('modal-produto');
-  },
-
-  calcMargem() {
-    const custo = parseFloat(document.getElementById('prod-custo').value) || 0;
-    const venda = parseFloat(document.getElementById('prod-venda').value) || 0;
-    const margem = custo > 0 ? ((venda - custo) / custo * 100).toFixed(0) + '%' : '—';
-    document.getElementById('prod-margem').value = margem;
-  },
-
-  async salvar() {
-    const nome = document.getElementById('prod-nome').value.trim();
-    if (!nome) { UI.toast('⚠️ Informe o nome', true); return; }
-    const id = document.getElementById('prod-id').value;
-    const payload = {
-      empresa_id: STATE.empresa.id,
-      nome, codigo_barras: document.getElementById('prod-barcode').value || null,
-      preco_custo: parseFloat(document.getElementById('prod-custo').value) || 0,
-      preco_venda: parseFloat(document.getElementById('prod-venda').value) || 0,
-      quantidade: parseInt(document.getElementById('prod-qty').value) || 0,
-      estoque_minimo: parseInt(document.getElementById('prod-min').value) || 0,
-      categoria: document.getElementById('prod-cat').value || null,
-      fornecedor: document.getElementById('prod-forn').value || null,
-      ativo: true,
-    };
-    try {
-      if (id) await window.sb.from('produtos').update(payload).eq('id', id);
-      else await window.sb.from('produtos').insert(payload);
-      UI.closeModal('modal-produto');
-      await Estoque.load();
-      UI.toast(id ? '✅ Produto atualizado' : '✅ Produto cadastrado');
-    } catch(e) { UI.toast('Erro: ' + e.message, true); }
-  },
-};
-
-// ── AGENDA ──
-const Agenda = {
-  async load() {
-    if (!STATE.empresa) return;
-    const { data } = await window.sb.from('agenda').select('*').eq('empresa_id', STATE.empresa.id);
-    STATE.eventos = data || [];
-  },
-
-  render() {
-    Agenda.renderCal();
-  },
-
-  renderCal() {
-    const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-    document.getElementById('agenda-mes-label').textContent = meses[STATE.agendaMes] + ' ' + STATE.agendaAno;
-    const cal = document.getElementById('agenda-cal');
-    const dias = ['D','S','T','Q','Q','S','S'];
-    const primeiroDia = new Date(STATE.agendaAno, STATE.agendaMes, 1).getDay();
-    const totalDias = new Date(STATE.agendaAno, STATE.agendaMes+1, 0).getDate();
-    const hoje = new Date();
-
-    let html = dias.map(d=>`<div style="font-size:10px;font-weight:700;color:var(--muted);padding:4px 0">${d}</div>`).join('');
-    for (let i=0; i<primeiroDia; i++) html += '<div></div>';
-    for (let d=1; d<=totalDias; d++) {
-      const isHoje = d === hoje.getDate() && STATE.agendaMes === hoje.getMonth() && STATE.agendaAno === hoje.getFullYear();
-      const isSel = d === STATE.agendaDia;
-      const dateStr = `${STATE.agendaAno}-${String(STATE.agendaMes+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-      const temEvento = STATE.eventos.some(e=>e.data?.startsWith(dateStr));
-      html += `<div onclick="Agenda.selDia(${d})" style="padding:6px 2px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;position:relative;
-        background:${isSel?'var(--blue-d)':isHoje?'rgba(59,130,246,.15)':'transparent'};
-        color:${isSel?'#fff':isHoje?'var(--blue-l)':'var(--txt2)'};
-        border:1px solid ${isSel?'var(--blue-d)':isHoje?'rgba(59,130,246,.3)':'transparent'}">
-        ${d}${temEvento?`<span style="position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:${isSel?'#fff':'var(--orange)'}"></span>`:''}
-      </div>`;
-    }
-    cal.innerHTML = html;
-    Agenda.renderEventosDia();
-  },
-
-  selDia(d) {
-    STATE.agendaDia = d;
-    Agenda.renderCal();
-  },
-
-  hoje() {
-    const h = new Date();
-    STATE.agendaMes = h.getMonth(); STATE.agendaAno = h.getFullYear(); STATE.agendaDia = h.getDate();
-    Agenda.renderCal();
-  },
-
-  prevMes() { if(STATE.agendaMes===0){STATE.agendaMes=11;STATE.agendaAno--;}else STATE.agendaMes--; Agenda.renderCal(); },
-  nextMes() { if(STATE.agendaMes===11){STATE.agendaMes=0;STATE.agendaAno++;}else STATE.agendaMes++; Agenda.renderCal(); },
-
-  renderEventosDia() {
-    const dateStr = `${STATE.agendaAno}-${String(STATE.agendaMes+1).padStart(2,'0')}-${String(STATE.agendaDia).padStart(2,'0')}`;
-    const evs = STATE.eventos.filter(e=>e.data?.startsWith(dateStr));
-    const el = document.getElementById('agenda-events');
-    if (!evs.length) { el.innerHTML = '<div class="empty"><div class="empty-ico">📅</div><p>Sem eventos neste dia</p></div>'; return; }
-    el.innerHTML = evs.map(e => `<div class="mov-item">
-      <div>
-        <div class="mov-desc">${e.titulo}</div>
-        <div class="mov-meta">${e.hora||''} · ${({os:'🔧 OS',visita:'🚗 Visita',cobranca:'💰 Cobrança',geral:'📌 Geral'})[e.tipo]||e.tipo}</div>
-      </div>
-      <button class="btn btn-red btn-sm" onclick="Agenda.del('${e.id}')">✕</button>
-    </div>`).join('');
-  },
-
-  async salvar() {
-    const titulo = document.getElementById('ev-titulo').value.trim();
-    const data = document.getElementById('ev-data').value;
-    const tipo = document.getElementById('ev-tipo').value;
-    if (!titulo || !data) { UI.toast('⚠️ Preencha título e data', true); return; }
-    const tecId = document.getElementById('ev-tecnico').value;
-    await window.sb.from('agenda').insert({
-      empresa_id: STATE.empresa.id, titulo, data,
-      hora: document.getElementById('ev-hora').value || null,
-      tipo, descricao: document.getElementById('ev-desc').value,
-      tecnico_id: tecId || null,
-    });
-    UI.closeModal('modal-evento');
-    await Agenda.load();
-    Agenda.renderCal();
-    UI.toast('✅ Evento agendado');
-  },
-
-  async del(id) {
-    await window.sb.from('agenda').delete().eq('id', id);
-    STATE.eventos = STATE.eventos.filter(e=>e.id!==id);
-    Agenda.renderEventosDia();
-    UI.toast('🗑️ Evento removido');
-  },
-};
-
-// ── ANALYTICS ──
-const Analytics = {
-  async load() {
-    if (!STATE.empresa) return;
-    const hoje = today();
-    const mesAtual = hoje.slice(0,7);
-    const mesAnterior = new Date(); mesAnterior.setMonth(mesAnterior.getMonth()-1);
-    const mesAntStr = mesAnterior.toISOString().slice(0,7);
-
-    const osMes = STATE.os.filter(o => o.status === 'paga' && (o.criado_em||'').startsWith(mesAtual));
-    const osAnt = STATE.os.filter(o => o.status === 'paga' && (o.criado_em||'').startsWith(mesAntStr));
-    const fat = osMes.reduce((s,o)=>s+(o.total||0),0);
-    const fatAnt = osAnt.reduce((s,o)=>s+(o.total||0),0);
-    const pct = fatAnt > 0 ? ((fat-fatAnt)/fatAnt*100).toFixed(0) : 0;
-    const fiado = STATE.os.filter(o=>o.status==='fiado').reduce((s,o)=>s+(o.total||0),0);
-    const ticket = osMes.length ? fat/osMes.length : 0;
-
-    document.getElementById('an-fat').textContent = fmt(fat);
-    document.getElementById('an-svcs').textContent = osMes.length;
-    document.getElementById('an-ticket').textContent = fmt(ticket);
-    document.getElementById('an-fiado').textContent = fmt(fiado);
-    const badge = document.getElementById('an-fat-badge');
-    badge.textContent = (pct>=0?'+':'')+pct+'%';
-    badge.className = 'kpi-badge ' + (pct >= 0 ? 'up' : 'down');
-
-    Analytics.renderChartMensal();
-    Analytics.renderChartPag(osMes);
-    IA.analiseMes();
-  },
-
-  renderChartMensal() {
-    const labels=[], vals=[];
-    for (let i=5;i>=0;i--) {
-      const d = new Date(); d.setMonth(d.getMonth()-i);
-      const m = d.toISOString().slice(0,7);
-      const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-      labels.push(meses[d.getMonth()]);
-      vals.push(STATE.os.filter(o=>o.status==='paga'&&(o.criado_em||'').startsWith(m)).reduce((s,o)=>s+(o.total||0),0));
-    }
-    if (STATE.chartMensal) STATE.chartMensal.destroy();
-    const ctx = document.getElementById('chart-mensal')?.getContext('2d');
-    if (!ctx) return;
-    STATE.chartMensal = new Chart(ctx, {
-      type: 'bar',
-      data: { labels, datasets: [{ label: 'Faturamento', data: vals, backgroundColor: 'rgba(59,130,246,.7)', borderRadius: 8 }] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { grid: { color: 'rgba(255,255,255,.05)' }, ticks: { callback: v => 'R$'+v } } } }
-    });
-  },
-
-  renderChartPag(osMes) {
-    const pays = {};
-    osMes.forEach(o => { pays[o.forma_pagamento||'outro'] = (pays[o.forma_pagamento||'outro']||0) + (o.total||0); });
-    const labels = Object.keys(pays).map(payLabel);
-    const vals = Object.values(pays);
-    if (STATE.chartPag) STATE.chartPag.destroy();
-    const ctx = document.getElementById('chart-pag')?.getContext('2d');
-    if (!ctx) return;
-    STATE.chartPag = new Chart(ctx, {
-      type: 'doughnut',
-      data: { labels, datasets: [{ data: vals, backgroundColor: ['#10b981','#3b82f6','#8b5cf6','#f59e0b','#ef4444','#06b6d4','#ec4899'] }] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', padding: 12, font: { size: 11 } } } } }
-    });
-  },
-
-  setPeriodo(p, el) {
-    STATE.anPeriodo = p;
-    document.querySelectorAll('#pg-analytics .chip').forEach(c=>c.classList.remove('on'));
-    el.classList.add('on');
-    Analytics.load();
-  },
-};
-
-// ── DASHBOARD ──
-const Dashboard = {
-  async load() {
-    if (!STATE.empresa || !STATE.os.length) return;
-    const hoje = today();
-    const mesAtual = hoje.slice(0,7);
-
-    const fHoje = STATE.os.filter(o=>o.status==='paga'&&(o.criado_em||'').startsWith(hoje)).reduce((s,o)=>s+(o.total||0),0);
-    const fMes = STATE.os.filter(o=>o.status==='paga'&&(o.criado_em||'').startsWith(mesAtual)).reduce((s,o)=>s+(o.total||0),0);
-    const osAb = STATE.os.filter(o=>o.status==='aberta'||o.status==='em_andamento').length;
-    const lucro = fMes * 0.65; // estimativa
-
-    document.getElementById('kv-hoje').textContent = fmt(fHoje);
-    document.getElementById('kv-mes').textContent = fmt(fMes);
-    document.getElementById('kv-os-ab').textContent = osAb;
-    document.getElementById('kv-lucro').textContent = fmt(lucro);
-    document.getElementById('ks-os-ab').textContent = osAb + ' em andamento';
-
-    Dashboard.renderChart();
-    Dashboard.renderRanking();
-    Dashboard.renderOSRecentes();
-  },
-
-  reload() { OS.load(); },
-
-  setRange(r, el) {
-    STATE.range = r;
-    document.querySelectorAll('#pg-dashboard .chip').forEach(c=>c.classList.remove('on'));
-    el.classList.add('on');
-    Dashboard.renderChart();
-  },
-
-  renderChart() {
-    const labels=[], vals=[];
-    for (let i=STATE.range-1;i>=0;i--) {
-      const d = new Date(); d.setDate(d.getDate()-i);
-      const ds = d.toISOString().split('T')[0];
-      labels.push(STATE.range<=7 ? ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][d.getDay()] : (d.getDate()+'/'+String(d.getMonth()+1).padStart(2,'0')));
-      vals.push(STATE.os.filter(o=>o.status==='paga'&&(o.criado_em||'').startsWith(ds)).reduce((s,o)=>s+(o.total||0),0));
-    }
-    if (STATE.chartFat) STATE.chartFat.destroy();
-    const ctx = document.getElementById('chart-fat')?.getContext('2d');
-    if (!ctx) return;
-    const grad = ctx.createLinearGradient(0,0,0,160);
-    grad.addColorStop(0,'rgba(59,130,246,.3)'); grad.addColorStop(1,'rgba(59,130,246,.0)');
-    STATE.chartFat = new Chart(ctx, {
-      type: 'line',
-      data: { labels, datasets: [{ label: 'Faturamento', data: vals, borderColor: '#3b82f6', backgroundColor: grad, tension: .4, fill: true, pointBackgroundColor: '#3b82f6', pointRadius: vals.length>14?2:4 }] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { color: '#64748b', maxTicksLimit: 8, font: { size: 10 } } }, y: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { color: '#64748b', callback: v => 'R$'+v, font: { size: 10 } } } } }
-    });
-  },
-
-  renderRanking() {
-    const ranking = {};
-    STATE.os.filter(o=>o.cliente_id&&o.status==='paga').forEach(o=>{
-      if (!ranking[o.cliente_id]) ranking[o.cliente_id] = { nome: o.cliente_nome||'?', total: 0, count: 0 };
-      ranking[o.cliente_id].total += (o.total||0);
-      ranking[o.cliente_id].count++;
-    });
-    const list = Object.values(ranking).sort((a,b)=>b.total-a.total).slice(0,5);
-    const el = document.getElementById('ranking-clientes');
-    if (!list.length) { el.innerHTML = '<div class="empty"><div class="empty-ico">👥</div><p>Sem dados</p></div>'; return; }
-    el.innerHTML = list.map((c,i) => `<div class="rank-item">
-      <div class="rank-num">${i+1}</div>
-      <div class="rank-av" style="background:${avatarColor(c.nome)}">${initials(c.nome)}</div>
-      <div class="rank-info">
-        <div class="rank-name">${c.nome}</div>
-        <div class="rank-os">${c.count} OS</div>
-      </div>
-      <div class="rank-val">${fmt(c.total)}</div>
-    </div>`).join('');
-  },
-
-  renderOSRecentes() {
-    const el = document.getElementById('dash-os-list');
-    const list = STATE.os.slice(0,5);
-    if (!list.length) { el.innerHTML = '<div class="empty"><div class="empty-ico">🔧</div><p>Nenhuma OS</p></div>'; return; }
-    el.innerHTML = list.map(o => OS.cardHTML(o)).join('');
-  },
-};
-
-// ── IA ──
-const IA = {
-  async analiseMes() {
-    const el = document.getElementById('ia-analytics-txt');
-    if (!el) return;
-    el.innerHTML = '<div class="ia-loading"><div class="ia-dot"></div><div class="ia-dot"></div><div class="ia-dot"></div></div>';
-    const osMes = STATE.os.filter(o=>o.status==='paga'&&(o.criado_em||'').startsWith(today().slice(0,7)));
-    const fat = osMes.reduce((s,o)=>s+(o.total||0),0);
-    const prompt = `Analise estes dados de uma assistência técnica:
-- Faturamento do mês: ${fmt(fat)}
-- Total de serviços concluídos: ${osMes.length}
-- OS em aberto: ${STATE.os.filter(o=>o.status==='aberta').length}
-- Fiado pendente: ${fmt(STATE.os.filter(o=>o.status==='fiado').reduce((s,o)=>s+(o.total||0),0))}
-Dê uma análise rápida em 2-3 frases com sugestões práticas. Seja direto e útil.`;
-    try {
-      const res = await fetch('https://twxotfzlronfjfjyaklx.supabase.co/functions/v1/ia-proxy', {
-        method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR3eG90Znpscm9uZmpmanlha2x4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1NzA5NjAsImV4cCI6MjA4ODE0Njk2MH0.QqOg_dFtoGJfNJ_-l58AMeWeynYJL8wIczO5QU-nY1A'},
-        body: JSON.stringify({ prompt })
-      });
-      const d = await res.json();
-      el.textContent = d.result || d.text || 'Análise indisponível no momento.';
-    } catch(e) { el.textContent = 'IA temporariamente indisponível.'; }
-  },
-};
-
-// ── NOTIFICAÇÕES ──
-const Notif = {
-  async load() {
-    if (!STATE.empresa) return;
-    const { data } = await window.sb.from('notificacoes').select('*').eq('empresa_id', STATE.empresa.id).order('criado_em', { ascending: false }).limit(20);
-    STATE.notifs = data || [];
-    Notif.render();
-  },
-
-  render() {
-    const unread = STATE.notifs.filter(n=>!n.lida).length;
-    document.getElementById('notif-dot').style.display = unread ? '' : 'none';
-    const el = document.getElementById('notif-list');
-    if (!STATE.notifs.length) { el.innerHTML = '<div class="empty"><div class="empty-ico">🔔</div><p>Sem notificações</p></div>'; return; }
-    el.innerHTML = STATE.notifs.map(n=>`<div class="notif-item ${n.lida?'':'unread'}" onclick="Notif.read('${n.id}')">
-      <div class="notif-title">${n.titulo||'Notificação'}</div>
-      <div class="notif-msg">${n.mensagem||''}</div>
-      <div class="notif-time">${fmtDate(n.criado_em?.split('T')[0])}</div>
-    </div>`).join('');
-  },
-
-  async read(id) {
-    await window.sb.from('notificacoes').update({ lida: true }).eq('id', id);
-    STATE.notifs = STATE.notifs.map(n=>n.id===id?{...n,lida:true}:n);
-    Notif.render();
-  },
-
-  async markAll() {
-    await window.sb.from('notificacoes').update({ lida: true }).eq('empresa_id', STATE.empresa.id);
-    STATE.notifs = STATE.notifs.map(n=>({...n,lida:true}));
-    Notif.render();
-  },
-};
-
-// ── CONFIGURAÇÕES ──
-const Config = {
-  async load() {
-    if (!STATE.empresa) return;
-    const c = STATE.empresa;
-    document.getElementById('cfg-empresa').value = c.nome||'';
-    document.getElementById('cfg-cnpj').value = c.cnpj||'';
-    document.getElementById('cfg-tel').value = c.telefone||'';
-    document.getElementById('cfg-end').value = c.endereco||'';
-    document.getElementById('cfg-insta').value = c.instagram||'';
-    document.getElementById('cfg-pix').value = c.pix||'';
-    document.getElementById('cfg-termos').value = c.termos_garantia||'';
-    document.getElementById('cfg-wapi').value = c.whatsapp_api||'';
-    document.getElementById('cfg-sig').checked = c.config?.assinatura||false;
-    document.getElementById('cfg-foto').checked = c.config?.fotos||false;
-    document.getElementById('cfg-scanner').checked = c.config?.scanner||false;
-    if (c.logo_url) {
-      document.getElementById('logo-preview').innerHTML = `<img src="${c.logo_url}" style="width:100%;height:100%;object-fit:contain">`;
-    }
-    await Config.loadFuncionarios();
-  },
-
-  async salvar() {
-    const nome = document.getElementById('cfg-empresa').value.trim();
-    if (!nome) { UI.toast('⚠️ Informe o nome da empresa', true); return; }
-    const payload = {
-      nome, cnpj: document.getElementById('cfg-cnpj').value,
-      telefone: document.getElementById('cfg-tel').value,
-      endereco: document.getElementById('cfg-end').value,
-      instagram: document.getElementById('cfg-insta').value,
-      pix: document.getElementById('cfg-pix').value,
-      termos_garantia: document.getElementById('cfg-termos').value,
-    };
-    await window.sb.from('empresas').update(payload).eq('id', STATE.empresa.id);
-    STATE.empresa = { ...STATE.empresa, ...payload };
-    UI.toast('✅ Dados salvos');
-  },
-
-  async toggle(key, val) {
-    const config = { ...STATE.config, [key]: val };
-    await window.sb.from('empresas').update({ config }).eq('id', STATE.empresa.id);
-    STATE.config = config;
-    STATE.empresa.config = config;
-    if (key === 'assinatura') document.getElementById('os-sig-section').classList.toggle('gone', !val);
-    if (key === 'fotos') document.getElementById('os-foto-section').classList.toggle('gone', !val);
-    if (key === 'scanner') {
-      localStorage.setItem('nexos_scanner', val ? '1' : '0');
-      document.querySelectorAll('[id$="-btn"]').forEach(b => { if(b.id.includes('scanner')) b.classList.toggle('gone', !val); });
-    }
-  },
-
-  toggleTheme(isLight) {
-    if (isLight) { document.documentElement.removeAttribute('data-theme'); localStorage.setItem('nexos_theme','dark'); }
-    else { document.documentElement.setAttribute('data-theme','light'); localStorage.setItem('nexos_theme','light'); }
-  },
-
-  uploadLogo(inp) {
-    if (!inp.files[0]) return;
-    const r = new FileReader();
-    r.onload = async e => {
-      document.getElementById('logo-preview').innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:contain">`;
-      await window.sb.from('empresas').update({ logo_url: e.target.result }).eq('id', STATE.empresa.id);
-      STATE.empresa.logo_url = e.target.result;
-      UI.toast('✅ Logo atualizado');
-    };
-    r.readAsDataURL(inp.files[0]);
-  },
-
-  async salvarWA() {
-    await window.sb.from('empresas').update({ whatsapp_api: document.getElementById('cfg-wapi').value, whatsapp_token: document.getElementById('cfg-wtoken').value || undefined }).eq('id', STATE.empresa.id);
-    UI.toast('✅ WhatsApp configurado');
-  },
-
-  async loadFuncionarios() {
-    if (!STATE.empresa) return;
-    const { data } = await window.sb.from('funcionarios').select('*').eq('empresa_id', STATE.empresa.id);
-    const el = document.getElementById('func-list');
-    if (!data?.length) { el.innerHTML = '<div class="empty"><div class="empty-ico">👨‍💼</div><p>Nenhum funcionário</p></div>'; return; }
-    el.innerHTML = data.map(f=>`<div class="mov-item">
-      <div>
-        <div class="mov-desc">${f.nome}</div>
-        <div class="mov-meta">${f.funcao} · PIN: ••••</div>
-      </div>
-      <div style="display:flex;gap:6px">
-        <span class="sbadge ${f.ativo?'sb-paga':'sb-cancelada'}">${f.ativo?'Ativo':'Inativo'}</span>
-        <button class="btn btn-red btn-sm" onclick="Funcionarios.del('${f.id}')">✕</button>
-      </div>
-    </div>`).join('');
-  },
-
-  exportJSON() {
-    const data = { os: STATE.os, clientes: STATE.clientes, produtos: STATE.produtos };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = 'nexos_backup_' + today() + '.json'; a.click();
-    UI.toast('✅ Backup exportado');
-  },
-
-  importJSON(inp) {
-    if (!inp.files[0]) return;
-    const r = new FileReader();
-    r.onload = async e => {
-      try {
-        const data = JSON.parse(e.target.result);
-        UI.toast('⚠️ Importação: função em desenvolvimento', true);
-      } catch(err) { UI.toast('❌ JSON inválido', true); }
-    };
-    r.readAsText(inp.files[0]);
-  },
-};
-
-// ── FUNCIONÁRIOS ──
-const Funcionarios = {
-  async salvar() {
-    const nome = document.getElementById('func-nome').value.trim();
-    const funcao = document.getElementById('func-funcao').value.trim();
-    const pin = document.getElementById('func-pin').value.trim();
-    if (!nome || !funcao || pin.length < 4) { UI.toast('⚠️ Preencha nome, função e PIN de 4 dígitos', true); return; }
-    const perms = {};
-    document.querySelectorAll('#func-perms input[name="perm"]').forEach(cb => { perms[cb.value] = cb.checked; });
-    const id = document.getElementById('func-id').value;
-    const payload = { empresa_id: STATE.empresa.id, nome, funcao, pin_hash: btoa(pin), permissoes: perms, ativo: true };
-    try {
-      if (id) await window.sb.from('funcionarios').update(payload).eq('id', id);
-      else await window.sb.from('funcionarios').insert(payload);
-      UI.closeModal('modal-funcionario');
-      await Config.loadFuncionarios();
-      UI.toast(id ? '✅ Funcionário atualizado' : '✅ Funcionário cadastrado');
-    } catch(e) { UI.toast('Erro: ' + e.message, true); }
-  },
-
-  async del(id) {
-    if (!confirm('Remover funcionário?')) return;
-    await window.sb.from('funcionarios').update({ ativo: false }).eq('id', id);
-    await Config.loadFuncionarios();
-    UI.toast('🗑️ Funcionário removido');
-  },
-};
-
-// ── COMPROVANTE ──
-const Comp = {
-  ver(id) {
-    const o = STATE.os.find(x=>x.id===id) || STATE.os.find(x=>String(x.id)===String(id));
-    if (!o) { UI.toast('OS não encontrada', true); return; }
-    UI.closeModal('modal-os-detail');
-    const emp = STATE.empresa;
-    const pix = emp?.pix;
-    let qrDiv = '';
-    if (pix) qrDiv = `<div class="comp-qr" id="comp-qr-${o.id}"></div>`;
-    const paper = document.getElementById('comp-paper');
-    paper.innerHTML = `
-      <div class="comp-header">
-        ${emp?.logo_url ? `<img class="comp-logo-img" src="${emp.logo_url}" alt="Logo">` : ''}
-        <div class="comp-logo">${emp?.nome||'Empresa'}</div>
-        <div class="comp-sub">${emp?.telefone||''} ${emp?.pix?'· PIX: '+emp.pix:''}</div>
-        <div class="comp-num">#${String(o.numero||'?').padStart(4,'0')}</div>
-        <div class="comp-date">${fmtDate(o.criado_em?.split('T')[0])}</div>
-      </div>
-      <div class="comp-section">CLIENTE</div>
-      <div class="comp-row"><span>Nome</span><span>${o.cliente_nome||'—'}</span></div>
-      <div class="comp-section">SERVIÇO</div>
-      <div class="comp-row"><span>Equipamento</span><span>${o.equipamento||'—'}</span></div>
-      <div class="comp-row"><span>Defeito</span><span>${o.defeito||'—'}</span></div>
-      ${o.tecnico_nome?`<div class="comp-row"><span>Técnico</span><span>${o.tecnico_nome}</span></div>`:''}
-      ${o.garantia_dias?`<div class="comp-row"><span>Garantia</span><span>${o.garantia_dias} dias</span></div>`:''}
-      ${(o.items||[]).length?`<div class="comp-section">ITENS</div>${(o.items||[]).map(it=>`<div class="comp-item-row"><span>${it.qty}x ${it.desc}</span><span>${fmt(it.total)}</span></div>`).join('')}`:''}
-      <div class="comp-total-row"><span>TOTAL</span><span>${fmt(o.total||0)}</span></div>
-      <div class="comp-row"><span>Pagamento</span><span>${payLabel(o.forma_pagamento)}</span></div>
-      ${emp?.termos_garantia?`<div class="comp-terms">${emp.termos_garantia}</div>`:''}
-      ${pix?`<div class="comp-section">PIX</div>${qrDiv}`:''}
-      <div class="comp-footer">
-        <div>Obrigado pela preferência!</div>
-        <div class="comp-hash">OS-${o.id?.slice(0,8)||'?'}</div>
-      </div>
-    `;
-    if (pix) {
-      setTimeout(() => {
-        try { new QRCode(document.getElementById('comp-qr-'+o.id), { text: pix, width: 100, height: 100 }); } catch(e) {}
-      }, 100);
-    }
-    const cv = document.getElementById('compView');
-    cv.style.display = 'block';
-    cv.style.position = 'fixed';
-    cv.style.inset = '0';
-    cv.style.zIndex = '600';
-    cv.style.background = 'var(--bg)';
-    cv.style.overflowY = 'auto';
-    cv.style.padding = '20px';
-    cv.style.transform = 'none';
-  },
-
-  fechar() {
-    const cv = document.getElementById('compView');
-    cv.style.display = 'none';
-  },
-
-  pdf() {
-    window.print();
-  },
-
-  whatsapp() {
-    const tel = STATE.clientes.find(c=>c.id===STATE.os.find(o=>o.status==='paga')?.cliente_id)?.telefone || '';
-    const msg = encodeURIComponent('Seu serviço está pronto! Acesse seu comprovante no NexOS.');
-    window.open('https://wa.me/55'+tel.replace(/\D/g,'')+`?text=${msg}`, '_blank');
-  },
-};
-
-// ── ASSINATURA ──
-const Sig = {
-  canvas: null, ctx: null, drawing: false,
-  init() {
-    const c = document.getElementById('sig-canvas');
-    if (!c) return;
-    Sig.canvas = c;
-    c.width = c.offsetWidth * 2; c.height = 240;
-    Sig.ctx = c.getContext('2d');
-    Sig.ctx.scale(2, 2);
-    Sig.ctx.strokeStyle = '#3b82f6';
-    Sig.ctx.lineWidth = 2;
-    Sig.ctx.lineCap = 'round';
-    const pos = e => {
-      const r = c.getBoundingClientRect();
-      const src = e.touches ? e.touches[0] : e;
-      return { x: (src.clientX - r.left), y: (src.clientY - r.top) };
-    };
-    c.addEventListener('mousedown', e => { Sig.drawing = true; const p = pos(e); Sig.ctx.beginPath(); Sig.ctx.moveTo(p.x, p.y); });
-    c.addEventListener('mousemove', e => { if (!Sig.drawing) return; const p = pos(e); Sig.ctx.lineTo(p.x, p.y); Sig.ctx.stroke(); });
-    c.addEventListener('mouseup', () => Sig.drawing = false);
-    c.addEventListener('touchstart', e => { e.preventDefault(); Sig.drawing = true; const p = pos(e); Sig.ctx.beginPath(); Sig.ctx.moveTo(p.x, p.y); }, { passive: false });
-    c.addEventListener('touchmove', e => { e.preventDefault(); if (!Sig.drawing) return; const p = pos(e); Sig.ctx.lineTo(p.x, p.y); Sig.ctx.stroke(); }, { passive: false });
-    c.addEventListener('touchend', () => Sig.drawing = false);
-  },
-  clear() { if (Sig.ctx) Sig.ctx.clearRect(0, 0, Sig.canvas.width, Sig.canvas.height); }
-};
-
-// ── SCANNER ──
-const Scanner = {
-  _target: null, _stream: null,
-  async open(targetId) {
-    if (!STATE.config?.scanner) { UI.toast('⚠️ Ative o scanner nas configurações', true); return; }
-    Scanner._target = targetId;
-    UI.openModal('modal-scanner');
-    try {
-      Scanner._stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-      document.getElementById('scanner-video').srcObject = Scanner._stream;
-      document.getElementById('scanner-video').play();
-      document.getElementById('scanner-result').textContent = 'Aponte para o código...';
-    } catch(e) {
-      UI.toast('❌ Câmera não disponível', true);
-      Scanner.close();
-    }
-  },
-  close() {
-    if (Scanner._stream) { Scanner._stream.getTracks().forEach(t=>t.stop()); Scanner._stream = null; }
-    UI.closeModal('modal-scanner');
-  },
-};
-
-// ── MASTER ──
-const Master = {
-  async load() {
-    if (STATE.perfil !== 'master' && STATE.perfil !== 'dono') return;
-    const { data: emps } = await window.sb.from('empresas').select('*').order('criado_em', { ascending: false });
-    if (!emps) return;
-    document.getElementById('m-empresas').textContent = emps.length;
-    document.getElementById('m-ativas').textContent = emps.filter(e=>!e.bloqueada).length;
-    document.getElementById('m-bloq').textContent = emps.filter(e=>e.bloqueada).length;
-    const el = document.getElementById('master-list');
-    el.innerHTML = emps.map(e=>`<div class="mov-item">
-      <div>
-        <div class="mov-desc">${e.nome}</div>
-        <div class="mov-meta">${fmtDate(e.criado_em?.split('T')[0])} · Plano: ${e.plano||'básico'}</div>
-      </div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <span class="sbadge ${e.bloqueada?'sb-cancelada':'sb-paga'}">${e.bloqueada?'Bloqueada':'Ativa'}</span>
-        <button class="btn btn-ghost btn-sm" onclick="Master.toggle('${e.id}',${e.bloqueada})">${e.bloqueada?'✓':'⛔'}</button>
-      </div>
-    </div>`).join('');
-  },
-  async toggle(id, bloqueada) {
-    await window.sb.from('empresas').update({ bloqueada: !bloqueada }).eq('id', id);
-    await Master.load();
-    UI.toast(bloqueada ? '✅ Empresa desbloqueada' : '⛔ Empresa bloqueada');
-  },
-};
-
-// ── GLOBAL SEARCH ──
-const GlobalSearch = {
-  search(q) {
-    const panel = document.getElementById('gsearch-panel');
-    const results = document.getElementById('gsearch-results');
-    if (!q || q.length < 2) { panel.classList.add('gone'); return; }
-    panel.classList.remove('gone');
-    const ql = q.toLowerCase();
-    const osR = STATE.os.filter(o=>(o.cliente_nome||'').toLowerCase().includes(ql)||(o.equipamento||'').toLowerCase().includes(ql)||(o.defeito||'').toLowerCase().includes(ql)).slice(0,4);
-    const cliR = STATE.clientes.filter(c=>(c.nome||'').toLowerCase().includes(ql)||(c.telefone||'').includes(ql)).slice(0,4);
-    const prodR = STATE.produtos.filter(p=>(p.nome||'').toLowerCase().includes(ql)).slice(0,3);
-    let html = '';
-    if (osR.length) {
-      html += `<div style="font-size:10px;font-weight:700;color:var(--muted);padding:8px 8px 4px;text-transform:uppercase;letter-spacing:1px">Ordens de Serviço</div>`;
-      html += osR.map(o=>`<div onclick="Nav.go('os');setTimeout(()=>OS.ver('${o.id}'),200);document.getElementById('gsearch-panel').classList.add('gone')" style="padding:8px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='var(--bg4)'" onmouseout="this.style.background=''">
-        <span>🔧</span>
-        <div><div style="font-size:13px;font-weight:600">#${String(o.numero||'?').padStart(4,'0')} ${o.cliente_nome||'Sem nome'}</div><div style="font-size:11px;color:var(--muted)">${o.equipamento||''} — ${o.defeito||''}</div></div>
-      </div>`).join('');
-    }
-    if (cliR.length) {
-      html += `<div style="font-size:10px;font-weight:700;color:var(--muted);padding:8px 8px 4px;text-transform:uppercase;letter-spacing:1px">Clientes</div>`;
-      html += cliR.map(c=>`<div onclick="Nav.go('clientes');setTimeout(()=>Clientes.ver('${c.id}'),200);document.getElementById('gsearch-panel').classList.add('gone')" style="padding:8px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='var(--bg4)'" onmouseout="this.style.background=''">
-        <div style="width:28px;height:28px;border-radius:50%;background:${avatarColor(c.nome)};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff">${initials(c.nome)}</div>
-        <div><div style="font-size:13px;font-weight:600">${c.nome}</div><div style="font-size:11px;color:var(--muted)">${c.telefone||''}</div></div>
-      </div>`).join('');
-    }
-    if (prodR.length) {
-      html += `<div style="font-size:10px;font-weight:700;color:var(--muted);padding:8px 8px 4px;text-transform:uppercase;letter-spacing:1px">Estoque</div>`;
-      html += prodR.map(p=>`<div onclick="Nav.go('estoque');document.getElementById('gsearch-panel').classList.add('gone')" style="padding:8px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='var(--bg4)'" onmouseout="this.style.background=''">
-        <span>📦</span>
-        <div><div style="font-size:13px;font-weight:600">${p.nome}</div><div style="font-size:11px;color:var(--muted)">Estoque: ${p.quantidade||0} · ${fmt(p.preco_venda||0)}</div></div>
-      </div>`).join('');
-    }
-    if (!html) html = '<div style="padding:16px;text-align:center;color:var(--muted);font-size:13px">Nenhum resultado</div>';
-    results.innerHTML = html;
-  },
-};
-
-// ── HELPERS GLOBAIS ──
-function openNovaOS() {
-  OS.openNew();
-  if (!document.getElementById('pg-os').classList.contains('on')) Nav.go('os');
-}
-function openNovoCliente() {
-  document.getElementById('cli-modal-title').textContent = 'Novo Cliente';
-  document.getElementById('cli-id').value = '';
-  ['cli-nome','cli-tel','cli-cpf','cli-email','cli-end','cli-obs','cli-limite'].forEach(id=>{
-    const el = document.getElementById(id); if(el) el.value='';
-  });
-  document.getElementById('cli-nasc').value = '';
-  document.getElementById('cli-nivel').value = 'normal';
-  document.getElementById('cli-foto-preview').innerHTML = '👤';
-  // Rebuild modal body
-  const tpl = document.querySelector('#modal-cliente .mbody');
-  // Keep the original structure
-  UI.openModal('modal-cliente');
-}
-function openNovoProduto() {
-  document.getElementById('prod-modal-title').textContent = 'Novo Produto';
-  document.getElementById('prod-id').value = '';
-  ['prod-nome','prod-barcode','prod-custo','prod-venda','prod-qty','prod-min','prod-cat','prod-forn'].forEach(id=>{
-    const el=document.getElementById(id); if(el) el.value='';
-  });
-  document.getElementById('prod-margem').value = '';
-  // Scanner btn
-  if (STATE.config?.scanner) document.getElementById('scanner-prod-btn').classList.remove('gone');
-  UI.openModal('modal-produto');
-}
-function openNovoEvento() {
-  document.getElementById('ev-id').value = '';
-  document.getElementById('ev-titulo').value = '';
-  document.getElementById('ev-data').value = `${STATE.agendaAno}-${String(STATE.agendaMes+1).padStart(2,'0')}-${String(STATE.agendaDia).padStart(2,'0')}`;
-  document.getElementById('ev-hora').value = '';
-  document.getElementById('ev-tipo').value = 'geral';
-  document.getElementById('ev-desc').value = '';
-  OS.loadTecnicos('ev-tecnico');
-  UI.openModal('modal-evento');
-}
-function openRegistrarSaida() {
-  document.getElementById('saida-desc').value = '';
-  document.getElementById('saida-val').value = '';
-  document.getElementById('saida-data').value = today();
-  UI.openModal('modal-saida');
-}
-function openNovaContaPagar() { openNovaConta('pagar'); }
-function openNovaConta(tipo) {
-  document.getElementById('conta-modal-title').textContent = tipo === 'pagar' ? 'Nova conta a pagar' : 'Nova conta a receber';
-  document.getElementById('conta-tipo').value = tipo;
-  ['conta-desc','conta-cat'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
-  document.getElementById('conta-valor').value = '';
-  document.getElementById('conta-venc').value = '';
-  UI.openModal('modal-conta');
-}
-function openNovoFuncionario() {
-  document.getElementById('func-modal-title').textContent = 'Novo Funcionário';
-  document.getElementById('func-id').value = '';
-  ['func-nome','func-funcao','func-pin'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
-  document.querySelectorAll('#func-perms input[name="perm"]').forEach(cb => { cb.checked = cb.value==='criar_os'||cb.value==='gerenciar_estoque'||cb.value==='ver_clientes'; });
-  UI.openModal('modal-funcionario');
+  if (window.lucide) lucide.createIcons();
 }
