@@ -337,19 +337,19 @@ const Auth = {
       if (empErr) throw empErr;
 
       // Criar perfil do dono
-      const { data: perfil, error: perErr } = await window.sb
-        .from('usuarios')
-        .insert({
-          user_id:    supabaseUser.id,
-          empresa_id: empresa.id,
-          nome:       supabaseUser.user_metadata?.full_name || supabaseUser.email,
-          email:      supabaseUser.email,
-          nivel:      'dono',
-        })
-        .select('*, empresas(*)')
-        .single();
+const { data: perfil, error: perErr } = await window.sb
+  .from('usuarios')
+  .insert({
+    id: supabaseUser.id,
+    empresa_id: empresa.id,
+    nome: supabaseUser.user_metadata?.full_name || supabaseUser.email,
+    email: supabaseUser.email,
+    cargo: 'dono'
+  })
+  .select('*, empresas(*)')
+  .single();
 
-      if (perErr) throw perErr;
+if (perErr) throw perErr;
 
       // Registrar config de assinatura
       if (prefs.signature !== undefined) {
