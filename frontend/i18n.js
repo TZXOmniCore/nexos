@@ -1024,6 +1024,46 @@ const I18N = {
       setup_complete: '¡Todo listo!',
       setup_start: 'Comenzar a usar NexOS',
     }
+  },
+
+  // ── MÉTODOS ───────────────────────────────────────────────
+  get lang() { return this._lang; },
+
+  init() {
+    const saved = localStorage.getItem('nexos_lang') || 'pt';
+    this._lang = this.translations[saved] ? saved : 'pt';
+    this.apply();
+  },
+
+  set(lang) {
+    if (!this.translations[lang]) return;
+    this._lang = lang;
+    localStorage.setItem('nexos_lang', lang);
+    this.apply();
+  },
+
+  t(key) {
+    const parts = key.split('.');
+    let value = this.translations[this._lang] || this.translations['pt'];
+    for (const p of parts) {
+      if (value == null) return key;
+      value = value[p];
+    }
+    return value ?? (this.translations['pt'][key] ?? key);
+  },
+
+  apply() {
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.getAttribute('data-i18n');
+      const val = this.t(key);
+      if (val && val !== key) el.textContent = val;
+    });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+      const key = el.getAttribute('data-i18n-placeholder');
+      const val = this.t(key);
+      if (val && val !== key) el.placeholder = val;
+    });
+    document.documentElement.lang = this._lang;
   }
 };
 
