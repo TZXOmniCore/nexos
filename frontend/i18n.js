@@ -3,32 +3,16 @@
    Sistema de internacionalização (PT-BR, EN, ES)
    ============================================================ */
 
-const I18N = {
-
+cconst I18N = {
   _lang: 'pt',
 
   translations: {
     pt: {
-      app: {
-        name: "NexOS"
-      }
+      hello: "Olá"
     },
     en: {
-      app: {
-        name: "NexOS"
-      }
+      hello: "Hello"
     }
-  },
-
-  get lang() {
-    return this._lang;
-  },
-
-  set(lang) {
-    if (!this.translations[lang]) return;
-    this._lang = lang;
-    localStorage.setItem('nexos_lang', lang);
-    this.apply();
   },
 
   init() {
@@ -38,11 +22,7 @@ const I18N = {
   },
 
   t(key) {
-
-    if (typeof key !== 'string') return '';
-
     const parts = key.split('.');
-
     let value = this.translations[this._lang];
 
     for (const p of parts) {
@@ -50,27 +30,17 @@ const I18N = {
       value = value[p];
     }
 
-    return value ?? key;
+    return value || key;
   },
 
   apply() {
-
     document.querySelectorAll('[data-i18n]').forEach(el => {
       const key = el.getAttribute('data-i18n');
       el.textContent = this.t(key);
     });
 
-    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
-      el.placeholder = this.t(el.getAttribute('data-i18n-placeholder'));
-    });
-
-    document.querySelectorAll('[data-i18n-title]').forEach(el => {
-      el.title = this.t(el.getAttribute('data-i18n-title'));
-    });
-
     document.documentElement.lang = this._lang;
   }
-
 };
 
 window.I18N = I18N;
