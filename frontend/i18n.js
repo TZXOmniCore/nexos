@@ -6,43 +6,6 @@
 const I18N = {
   _lang: 'pt',
 
-  translations: {
-    pt: {
-      hello: "Olá"
-    },
-    en: {
-      hello: "Hello"
-    }
-  },
-
-  init() {
-    const saved = localStorage.getItem('nexos_lang') || 'pt';
-    this._lang = this.translations[saved] ? saved : 'pt';
-    this.apply();
-  },
-
-  t(key) {
-    const parts = key.split('.');
-    let value = this.translations[this._lang];
-
-    for (const p of parts) {
-      if (!value) return key;
-      value = value[p];
-    }
-
-    return value || key;
-  },
-
-  apply() {
-    document.querySelectorAll('[data-i18n]').forEach(el => {
-      const key = el.getAttribute('data-i18n');
-      el.textContent = this.t(key);
-    });
-
-    document.documentElement.lang = this._lang;
-  }
-};
-
   // ── TRADUÇÕES ──────────────────────────────────────────────
   translations: {
 
