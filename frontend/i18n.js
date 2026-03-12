@@ -43,8 +43,6 @@ const I18N = {
   }
 };
 
-window.I18N = I18N;
-
   // ── TRADUÇÕES ──────────────────────────────────────────────
   translations: {
 
@@ -1065,3 +1063,5 @@ window.I18N = I18N;
     }
   }
 };
+
+window.I18N = I18N;
