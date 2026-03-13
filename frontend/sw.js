@@ -1,31 +1,17 @@
-const CACHE = 'nexos-v2';
-const FILES = [
-  '/nexos/frontend/index.html',
-  '/nexos/frontend/styles.css',
-  '/nexos/frontend/api.js',
-  '/nexos/frontend/auth.js',
-  '/nexos/frontend/app.js',
-  '/nexos/frontend/manifest.json',
-];
-
-self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(FILES))
-  );
-  self.skipWaiting();
-});
+// ── NexOS v3.0 Service Worker ──────────────────────────────
+// CACHE DESATIVADO — serve sempre da rede para garantir atualizações
+self.addEventListener('install', () => self.skipWaiting());
 
 self.addEventListener('activate', e => {
+  // Apaga TODOS os caches antigos (nexos-v1, nexos-v2, etc.)
   e.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-    )
+      Promise.all(keys.map(k => caches.delete(k)))
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
+// Sempre busca da rede — sem cache
 self.addEventListener('fetch', e => {
-  e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request))
-  );
+  e.respondWith(fetch(e.request));
 });
