@@ -1,8 +1,5 @@
 /* ============================================================
-   NexOS v3.0 — segments.js
-   Configuração completa por segmento de negócio.
-   Cada segmento define: nomes, campos, ícones, cores,
-   layout do formulário OS, documentos e KPIs do dashboard.
+   NexOS v3.5 — segments.js
    ============================================================ */
 
 const SEGMENTS = {
