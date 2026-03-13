@@ -1,7 +1,5 @@
 /* ============================================================
    NexOS v3.0 — api.js
-   Camada de acesso ao Supabase.
-   Todas as operações de banco passam por aqui.
    ============================================================ */
 
 // ── UTILS GLOBAIS ──────────────────────────────────────────
@@ -165,14 +163,14 @@ const API = {
         funcionarios ( id, nome, funcao )
       `)
       .eq('empresa_id', empresaId)
-      .order('created_at', { ascending: false });
+      .order('criado_em', { ascending: false });
 
     if (filters.status && filters.status !== 'all') q = q.eq('status', filters.status);
     if (filters.search) {
       q = q.or(`numero.ilike.%${filters.search}%,item.ilike.%${filters.search}%,extra_1.ilike.%${filters.search}%`);
     }
-    if (filters.from)   q = q.gte('created_at', filters.from);
-    if (filters.to)     q = q.lte('created_at', filters.to + 'T23:59:59');
+    if (filters.from)   q = q.gte('criado_em', filters.from);
+    if (filters.to)     q = q.lte('criado_em', filters.to + 'T23:59:59');
     if (filters.limit)  q = q.limit(filters.limit);
 
     const { data, error } = await q;
@@ -197,11 +195,15 @@ const API = {
       .select('id', { count: 'exact', head: true })
       .eq('empresa_id', empresaId);
 
-    const numero = String((count || 0) + 1).padStart(4, '0');
+    const numero = (count || 0) + 1;
+
+    // Remove campos undefined e normaliza nomes de colunas
+    const payload = {};
+    Object.entries(osData).forEach(([k,v]) => { if (v !== undefined && v !== '') payload[k] = v; });
 
     const { data, error } = await window.sb
       .from('ordens')
-      .insert({ ...osData, empresa_id: empresaId, numero, created_at: nowISO() })
+      .insert({ ...payload, empresa_id: empresaId, numero })
       .select()
       .single();
 
@@ -211,9 +213,12 @@ const API = {
   },
 
   async updateOS(id, updates) {
+    // Remove campos undefined
+    const payload = {};
+    Object.entries(updates).forEach(([k,v]) => { if (v !== undefined) payload[k] = v; });
     const { data, error } = await window.sb
       .from('ordens')
-      .update({ ...updates, updated_at: nowISO() })
+      .update(payload)
       .eq('id', id)
       .select()
       .single();
@@ -241,7 +246,7 @@ const API = {
         empresa_id:   STATE.empresa?.id,
         texto,
         usuario_nome: usuarioNome || STATE.perfil?.nome || 'Sistema',
-        created_at:   nowISO(),
+        criado_em:   nowISO(),
       })
       .select()
       .single();
@@ -252,7 +257,7 @@ const API = {
   async duplicarOS(id) {
     const os = await API.getOSById(id);
     if (!os) throw new Error('OS não encontrada');
-    const { id: _, numero: __, created_at: ___, updated_at: ____, ordens_historico: _____, ...osData } = os;
+    const { id: _, numero: __, criado_em: ___, atualizado_em: ____, ordens_historico: _____, ...osData } = os;
     osData.status = 'aguardando';
     osData.valor_total = osData.valor_total || 0;
     return await API.createOS(STATE.empresa.id, osData);
@@ -282,7 +287,7 @@ const API = {
   async createCliente(empresaId, dados) {
     const { data, error } = await window.sb
       .from('clientes')
-      .insert({ ...dados, empresa_id: empresaId, created_at: nowISO() })
+      .insert({ ...dados, empresa_id: empresaId, criado_em: nowISO() })
       .select()
       .single();
     if (error) throw error;
@@ -293,7 +298,7 @@ const API = {
   async updateCliente(id, updates) {
     const { data, error } = await window.sb
       .from('clientes')
-      .update({ ...updates, updated_at: nowISO() })
+      .update({ ...updates, atualizado_em: nowISO() })
       .eq('id', id)
       .select()
       .single();
@@ -309,9 +314,9 @@ const API = {
   async getHistoricoCliente(clienteId) {
     const { data } = await window.sb
       .from('ordens')
-      .select('id, numero, item, status, valor_total, created_at')
+      .select('id, numero, item, status, valor_total, criado_em')
       .eq('cliente_id', clienteId)
-      .order('created_at', { ascending: false })
+      .order('criado_em', { ascending: false })
       .limit(20);
     return data || [];
   },
@@ -363,7 +368,7 @@ const API = {
   async createProduto(empresaId, dados) {
     const { data, error } = await window.sb
       .from('produtos')
-      .insert({ ...dados, empresa_id: empresaId, created_at: nowISO() })
+      .insert({ ...dados, empresa_id: empresaId, criado_em: nowISO() })
       .select()
       .single();
     if (error) throw error;
@@ -374,7 +379,7 @@ const API = {
   async updateProduto(id, updates) {
     const { data, error } = await window.sb
       .from('produtos')
-      .update({ ...updates, updated_at: nowISO() })
+      .update({ ...updates, atualizado_em: nowISO() })
       .eq('id', id)
       .select()
       .single();
@@ -416,9 +421,9 @@ const API = {
       .from('caixa')
       .select('*')
       .eq('empresa_id', empresaId)
-      .gte('created_at', from || today() + 'T00:00:00')
-      .lte('created_at', (to || today()) + 'T23:59:59')
-      .order('created_at', { ascending: false });
+      .gte('criado_em', from || today() + 'T00:00:00')
+      .lte('criado_em', (to || today()) + 'T23:59:59')
+      .order('criado_em', { ascending: false });
     if (error) throw error;
     return data || [];
   },
@@ -426,7 +431,7 @@ const API = {
   async addCaixaEntry(empresaId, entry) {
     const { data, error } = await window.sb
       .from('caixa')
-      .insert({ ...entry, empresa_id: empresaId, created_at: nowISO() })
+      .insert({ ...entry, empresa_id: empresaId, criado_em: nowISO() })
       .select()
       .single();
     if (error) throw error;
@@ -454,7 +459,7 @@ const API = {
   async createContaPagar(empresaId, dados) {
     const { data, error } = await window.sb
       .from('contas_pagar')
-      .insert({ ...dados, empresa_id: empresaId, pago: false, created_at: nowISO() })
+      .insert({ ...dados, empresa_id: empresaId, pago: false, criado_em: nowISO() })
       .select()
       .single();
     if (error) throw error;
@@ -490,7 +495,7 @@ const API = {
   async createContaReceber(empresaId, dados) {
     const { data, error } = await window.sb
       .from('contas_receber')
-      .insert({ ...dados, empresa_id: empresaId, recebido: false, created_at: nowISO() })
+      .insert({ ...dados, empresa_id: empresaId, recebido: false, criado_em: nowISO() })
       .select()
       .single();
     if (error) throw error;
@@ -535,7 +540,7 @@ const API = {
         valor:      parseFloat(valorParc.toFixed(2)),
         vencimento: d.toISOString().split('T')[0],
         pago:       false,
-        created_at: nowISO(),
+        criado_em: nowISO(),
       };
     });
     const { data, error } = await window.sb.from('parcelas').insert(parcelas).select();
@@ -582,7 +587,7 @@ const API = {
   async createEvento(empresaId, dados) {
     const { data, error } = await window.sb
       .from('agenda')
-      .insert({ ...dados, empresa_id: empresaId, created_at: nowISO() })
+      .insert({ ...dados, empresa_id: empresaId, criado_em: nowISO() })
       .select()
       .single();
     if (error) throw error;
@@ -625,7 +630,7 @@ const API = {
         empresa_id: empresaId,
         pin_hash:   pinHash,
         ativo:      true,
-        created_at: nowISO(),
+        criado_em: nowISO(),
       })
       .select()
       .single();
@@ -659,7 +664,7 @@ const API = {
       .from('notificacoes')
       .select('*')
       .eq('empresa_id', empresaId)
-      .order('created_at', { ascending: false })
+      .order('criado_em', { ascending: false })
       .limit(50);
     return data || [];
   },
@@ -677,7 +682,7 @@ const API = {
       ...dados,
       empresa_id: empresaId,
       lida: false,
-      created_at: nowISO(),
+      criado_em: nowISO(),
     });
   },
 
@@ -694,7 +699,7 @@ const API = {
   async createFornecedor(empresaId, dados) {
     const { data, error } = await window.sb
       .from('fornecedores')
-      .insert({ ...dados, empresa_id: empresaId, created_at: nowISO() })
+      .insert({ ...dados, empresa_id: empresaId, criado_em: nowISO() })
       .select()
       .single();
     if (error) throw error;
@@ -720,15 +725,15 @@ const API = {
   async getAnalytics(empresaId, from, to) {
     const [osData, caixaData] = await Promise.all([
       window.sb.from('ordens')
-        .select('status, valor_total, forma_pagamento, tecnico_id, created_at, item')
+        .select('status, valor_total, forma_pagamento, tecnico_id, criado_em, item')
         .eq('empresa_id', empresaId)
-        .gte('created_at', from + 'T00:00:00')
-        .lte('created_at', to + 'T23:59:59'),
+        .gte('criado_em', from + 'T00:00:00')
+        .lte('criado_em', to + 'T23:59:59'),
       window.sb.from('caixa')
-        .select('tipo, valor, forma, created_at')
+        .select('tipo, valor, forma, criado_em')
         .eq('empresa_id', empresaId)
-        .gte('created_at', from + 'T00:00:00')
-        .lte('created_at', to + 'T23:59:59'),
+        .gte('criado_em', from + 'T00:00:00')
+        .lte('criado_em', to + 'T23:59:59'),
     ]);
 
     const os     = osData.data || [];
@@ -772,10 +777,10 @@ const API = {
 
     const { data } = await window.sb
       .from('ordens')
-      .select('valor_total, created_at')
+      .select('valor_total, criado_em')
       .eq('empresa_id', empresaId)
       .in('status', ['concluido', 'retirada'])
-      .gte('created_at', fromStr + 'T00:00:00');
+      .gte('criado_em', fromStr + 'T00:00:00');
 
     if (!data) return [];
 
@@ -788,7 +793,7 @@ const API = {
     }
 
     data.forEach(os => {
-      const d = os.created_at.split('T')[0];
+      const d = os.criado_em.split('T')[0];
       if (byDay[d] !== undefined) byDay[d] += parseFloat(os.valor_total) || 0;
     });
 
@@ -818,7 +823,7 @@ const API = {
     if (existing) {
       await window.sb.from('metas').update({ valor_meta: valor }).eq('id', existing.id);
     } else {
-      await window.sb.from('metas').insert({ empresa_id: empresaId, tipo, valor_meta: valor, mes, created_at: nowISO() });
+      await window.sb.from('metas').insert({ empresa_id: empresaId, tipo, valor_meta: valor, mes, criado_em: nowISO() });
     }
   },
 
@@ -835,7 +840,7 @@ const API = {
   async createTemplate(empresaId, dados) {
     const { data, error } = await window.sb
       .from('templates_os')
-      .insert({ ...dados, empresa_id: empresaId, created_at: nowISO() })
+      .insert({ ...dados, empresa_id: empresaId, criado_em: nowISO() })
       .select()
       .single();
     if (error) throw error;
@@ -959,9 +964,9 @@ const API = {
       estoquesBaixos,
     ] = await Promise.all([
       window.sb.from('ordens').select('id', { count: 'exact', head: true }).eq('empresa_id', empresaId).in('status', ['aguardando','andamento','retirada']),
-      window.sb.from('ordens').select('id', { count: 'exact', head: true }).eq('empresa_id', empresaId).eq('status', 'concluido').gte('created_at', mesStart),
-      window.sb.from('ordens').select('valor_total').eq('empresa_id', empresaId).in('status', ['concluido','retirada']).gte('created_at', mesStart + 'T00:00:00').lte('created_at', mesEnd + 'T23:59:59'),
-      window.sb.from('ordens').select('valor_total').eq('empresa_id', empresaId).in('status', ['concluido','retirada']).gte('created_at', lmStart + 'T00:00:00').lte('created_at', lmEnd + 'T23:59:59'),
+      window.sb.from('ordens').select('id', { count: 'exact', head: true }).eq('empresa_id', empresaId).eq('status', 'concluido').gte('criado_em', mesStart),
+      window.sb.from('ordens').select('valor_total').eq('empresa_id', empresaId).in('status', ['concluido','retirada']).gte('criado_em', mesStart + 'T00:00:00').lte('criado_em', mesEnd + 'T23:59:59'),
+      window.sb.from('ordens').select('valor_total').eq('empresa_id', empresaId).in('status', ['concluido','retirada']).gte('criado_em', lmStart + 'T00:00:00').lte('criado_em', lmEnd + 'T23:59:59'),
       API.getAgendaHoje(empresaId),
       API.getAniversariosHoje(empresaId),
       API.getTopClientes(empresaId),
