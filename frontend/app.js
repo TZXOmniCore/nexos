@@ -35,7 +35,7 @@ const App = {
       App._setupRealtime();
       App._setupCalendar();
       App._setGreeting();
-      Auth.enforcePermissions();
+      
       goPage(localStorage.getItem('nexos_page') || 'dashboard');
     } catch(e) {
       console.error('Erro ao inicializar app:', e);
@@ -379,7 +379,7 @@ function renderOSList() {
 function osCard(os, compact = false) {
   const st   = STATUS_CONFIG[os.status] || {};
   const cli  = os.clientes?.nome || 'Sem cadastro';
-  const data = fmtDate(os.created_at);
+  const data = fmtDate(os.criado_em);
   const seg  = SEGMENTS.current;
   const itemLabel = seg?.labels?.[I18N.lang]?.item_field || 'Equipamento';
 
@@ -445,21 +445,6 @@ function buildOSModal(os) {
   const prefs  = JSON.parse(localStorage.getItem('nexos_prefs')||'{}');
   const title  = os ? 'Editar ' + seg.labels[lang].os_single : seg.labels[lang].os_new;
 
-  // Mapa de IDs do segments.js → colunas reais do banco
-  const FIELD_DB = {
-    item:       'item',
-    defect:     'defeito',
-    diagnosis:  'diagnostico',
-    technician: 'tecnico_id',
-    warranty:   'garantia_dias',
-    extra_1:    'extra_1',
-    extra_2:    'extra_2',
-    extra_3:    'extra_3',
-    notes:      'observacoes',
-    delivery:   'data_entrega',
-    priority:   'prioridade',
-  };
-
   const funcsOpts = APP.funcionarios.map(f =>
     `<option value="${f.id}" ${os?.tecnico_id===f.id?'selected':''}>${f.nome}</option>`
   ).join('');
@@ -469,13 +454,11 @@ function buildOSModal(os) {
   ).join('');
 
   const renderField = (f) => {
-    if (!f || !f.type) return '';
-    const label = (f.label_key ? (seg.labels[lang]?.[f.label_key] || I18N.t(f.label_key)) : null) || f.label || f.id || '';
-    const ph    = (f.placeholder_key ? (seg.labels[lang]?.[f.placeholder_key] || I18N.t(f.placeholder_key)) : null) || f.placeholder || '';
-    const dbKey = FIELD_DB[f.id] || f.id;
-    const val   = os?.[dbKey] || '';
+    const label = seg.labels[lang]?.[f.label_key] || I18N.t(f.label_key) || f.id;
+    const ph    = seg.labels[lang]?.[f.placeholder_key] || '';
+    const val   = os?.[f.id] || '';
 
-    if (!label && f.type === 'text') return '';
+    if (!label) return '';
 
     switch(f.type) {
       case 'client_select': return `
@@ -898,7 +881,7 @@ function buildOSViewModal(os) {
           <div style="font-size:.72rem;color:var(--text-3);margin-bottom:8px">${I18N.t('os_history')}</div>
           ${os.ordens_historico.slice().reverse().map(h=>`
             <div style="font-size:.78rem;padding:6px 0;border-bottom:1px solid var(--border);display:flex;gap:8px">
-              <span style="color:var(--text-3);white-space:nowrap">${fmtDatetime(h.created_at)}</span>
+              <span style="color:var(--text-3);white-space:nowrap">${fmtDatetime(h.criado_em)}</span>
               <span>${h.texto}</span>
             </div>`).join('')}
         </div>` : ''}
@@ -1330,7 +1313,7 @@ function renderCashTable(items) {
   }
   tbody.innerHTML = items.map(i => `
     <tr>
-      <td style="font-size:.78rem;color:var(--text-3);white-space:nowrap">${fmtDatetime(i.created_at)}</td>
+      <td style="font-size:.78rem;color:var(--text-3);white-space:nowrap">${fmtDatetime(i.criado_em)}</td>
       <td style="font-size:.84rem">${i.descricao||'–'}</td>
       <td style="font-family:'JetBrains Mono',monospace;font-weight:600;color:${i.tipo==='entrada'?'var(--green)':'var(--red)'}">${i.tipo==='entrada'?'+':'-'}${fmt(i.valor)}</td>
       <td style="font-size:.78rem;color:var(--text-2)">${payLabel(i.forma)||'–'}</td>
@@ -1818,7 +1801,7 @@ function renderNotifications() {
       </div>
       <div style="flex:1">
         <div style="font-size:.86rem;font-weight:${n.lida?'400':'600'}">${n.titulo||n.mensagem}</div>
-        <div style="font-size:.76rem;color:var(--text-3);margin-top:2px">${fmtDatetime(n.created_at)}</div>
+        <div style="font-size:.76rem;color:var(--text-3);margin-top:2px">${fmtDatetime(n.criado_em)}</div>
       </div>
       ${!n.lida ? '<div style="width:8px;height:8px;border-radius:50%;background:var(--blue);flex-shrink:0;margin-top:4px"></div>' : ''}
     </div>
@@ -2004,7 +1987,7 @@ function changeSegment(id, el) {
   API.updateEmpresa(STATE.empresa.id, { segmento: id });
   document.querySelectorAll('#settings-content .segment-card').forEach(c => c.classList.remove('selected'));
   el.classList.add('selected');
-  Auth._updateSegmentLabels();
+  // segment labels updated via SEGMENTS.set()
   UI.toast('✅ Segmento alterado!', 'success');
 }
 
@@ -2113,11 +2096,11 @@ function confirmDeleteEmployee(id, nome) {
 
 // ── MASTER ADMIN ───────────────────────────────────────────
 async function renderMaster() {
-  if (!STATE.isMaster) return;
+  if (!STATE.perfil?.nivel || STATE.perfil.nivel !== 'master') return;
   const content = document.getElementById('master-content');
   if (!content) return;
 
-  const { data: empresas } = await window.sb.from('empresas').select('*').order('created_at', { ascending: false });
+  const { data: empresas } = await window.sb.from('empresas').select('*').order('criado_em', { ascending: false });
 
   content.innerHTML = `
     <div class="kpi-grid" style="margin-bottom:20px">
@@ -2131,7 +2114,7 @@ async function renderMaster() {
           <td><div style="font-weight:600;font-size:.86rem">${e.nome}</div><div style="font-size:.74rem;color:var(--text-3)">${e.id.slice(0,8)}</div></td>
           <td style="font-size:.82rem">${e.segmento||'tech'}</td>
           <td><span class="badge badge-${e.plano==='pro'?'success':'warning'}">${e.plano||'basico'}</span></td>
-          <td style="font-size:.78rem;color:var(--text-3)">${fmtDate(e.created_at)}</td>
+          <td style="font-size:.78rem;color:var(--text-3)">${fmtDate(e.criado_em)}</td>
           <td><span class="badge ${e.ativo?'badge-success':'badge-danger'}">${e.ativo?'Ativo':'Inativo'}</span></td>
         </tr>`).join('')}
       </tbody></table></div>
