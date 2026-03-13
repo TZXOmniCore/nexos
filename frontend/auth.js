@@ -1,7 +1,5 @@
 /* ============================================================
-   NexOS v3.0 — auth.js
-   Estrutura real do banco: usuarios(id, empresa_id, user_id,
-   nome, email, cargo, nivel, ativo), empresas(id, nome, ...)
+   NexOS v3.5 — auth.js
    ============================================================ */
 
 const SB_URL = 'https://twxotfzlronfjfjyaklx.supabase.co';
