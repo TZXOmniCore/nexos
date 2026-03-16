@@ -3,7 +3,7 @@
    ============================================================ */
 
 const SB_URL = 'https://twxotfzlronfjfjyaklx.supabase.co';
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR3eG90Znpscm9uZmpmanlha2x4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1NzA5NjAsImV4cCI6MjA4ODE0Njk2MH0.QqOg_dFtoGJfNJ_-l58AMeWeynYJL8wIczO5QU-nY1A';
+const SB_KEY = 'sb_publishable_cQG-hm_203Ftz5uIlBW76w_y-5e8De-';
 
 window.sb = supabase.createClient(SB_URL, SB_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, storageKey: 'nexos_session' }
