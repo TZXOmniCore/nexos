@@ -1,5 +1,5 @@
 /* ============================================================
-   NexOS v3.5 — api.js
+   NexOS v3.0 — api.js
    ============================================================ */
 
 // ── UTILS GLOBAIS ──────────────────────────────────────────
@@ -393,15 +393,7 @@ const API = {
   },
 
   async getLowStockProducts(empresaId) {
-    const { data } = await window.sb
-      .from('produtos')
-      .select('*')
-      .eq('empresa_id', empresaId)
-      .gt('estoque_minimo', 0)
-      .filter('quantidade', 'lte', window.sb.rpc) // usando js
-      .order('quantidade');
-
-    // Fallback — filtra no JS
+    // Filtra no JS para evitar query inválida
     const all = await API.getProdutos(empresaId);
     return all.filter(p => p.estoque_minimo > 0 && (p.quantidade || 0) <= (p.estoque_minimo || 0));
   },
