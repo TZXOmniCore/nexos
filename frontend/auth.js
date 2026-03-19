@@ -1,9 +1,11 @@
 /* ============================================================
-   NexOS v3.5 — auth.js
+   NexOS v3.0 — auth.js
+   Estrutura real do banco: usuarios(id, empresa_id, user_id,
+   nome, email, cargo, nivel, ativo), empresas(id, nome, ...)
    ============================================================ */
 
 const SB_URL = 'https://twxotfzlronfjfjyaklx.supabase.co';
-const SB_KEY = 'sb_publishable_cQG-hm_203Ftz5uIlBW76w_y-5e8De-';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR3eG90Znpscm9uZmpmanlha2x4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1NzA5NjAsImV4cCI6MjA4ODE0Njk2MH0.QqOg_dFtoGJfNJ_-l58AMeWeynYJL8wIczO5QU-nY1A';
 
 window.sb = supabase.createClient(SB_URL, SB_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, storageKey: 'nexos_session' }
@@ -175,10 +177,11 @@ const Auth = {
       const prefs = JSON.parse(localStorage.getItem('nexos_prefs') || '{}');
       if (prefs.currency) STATE.currency = prefs.currency;
       if (prefs.lang && window.I18N) I18N.set(prefs.lang);
+      if (window.SEGMENTS) SEGMENTS._current = null;
       if (prefs.segment && window.SEGMENTS) SEGMENTS.set(prefs.segment);
 
-      // Aplica segmento salvo na empresa
-      if (STATE.empresa?.segmento && window.SEGMENTS) SEGMENTS.set(STATE.empresa.segmento);
+      // Aplica segmento salvo na empresa (tem prioridade)
+      if (STATE.empresa?.segmento && window.SEGMENTS) { SEGMENTS._current = null; SEGMENTS.set(STATE.empresa.segmento); }
 
       Auth._updateUI();
       _showApp();
@@ -281,8 +284,12 @@ const Auth = {
 document.addEventListener('DOMContentLoaded', async () => {
   _showLoading();
   if (window.I18N) I18N.init();
-  const savedSeg = localStorage.getItem('nexos_segment');
-  if (savedSeg && window.SEGMENTS) SEGMENTS.set(savedSeg);
+  // Reseta _current para garantir que pega o objeto completo do configs
+  if (window.SEGMENTS) {
+    SEGMENTS._current = null;
+    const savedSeg = localStorage.getItem('nexos_segment');
+    if (savedSeg && SEGMENTS.configs[savedSeg]) SEGMENTS.set(savedSeg);
+  }
 
   try {
     const { data: { session } } = await window.sb.auth.getSession();
