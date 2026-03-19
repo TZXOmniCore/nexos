@@ -25,14 +25,12 @@ const APP = {
 // ── HELPERS SEGUROS ────────────────────────────────────────
 function _seg() {
   if (!window.SEGMENTS) return { labels:{ pt:{} }, os_form_fields:[], id:'tech' };
-  // Se labels estiverem vazios, reseta o cache
-  const cur = SEGMENTS.current;
-  const lang = _lang();
-  if (!cur.labels[lang] || Object.keys(cur.labels[lang]).length === 0) {
-    SEGMENTS._current = null;
-    return SEGMENTS.current;
-  }
-  return cur;
+  // Lê sempre direto do configs — nunca do cache _current
+  const id = localStorage.getItem('nexos_segment') || STATE?.empresa?.segmento || 'tech';
+  const seg = SEGMENTS.configs[id] || SEGMENTS.configs.tech;
+  // Atualiza o cache com o objeto correto
+  SEGMENTS._current = seg;
+  return seg;
 }
 function _lang() { return (window.I18N) ? I18N.lang : 'pt'; }
 function _t(key) { return (window.I18N) ? I18N.t(key) : key; }
