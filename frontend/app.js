@@ -23,7 +23,17 @@ const APP = {
 };
 
 // ── HELPERS SEGUROS ────────────────────────────────────────
-function _seg()  { return (window.SEGMENTS && SEGMENTS.current) ? SEGMENTS.current : { labels:{ pt:{} }, os_form_fields:[], id:'tech' }; }
+function _seg() {
+  if (!window.SEGMENTS) return { labels:{ pt:{} }, os_form_fields:[], id:'tech' };
+  // Se labels estiverem vazios, reseta o cache
+  const cur = SEGMENTS.current;
+  const lang = _lang();
+  if (!cur.labels[lang] || Object.keys(cur.labels[lang]).length === 0) {
+    SEGMENTS._current = null;
+    return SEGMENTS.current;
+  }
+  return cur;
+}
 function _lang() { return (window.I18N) ? I18N.lang : 'pt'; }
 function _t(key) { return (window.I18N) ? I18N.t(key) : key; }
 
@@ -378,6 +388,8 @@ function _closeModal(id) {
 }
 
 function buildOSModal(os) {
+  // Garante que pega o objeto completo do segmento, nunca cache corrompido
+  if (window.SEGMENTS) SEGMENTS._current = null;
   const seg    = _seg();
   const lang   = _lang();
   const fields = seg.os_form_fields || [];
