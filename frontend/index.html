@@ -1041,17 +1041,91 @@
 <script src="api.js?v=36"></script>
 <script src="i18n.js?v=36"></script>
 <script src="segments.js?v=36"></script>
-  <script>
-window._seg = function() {
-  if (!window.SEGMENTS) return { labels:{ pt:{} }, os_form_fields:[], id:'tech' };
-  const id = localStorage.getItem('nexos_segment') || (window.STATE && STATE.empresa && STATE.empresa.segmento) || 'tech';
-  return SEGMENTS.configs[id] || SEGMENTS.configs.tech;
-};
-</script>
 <script src="auth.js?v=36"></script>
 <script src="app.js?v=36"></script>
 
 <script>
+// ── Patch segments os_form_fields ─────────────────────────
+// Garante que todos os segmentos têm os campos corretos
+document.addEventListener('DOMContentLoaded', () => {
+  if (!window.SEGMENTS) return;
+
+  const FIELDS = {
+    tech: [
+      { id:'client',    type:'client_select' },
+      { id:'item',      type:'text',     required:true,  label_key:'item_field',     placeholder_key:'item_placeholder' },
+      { id:'extra_1',   type:'text',     label_key:'extra_field_1' },
+      { id:'extra_2',   type:'text',     label_key:'extra_field_2' },
+      { id:'defect',    type:'textarea', label_key:'defect_field',  placeholder_key:'defect_placeholder', minimizable:true },
+      { id:'diagnosis', type:'textarea', label_key:'diagnosis_field', minimizable:true },
+      { id:'extra_3',   type:'text',     label_key:'extra_field_3' },
+      { id:'parts',     type:'parts_list' },
+      { id:'technician',type:'staff_select', label_key:'staff_field' },
+      { id:'warranty',  type:'number',   label_key:'warranty_field', default:90 },
+      { id:'priority',  type:'priority_select' },
+      { id:'delivery',  type:'date' },
+      { id:'payment',   type:'payment_select' },
+      { id:'photos',    type:'photo_upload' },
+      { id:'signature', type:'signature_pad' },
+      { id:'notes',     type:'textarea' },
+    ],
+    retail: [
+      { id:'client',    type:'client_select' },
+      { id:'item',      type:'text',     required:true,  label_key:'item_field',     placeholder_key:'item_placeholder' },
+      { id:'extra_1',   type:'text',     label_key:'extra_field_1' },
+      { id:'extra_2',   type:'text',     label_key:'extra_field_2' },
+      { id:'parts',     type:'parts_list' },
+      { id:'technician',type:'staff_select', label_key:'staff_field' },
+      { id:'warranty',  type:'number',   label_key:'warranty_field', default:90 },
+      { id:'payment',   type:'payment_select' },
+      { id:'photos',    type:'photo_upload' },
+      { id:'notes',     type:'textarea' },
+    ],
+    beauty: [
+      { id:'client',    type:'client_select' },
+      { id:'item',      type:'text',     required:true,  label_key:'item_field',     placeholder_key:'item_placeholder' },
+      { id:'extra_1',   type:'text',     label_key:'extra_field_1' },
+      { id:'parts',     type:'parts_list' },
+      { id:'technician',type:'staff_select', label_key:'staff_field' },
+      { id:'payment',   type:'payment_select' },
+      { id:'notes',     type:'textarea' },
+    ],
+    garage: [
+      { id:'client',    type:'client_select' },
+      { id:'item',      type:'text',     required:true,  label_key:'item_field',     placeholder_key:'item_placeholder' },
+      { id:'extra_1',   type:'text',     required:true,  label_key:'extra_field_1' },
+      { id:'extra_2',   type:'text',     label_key:'extra_field_2' },
+      { id:'extra_3',   type:'text',     label_key:'extra_field_3' },
+      { id:'defect',    type:'textarea', label_key:'defect_field',  placeholder_key:'defect_placeholder', minimizable:true },
+      { id:'diagnosis', type:'textarea', label_key:'diagnosis_field', minimizable:true },
+      { id:'parts',     type:'parts_list' },
+      { id:'technician',type:'staff_select', label_key:'staff_field' },
+      { id:'warranty',  type:'text',     label_key:'warranty_field' },
+      { id:'priority',  type:'priority_select' },
+      { id:'delivery',  type:'date' },
+      { id:'payment',   type:'payment_select' },
+      { id:'photos',    type:'photo_upload' },
+      { id:'notes',     type:'textarea' },
+    ],
+  };
+
+  // Injeta os campos em todos os segmentos
+  Object.keys(FIELDS).forEach(id => {
+    if (SEGMENTS.configs[id]) {
+      SEGMENTS.configs[id].os_form_fields = FIELDS[id];
+    }
+  });
+
+  // Reseta cache do current
+  SEGMENTS._current = null;
+
+  // Fix permanente do _seg()
+  window._seg = function() {
+    const id = localStorage.getItem('nexos_segment') || window.STATE?.empresa?.segmento || 'tech';
+    return SEGMENTS.configs[id] || SEGMENTS.configs.tech;
+  };
+});
+
 // ── Init ──────────────────────────────────────────────────
 // Fix permanente: _seg() sempre lê direto dos configs
 window._seg = function() {
