@@ -1041,6 +1041,13 @@
 <script src="api.js?v=36"></script>
 <script src="i18n.js?v=36"></script>
 <script src="segments.js?v=36"></script>
+  <script>
+window._seg = function() {
+  if (!window.SEGMENTS) return { labels:{ pt:{} }, os_form_fields:[], id:'tech' };
+  const id = localStorage.getItem('nexos_segment') || (window.STATE && STATE.empresa && STATE.empresa.segmento) || 'tech';
+  return SEGMENTS.configs[id] || SEGMENTS.configs.tech;
+};
+</script>
 <script src="auth.js?v=36"></script>
 <script src="app.js?v=36"></script>
 
