@@ -1,5 +1,5 @@
 /* ============================================================
-   NexOS v3.0 — auth.js
+   NexOS v3.5— auth.js
    Estrutura real do banco: usuarios(id, empresa_id, user_id,
    nome, email, cargo, nivel, ativo), empresas(id, nome, ...)
    ============================================================ */
