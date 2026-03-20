@@ -1,5 +1,8 @@
 /* ============================================================
-   NexOS v3.5 — segments.js
+   NexOS v3.0 — segments.js
+   Configuração completa por segmento de negócio.
+   Cada segmento define: nomes, campos, ícones, cores,
+   layout do formulário OS, documentos e KPIs do dashboard.
    ============================================================ */
 
 const SEGMENTS = {
@@ -8,7 +11,13 @@ const SEGMENTS = {
   _current: null,
 
   get current() {
-    if (!this._current) {
+    // Valida se _current tem os dados completos — se não, busca direto dos configs
+    const valid = this._current &&
+                  this._current.os_form_fields &&
+                  this._current.os_form_fields.length > 0 &&
+                  this._current.labels &&
+                  Object.keys(this._current.labels.pt || {}).length > 0;
+    if (!valid) {
       const saved = localStorage.getItem('nexos_segment') || 'tech';
       this._current = this.configs[saved] || this.configs.tech;
     }
