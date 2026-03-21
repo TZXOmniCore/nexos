@@ -109,7 +109,7 @@
 
     <!-- Login -->
     <div id="auth-login-view">
-      <h2 class="auth-title">Bem-vindo</h2>
+      <h2 class="auth-title">Bem-vindo de volta</h2>
       <p class="auth-sub">Entre com sua conta para continuar</p>
 
       <div class="form-group">
@@ -1123,6 +1123,71 @@ document.addEventListener('DOMContentLoaded', () => {
   window._seg = function() {
     const id = localStorage.getItem('nexos_segment') || window.STATE?.empresa?.segmento || 'tech';
     return SEGMENTS.configs[id] || SEGMENTS.configs.tech;
+  };
+
+  // Sobrescreve buildOSModal para usar _seg() correto
+  window.buildOSModal = function(os) {
+    const seg    = window._seg();
+    const lang   = window.I18N ? I18N.lang : 'pt';
+    const fields = seg.os_form_fields || [];
+    const prefs  = (() => { try { return JSON.parse(localStorage.getItem('nexos_prefs')||'{}'); } catch(e){ return {}; } })();
+    const title  = os ? 'Editar ' + (seg.labels[lang]?.os_single||'OS') : (seg.labels[lang]?.os_new||'Nova OS');
+
+    const funcsOpts  = (window.APP?.funcionarios||[]).map(f=>`<option value="${f.id}" ${os?.tecnico_id===f.id?'selected':''}>${f.nome}</option>`).join('');
+    const clientsOpts= (window.APP?.clientes||[]).map(c=>`<option value="${c.id}" ${os?.cliente_id===c.id?'selected':''}>${c.nome}</option>`).join('');
+
+    const FIELD_DB = { item:'item', defect:'defeito', diagnosis:'diagnostico', technician:'tecnico_id', warranty:'garantia_dias', extra_1:'extra_1', extra_2:'extra_2', extra_3:'extra_3', notes:'observacoes', delivery:'data_entrega', priority:'prioridade' };
+
+    const rf = (f) => {
+      if (!f?.type) return '';
+      const sl = seg.labels[lang] || seg.labels.pt || {};
+      const label = f.label_key ? (sl[f.label_key]||f.label||'') : (f.label||'');
+      const ph    = f.placeholder_key ? (sl[f.placeholder_key]||'') : (f.placeholder||'');
+      const dbKey = FIELD_DB[f.id]||f.id;
+      const val   = os ? (os[dbKey]??'') : '';
+      switch(f.type) {
+        case 'client_select': return `<div class="form-group"><label class="form-label">Cliente</label><div style="display:flex;gap:8px"><select id="os-f-cliente_id" class="form-control" style="flex:1"><option value="">Sem cadastro</option>${clientsOpts}</select><button type="button" class="btn btn-secondary btn-sm" onclick="openNewClientInline()">+</button></div></div>`;
+        case 'text': return label ? `<div class="form-group"><label class="form-label">${label}${f.required?'<span style="color:var(--red)"> *</span>':''}</label><input type="text" id="os-f-${f.id}" class="form-control" value="${String(val).replace(/"/g,'&quot;')}" placeholder="${ph}" ${f.required?'required':''}></div>` : '';
+        case 'textarea': return label ? `<div class="form-group"><label class="form-label">${label}</label><textarea id="os-f-${f.id}" class="form-control" rows="3" placeholder="${ph}">${String(val).replace(/</g,'&lt;')}</textarea></div>` : '';
+        case 'number': return label ? `<div class="form-group"><label class="form-label">${label}</label><input type="number" id="os-f-${f.id}" class="form-control" value="${val||f.default||''}" min="0"></div>` : '';
+        case 'date': return `<div class="form-group"><label class="form-label">Data de Entrega</label><input type="date" id="os-f-${f.id}" class="form-control" value="${val}"></div>`;
+        case 'staff_select': return `<div class="form-group"><label class="form-label">${label||'Técnico'}</label><select id="os-f-tecnico_id" class="form-control"><option value="">Sem atribuição</option>${funcsOpts}</select></div>`;
+        case 'priority_select': return `<div class="form-group"><label class="form-label">Prioridade</label><select id="os-f-prioridade" class="form-control"><option value="normal" ${!os||os.prioridade==='normal'?'selected':''}>Normal</option><option value="alta" ${os?.prioridade==='alta'?'selected':''}>Alta</option><option value="urgente" ${os?.prioridade==='urgente'?'selected':''}>Urgente</option></select></div>`;
+        case 'payment_select': return `<div class="form-group"><label class="form-label">Pagamento</label><select id="os-f-forma_pagamento" class="form-control" onchange="onPaymentChange(this.value)"><option value="">Selecionar...</option>${Object.entries(window.PAY_CONFIG||{}).map(([k,v])=>`<option value="${k}" ${os?.forma_pagamento===k?'selected':''}>${v.label}</option>`).join('')}</select><div id="parcelas-wrap" style="display:none;margin-top:8px"><label class="form-label">Nº Parcelas</label><select id="os-f-n_parcelas" class="form-control">${[2,3,4,5,6,7,8,9,10,11,12].map(n=>`<option value="${n}">${n}x</option>`).join('')}</select></div></div>`;
+        case 'parts_list': return `<div class="form-group"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><label class="form-label" style="margin:0">${sl.parts_field||'Itens'}</label><button type="button" class="btn btn-secondary btn-sm" onclick="addOSItem()">+ Adicionar</button></div><div id="os-items-list"></div><div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:.74rem;color:var(--text-3)">Mão de obra</div><input type="number" id="os-f-valor_mao_obra" class="form-control" style="width:130px;margin-top:4px" placeholder="0,00" value="${os?.valor_mao_obra||''}" min="0" step="0.01" oninput="recalcTotal()"></div><div style="text-align:right"><div style="font-size:.74rem;color:var(--text-3)">Total</div><div style="font-size:1.1rem;font-weight:800;color:var(--green)" id="os-total-display">${window.fmt ? fmt(os?.valor_total||0) : 'R$ 0,00'}</div></div></div></div>`;
+        case 'photo_upload': return (!prefs.photos_enabled && !os) ? '' : `<div class="form-group"><label class="form-label">Fotos</label><label class="photo-add-btn" for="os-photo-input" style="display:flex;gap:8px;padding:10px;background:var(--bg-2);border:1px dashed var(--border);border-radius:8px;cursor:pointer">📷 Adicionar foto<input type="file" id="os-photo-input" accept="image/*" multiple style="display:none"></label></div>`;
+        case 'signature_pad': return (!prefs.signature_enabled && !os) ? '' : `<div class="form-group"><label class="form-label">Assinatura</label><canvas id="sig-pad" style="width:100%;height:120px;background:var(--bg-2);border:1px solid var(--border);border-radius:8px;touch-action:none"></canvas><button type="button" onclick="clearSignature()" class="btn btn-ghost btn-sm" style="margin-top:4px">Limpar</button></div>`;
+        default: return '';
+      }
+    };
+
+    document.getElementById('os-modal')?.remove();
+    const modal = document.createElement('div');
+    modal.id = 'os-modal';
+    modal.className = 'modal-wrap open';
+    modal.innerHTML = `
+      <div class="modal" style="max-width:600px">
+        <div class="modal-header">
+          <h3 class="modal-title">${title}</h3>
+          <button class="modal-close" onclick="document.getElementById('os-modal').remove();document.body.style.overflow=''">✕</button>
+        </div>
+        <div class="modal-body">
+          ${os ? `<div class="form-group"><label class="form-label">Status</label><div style="display:flex;gap:6px;flex-wrap:wrap" id="os-status-btns">${Object.entries(window.STATUS_CONFIG||{}).map(([k,v])=>`<button type="button" class="filter-btn ${os.status===k?'active':''}" onclick="setOSStatus('${k}',this)" style="${os.status===k?'border-color:'+v.color+';color:'+v.color+';background:'+v.color+'22':''}">${v.label}</button>`).join('')}</div></div>` : ''}
+          ${fields.map(f => { try { return rf(f); } catch(e) { console.error(f.id, e); return ''; } }).join('')}
+          <div class="form-group"><label class="form-label">Observações Internas</label><textarea id="os-f-observacoes" class="form-control" rows="2" placeholder="Observações...">${os?.observacoes||''}</textarea></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" onclick="document.getElementById('os-modal').remove();document.body.style.overflow=''">Cancelar</button>
+          <button class="btn btn-primary" id="os-save-btn" onclick="saveOS()">💾 Salvar</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    document.body.style.overflow = 'hidden';
+    window._osItems  = window._osItems  || [];
+    window._osStatus = os?.status || 'aguardando';
+    if (os?.itens) { try { window._osItems = typeof os.itens==='string' ? JSON.parse(os.itens) : (os.itens||[]); } catch(e){ window._osItems=[]; } }
+    if (typeof renderOSItems === 'function') renderOSItems();
+    if (window.lucide) setTimeout(() => lucide.createIcons(), 60);
   };
 });
 
