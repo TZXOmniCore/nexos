@@ -805,6 +805,16 @@ tbody td { padding: 12px 16px; color: var(--text); vertical-align: middle; }
   .modal-overlay { align-items: flex-end; padding: 0; }
   #toast-container { bottom: 76px; right: 12px; left: 12px; }
   .toast { max-width: 100%; }
+  /* Estoque responsivo no mobile */
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .table-wrap table { min-width: 520px; }
+  .table-wrap th, .table-wrap td { padding: 9px 8px; font-size: .76rem; white-space: nowrap; }
+  /* Settings responsivo */
+  #settings-layout { grid-template-columns: 1fr !important; }
+  #settings-nav-card { position: static !important; }
+  /* Page header responsivo */
+  .page-header { flex-wrap: wrap; gap: 8px; }
+  .page-title { font-size: 1.2rem; }
 }
 
 @media (max-width: 420px) {
@@ -878,3 +888,46 @@ tbody td { padding: 12px 16px; color: var(--text); vertical-align: middle; }
 /* ── PHOTO ───────────────────────────────────────────────── */
 .photo-add-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; aspect-ratio: 1; border-radius: var(--radius-sm); background: var(--bg-3); border: 1.5px dashed var(--border-md); cursor: pointer; font-size: .72rem; color: var(--text-3); transition: all .15s; }
 .photo-add-btn:hover { border-color: var(--blue); color: var(--blue); }
+
+/* ── PÁGINAS DE FORMULÁRIO ─────────────────────────────── */
+#page-os-form .card,
+#page-client-form .card,
+#page-product-form .card,
+#page-transaction-form .card,
+#page-event-form .card {
+  margin-bottom: 16px;
+}
+
+/* Botão Voltar nas páginas internas */
+.btn-back {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  cursor: pointer;
+  font-size: .82rem;
+  transition: all var(--fast) var(--ease);
+}
+.btn-back:hover { background: var(--bg-2); color: var(--text); }
+
+/* Nav item settings */
+#settings-nav .settings-nav-item,
+#settings-nav .nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: .83rem;
+  color: var(--text-2);
+  transition: all var(--fast) var(--ease);
+}
+#settings-nav .settings-nav-item:hover,
+#settings-nav .nav-item:hover { background: var(--bg-3); color: var(--text); }
+#settings-nav .settings-nav-item.active,
+#settings-nav .nav-item.active { background: var(--blue-dim); color: var(--blue); }
