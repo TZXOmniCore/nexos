@@ -4,6 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#080C14">
+  <!-- SEGURANÇA -->
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="X-Frame-Options" content="DENY">
+  <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="NexOS">
@@ -14,7 +18,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=36">
+  <link rel="stylesheet" href="styles.css?v=37">
   <script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
   <style>
     /* ── helpers usados inline ───────────────────────── */
@@ -109,6 +113,10 @@
 
     <!-- Login -->
     <div id="auth-login-view">
+      <!-- Honeypot anti-bot (deve ficar vazio) -->
+      <div id="hp-field" aria-hidden="true" style="display:none!important;position:absolute;left:-9999px;">
+        <input type="text" name="website" tabindex="-1" autocomplete="off">
+      </div>
       <h2 class="auth-title">Bem-vindo de volta</h2>
       <p class="auth-sub">Entre com sua conta para continuar</p>
 
@@ -960,6 +968,280 @@
       </div>
 
     </main>
+
+      <!-- ── PÁGINA: FORMULÁRIO OS ──────────────────────── -->
+      <div class="page" id="page-os-form">
+        <div class="page-header">
+          <div style="display:flex;align-items:center;gap:12px">
+            <button class="btn btn-ghost btn-icon" onclick="goBack()" type="button">
+              <i data-lucide="arrow-left" style="width:18px;height:18px"></i>
+            </button>
+            <h1 class="page-title" id="os-form-title">Nova OS</h1>
+          </div>
+          <button class="btn btn-primary" onclick="saveOS()" type="button">
+            <i data-lucide="save" style="width:14px;height:14px"></i>
+            <span>Salvar</span>
+          </button>
+        </div>
+        <div id="os-form-body"></div>
+      </div>
+
+      <!-- ── PÁGINA: VISUALIZAÇÃO OS ───────────────────── -->
+      <div class="page" id="page-os-view">
+        <div class="page-header">
+          <div style="display:flex;align-items:center;gap:12px">
+            <button class="btn btn-ghost btn-icon" onclick="goBack()" type="button">
+              <i data-lucide="arrow-left" style="width:18px;height:18px"></i>
+            </button>
+            <h1 class="page-title" id="os-view-title">OS</h1>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="os-view-edit-btn" type="button">
+            <i data-lucide="pencil" style="width:14px;height:14px"></i>
+            <span>Editar</span>
+          </button>
+        </div>
+        <div id="os-view-body"></div>
+      </div>
+
+      <!-- ── PÁGINA: FORMULÁRIO CLIENTE ────────────────── -->
+      <div class="page" id="page-client-form">
+        <div class="page-header">
+          <div style="display:flex;align-items:center;gap:12px">
+            <button class="btn btn-ghost btn-icon" onclick="goBack()" type="button">
+              <i data-lucide="arrow-left" style="width:18px;height:18px"></i>
+            </button>
+            <h1 class="page-title" id="client-form-title">Novo Cliente</h1>
+          </div>
+          <button class="btn btn-primary" onclick="saveClient()" type="button">
+            <i data-lucide="save" style="width:14px;height:14px"></i>
+            <span>Salvar</span>
+          </button>
+        </div>
+        <div class="card">
+          <div class="form-group">
+            <label class="form-label">Nome <span style="color:var(--red)">*</span></label>
+            <input type="text" id="cli-nome" class="form-control" placeholder="Nome completo" autocomplete="off" maxlength="100">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Telefone</label>
+              <input type="tel" id="cli-tel" class="form-control" placeholder="(00) 00000-0000" maxlength="20">
+            </div>
+            <div class="form-group">
+              <label class="form-label">CPF</label>
+              <input type="text" id="cli-cpf" class="form-control" placeholder="000.000.000-00" maxlength="18">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">E-mail</label>
+            <input type="email" id="cli-email" class="form-control" placeholder="email@exemplo.com" maxlength="100">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Aniversário</label>
+              <input type="date" id="cli-aniv" class="form-control">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Nível</label>
+              <select id="cli-nivel" class="form-control">
+                <option value="normal">Normal</option>
+                <option value="vip">VIP</option>
+                <option value="corporativo">Corporativo</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Endereço</label>
+            <input type="text" id="cli-end" class="form-control" placeholder="Rua, número, bairro..." maxlength="200">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Observações</label>
+            <textarea id="cli-obs" class="form-control" rows="3" placeholder="Informações adicionais..." maxlength="500"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── PÁGINA: VISUALIZAÇÃO CLIENTE ──────────────── -->
+      <div class="page" id="page-client-view">
+        <div class="page-header">
+          <div style="display:flex;align-items:center;gap:12px">
+            <button class="btn btn-ghost btn-icon" onclick="goBack()" type="button">
+              <i data-lucide="arrow-left" style="width:18px;height:18px"></i>
+            </button>
+            <h1 class="page-title" id="client-view-name">Cliente</h1>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="editCurrentClient()" type="button">
+            <i data-lucide="pencil" style="width:14px;height:14px"></i>
+            <span>Editar</span>
+          </button>
+        </div>
+        <div id="client-view-body"></div>
+      </div>
+
+      <!-- ── PÁGINA: FORMULÁRIO PRODUTO ─────────────────── -->
+      <div class="page" id="page-product-form">
+        <div class="page-header">
+          <div style="display:flex;align-items:center;gap:12px">
+            <button class="btn btn-ghost btn-icon" onclick="goBack()" type="button">
+              <i data-lucide="arrow-left" style="width:18px;height:18px"></i>
+            </button>
+            <h1 class="page-title" id="product-form-title">Novo Produto</h1>
+          </div>
+          <button class="btn btn-primary" onclick="saveProduct()" type="button">
+            <i data-lucide="save" style="width:14px;height:14px"></i>
+            <span>Salvar</span>
+          </button>
+        </div>
+        <div class="card">
+          <div class="form-group">
+            <label class="form-label">Nome <span style="color:var(--red)">*</span></label>
+            <input type="text" id="prd-nome" class="form-control" placeholder="Nome do produto" maxlength="100">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Código</label>
+              <input type="text" id="prd-cod" class="form-control" placeholder="SKU-001" maxlength="50">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Cód. Barras</label>
+              <input type="text" id="prd-barcode" class="form-control" placeholder="7890000000000" maxlength="50">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Preço Custo (R$)</label>
+              <input type="number" id="prd-custo" class="form-control" placeholder="0,00" min="0" max="9999999" step="0.01" oninput="calcMargemProd()">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Preço Venda (R$)</label>
+              <input type="number" id="prd-venda" class="form-control" placeholder="0,00" min="0" max="9999999" step="0.01" oninput="calcMargemProd()">
+            </div>
+          </div>
+          <div id="prd-margin-display" style="font-size:.82rem;color:var(--text-3);margin-bottom:16px">Margem: –</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Quantidade</label>
+              <input type="number" id="prd-qtd" class="form-control" value="0" min="0" max="999999">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Estoque Mínimo</label>
+              <input type="number" id="prd-min" class="form-control" placeholder="0" min="0" max="999999">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Categoria</label>
+              <input type="text" id="prd-cat" class="form-control" placeholder="Ex: Telas, Baterias..." maxlength="50">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Fornecedor</label>
+              <input type="text" id="prd-forn" class="form-control" placeholder="Nome do fornecedor" maxlength="100">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── PÁGINA: LANÇAMENTO FINANCEIRO ──────────────── -->
+      <div class="page" id="page-transaction-form">
+        <div class="page-header">
+          <div style="display:flex;align-items:center;gap:12px">
+            <button class="btn btn-ghost btn-icon" onclick="goBack()" type="button">
+              <i data-lucide="arrow-left" style="width:18px;height:18px"></i>
+            </button>
+            <h1 class="page-title">Novo Lançamento</h1>
+          </div>
+          <button class="btn btn-primary" onclick="saveLancamento()" type="button">
+            <i data-lucide="save" style="width:14px;height:14px"></i>
+            <span>Salvar</span>
+          </button>
+        </div>
+        <div class="card">
+          <div class="form-group">
+            <label class="form-label">Tipo</label>
+            <div style="display:flex;gap:8px">
+              <button id="tipo-entrada" class="btn btn-primary" onclick="setTipoLanc('entrada')" type="button">
+                <i data-lucide="trending-up" style="width:14px;height:14px"></i> Entrada
+              </button>
+              <button id="tipo-saida" class="btn btn-ghost" onclick="setTipoLanc('saida')" style="color:var(--red);border-color:var(--red)" type="button">
+                <i data-lucide="trending-down" style="width:14px;height:14px"></i> Saída
+              </button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Descrição <span style="color:var(--red)">*</span></label>
+            <input type="text" id="lanc-desc" class="form-control" placeholder="Ex: Compra de peças..." maxlength="200">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Valor (R$) <span style="color:var(--red)">*</span></label>
+            <input type="number" id="lanc-valor" class="form-control" placeholder="0,00" min="0.01" max="9999999" step="0.01">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Forma de Pagamento</label>
+            <select id="lanc-forma" class="form-control">
+              <option value="dinheiro">💵 Dinheiro</option>
+              <option value="pix">📱 PIX</option>
+              <option value="debito">💳 Débito</option>
+              <option value="credito">💳 Crédito</option>
+              <option value="transferencia">🏦 Transferência</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── PÁGINA: FORMULÁRIO EVENTO ──────────────────── -->
+      <div class="page" id="page-event-form">
+        <div class="page-header">
+          <div style="display:flex;align-items:center;gap:12px">
+            <button class="btn btn-ghost btn-icon" onclick="goBack()" type="button">
+              <i data-lucide="arrow-left" style="width:18px;height:18px"></i>
+            </button>
+            <h1 class="page-title">Novo Evento</h1>
+          </div>
+          <button class="btn btn-primary" onclick="saveSchedule()" type="button">
+            <i data-lucide="save" style="width:14px;height:14px"></i>
+            <span>Salvar</span>
+          </button>
+        </div>
+        <div class="card">
+          <div class="form-group">
+            <label class="form-label">Título <span style="color:var(--red)">*</span></label>
+            <input type="text" id="sched-titulo" class="form-control" placeholder="Ex: Visita técnica, Reunião..." maxlength="100">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Data <span style="color:var(--red)">*</span></label>
+              <input type="date" id="sched-data" class="form-control">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Hora</label>
+              <input type="time" id="sched-hora" class="form-control">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tipo</label>
+            <select id="sched-tipo" class="form-control">
+              <option value="geral">Geral</option>
+              <option value="visita">Visita Técnica</option>
+              <option value="entrega">Entrega</option>
+              <option value="reuniao">Reunião</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Cliente</label>
+            <select id="sched-cliente-sel" class="form-control">
+              <option value="">Sem cliente</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Cor</label>
+            <input type="color" id="sched-cor" class="form-control" value="#38BDF8" style="height:44px;cursor:pointer">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Observações</label>
+            <textarea id="sched-obs" class="form-control" rows="3" placeholder="Detalhes do evento..." maxlength="500"></textarea>
+          </div>
+        </div>
+      </div>
   </div><!-- /main-wrap -->
 
   <!-- ── MOBILE NAV ──────────────────────────────────── -->
@@ -1038,11 +1320,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="api.js?v=36"></script>
-<script src="i18n.js?v=36"></script>
-<script src="segments.js?v=36"></script>
-<script src="auth.js?v=36"></script>
-<script src="app.js?v=36"></script>
+<script src="api.js?v=37"></script>
+<script src="i18n.js?v=37"></script>
+<script src="segments.js?v=37"></script>
+<script src="auth.js?v=37"></script>
+<script src="app.js?v=37"></script>
 
 <script>
 // ── Patch segments os_form_fields ─────────────────────────
