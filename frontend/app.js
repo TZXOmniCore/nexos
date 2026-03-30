@@ -7,10 +7,6 @@ function _clean(s,max){if(typeof s!=='string')return'';return s.trim().slice(0,m
 function _cleanNum(v,mn,mx){const n=parseFloat(v);return isNaN(n)?0:Math.min(Math.max(n,mn||0),mx||9999999);}
 function _esc(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 
-============================================================
-   NexOS v3.5 — app.js SEM MODAIS
-   Tudo em páginas. Sem modal. Sem popup.
-   ============================================================ */
 
 const APP = {
   os:[], clientes:[], produtos:[], notifs:[], funcionarios:[],
@@ -344,7 +340,7 @@ function deleteCurrentOS() {
 function _buildOSForm(os) {
   const seg    = _seg();
   const lang   = _lang();
-  const fields = (seg.os_form_fields && seg.os_form_fields.length > 0) ? seg.os_form_fields : _defaultFields();
+  const fields = (seg.os_form_fields && seg.os_form_fields.length > 0) ? seg.os_form_fields : _getDefaultFields('tech');
   const labels = (seg.labels && seg.labels[lang]) ? seg.labels[lang] : ((seg.labels && seg.labels.pt) ? seg.labels.pt : {parts_field:'Itens',item_field:'Equipamento',os_new:'Nova OS',os_single:'OS'});
   const prefs  = (() => { try { return JSON.parse(localStorage.getItem('nexos_prefs')||'{}'); } catch(e){ return {}; } })();
 
