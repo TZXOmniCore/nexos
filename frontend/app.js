@@ -1,19 +1,13 @@
 /* ============================================================
-   NexOS v3.5 — app.js — Sanitização de inputs adicionada
+   NexOS v3.5 — app.js CORRIGIDO COMPLETO
    ============================================================ */
 
-// ── SANITIZAÇÃO LOCAL (complementa backend) ────────────────
-function _clean(str, maxLen = 500) {
-  if (typeof str !== "string") return "";
-  return str.trim().slice(0, maxLen).replace(/[<>"'`]/g, "");
-}
-function _cleanNum(val, min = 0, max = 9999999) {
-  const n = parseFloat(val);
-  if (isNaN(n)) return 0;
-  return Math.min(Math.max(n, min), max);
-}
+// ── SANITIZAÇÃO ───────────────────────────────────────────
+function _clean(s,max){if(typeof s!=='string')return'';return s.trim().slice(0,max||500).replace(/[<>"'`]/g,'').replace(/javascript:/gi,'');}
+function _cleanNum(v,mn,mx){const n=parseFloat(v);return isNaN(n)?0:Math.min(Math.max(n,mn||0),mx||9999999);}
+function _esc(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 
-/* ============================================================
+============================================================
    NexOS v3.5 — app.js SEM MODAIS
    Tudo em páginas. Sem modal. Sem popup.
    ============================================================ */
@@ -26,10 +20,39 @@ const APP = {
 };
 
 // ── Helpers ────────────────────────────────────────────────
+function _getDefaultFields(id) {
+  const isTech   = !id || id === 'tech';
+  const isGarage = id === 'garage';
+  const isBeauty = id === 'beauty';
+  const itemLabel = isGarage ? 'Veículo' : isBeauty ? 'Serviço' : id === 'retail' ? 'Produto' : 'Equipamento';
+  const itemPH    = isGarage ? 'Ex: Fiat Uno 2018...' : isBeauty ? 'Ex: Corte, Escova...' : 'Ex: iPhone 13, Samsung A52...';
+  const fields = [
+    { id:'client',    type:'client_select' },
+    { id:'item',      type:'text',     required:true,  label:itemLabel, placeholder:itemPH },
+    { id:'extra_1',   type:'text',     label: isGarage?'Placa':'IMEI / Nº de Série' },
+    { id:'extra_2',   type:'text',     label: isGarage?'Quilometragem':'Senha do Dispositivo' },
+    { id:'defect',    type:'textarea', label:'Defeito Relatado', placeholder:'Descreva o problema...' },
+    { id:'diagnosis', type:'textarea', label:'Diagnóstico Técnico' },
+    { id:'extra_3',   type:'text',     label:'Acessórios / Observação' },
+    { id:'parts',     type:'parts_list' },
+    { id:'technician',type:'staff_select', label:'Técnico Responsável' },
+    { id:'warranty',  type:'number',   label:'Garantia (dias)', default:90 },
+    { id:'priority',  type:'priority_select' },
+    { id:'delivery',  type:'date' },
+    { id:'payment',   type:'payment_select' },
+  ];
+  return fields;
+}
+
 function _seg() {
-  if (!window.SEGMENTS) return { labels:{pt:{}}, os_form_fields:[], id:'tech' };
+  if (!window.SEGMENTS) return { labels:{pt:{}}, os_form_fields:_getDefaultFields('tech'), id:'tech' };
   const id = localStorage.getItem('nexos_segment') || window.STATE?.empresa?.segmento || 'tech';
-  return SEGMENTS.configs[id] || SEGMENTS.configs.tech;
+  const cfg = SEGMENTS.configs[id] || SEGMENTS.configs.tech;
+  // Garante que os_form_fields sempre tem campos válidos
+  if (!cfg.os_form_fields || cfg.os_form_fields.length === 0) {
+    cfg.os_form_fields = _getDefaultFields(id);
+  }
+  return cfg;
 }
 function _lang() { return window.I18N ? I18N.lang : 'pt'; }
 
@@ -71,6 +94,9 @@ function goPage(page) {
     notifications: renderNotifications,
     settings: () => renderSettings(APP.settingsTab),
     master: renderMaster,
+    // Páginas de formulário sem render automático (populadas por openNew*)
+    'os-form': null, 'os-view': null, 'client-form': null,
+    'client-view': null, 'product-form': null, 'transaction-form': null, 'event-form': null,
   };
   try { renders[page]?.(); } catch(e) { console.error('render '+page+':', e); }
 
@@ -318,8 +344,8 @@ function deleteCurrentOS() {
 function _buildOSForm(os) {
   const seg    = _seg();
   const lang   = _lang();
-  const fields = seg.os_form_fields || [];
-  const labels = seg.labels[lang] || seg.labels.pt || {};
+  const fields = (seg.os_form_fields && seg.os_form_fields.length > 0) ? seg.os_form_fields : _defaultFields();
+  const labels = (seg.labels && seg.labels[lang]) ? seg.labels[lang] : ((seg.labels && seg.labels.pt) ? seg.labels.pt : {parts_field:'Itens',item_field:'Equipamento',os_new:'Nova OS',os_single:'OS'});
   const prefs  = (() => { try { return JSON.parse(localStorage.getItem('nexos_prefs')||'{}'); } catch(e){ return {}; } })();
 
   const title = document.getElementById('os-form-title');
@@ -335,8 +361,9 @@ function _buildOSForm(os) {
 
   const rf = (f) => {
     if (!f?.type) return '';
-    const label = f.label_key ? (labels[f.label_key]||'') : (f.label||'');
-    const ph    = f.placeholder_key ? (labels[f.placeholder_key]||'') : (f.placeholder||'');
+    // Resolve label: label_key -> labels[key] || f.label || f.id
+    const label = f.label_key ? (labels[f.label_key] || f.label || '') : (f.label || '');
+    const ph    = f.placeholder_key ? (labels[f.placeholder_key] || f.placeholder || '') : (f.placeholder || '');
     const dbKey = FIELD_DB[f.id]||f.id;
     const val   = os ? (os[dbKey]??'') : '';
     switch(f.type) {
@@ -455,34 +482,29 @@ async function saveOS() {
 
   const itensTotal = (window._osItems||[]).reduce((s,i)=>s+((i.quantidade||1)*(i.valor_unit||0)),0);
   const maoObra    = _cleanNum(document.getElementById('os-f-valor_mao_obra')?.value,0,9999999);
-  const total      = Math.min(itensTotal + maoObra, 9999999);
-  const g = id => { const el = document.getElementById(id); return el?.value || null; };
-  const gc = (id, max) => { const v = document.getElementById(id)?.value||''; return _clean(v, max)||null; };
+  const total      = itensTotal + maoObra;
+  const g = id => document.getElementById(id)?.value || null;
 
-  // Validar status e prioridade contra whitelist
-  const STATUS_VALID = ['aguardando','andamento','concluido','retirada','cancelado','fiado','orcamento'];
-  const PRIO_VALID   = ['normal','alta','urgente'];
-  const PAY_VALID    = Object.keys(PAY_CONFIG||{});
+  const STATUS_V=['aguardando','andamento','concluido','retirada','cancelado','fiado','orcamento'];
+  const PRIO_V=['normal','alta','urgente'];
+  const PAY_V=Object.keys(PAY_CONFIG||{});
+  const gc=(id,max)=>{ const v=document.getElementById(id)?.value||''; return _clean(v,max)||null; };
 
   const osData = {
-    status:          STATUS_VALID.includes(window._osStatus) ? window._osStatus : 'aguardando',
+    status:          STATUS_V.includes(window._osStatus)?window._osStatus:'aguardando',
     cliente_id:      g('os-f-cliente_id')||null,
     item,
-    extra_1:    gc('os-f-extra_1', 200),
-    extra_2:    gc('os-f-extra_2', 200),
-    extra_3:    gc('os-f-extra_3', 200),
-    defeito:    gc('os-f-defect', 1000),
-    diagnostico:gc('os-f-diagnosis', 1000),
+    extra_1:    gc('os-f-extra_1',200), extra_2:gc('os-f-extra_2',200), extra_3:gc('os-f-extra_3',200),
+    defeito:    gc('os-f-defect',1000), diagnostico:gc('os-f-diagnosis',1000),
     tecnico_id: g('os-f-tecnico_id')||null,
-    garantia_dias: Math.max(0, parseInt(g('os-f-warranty'))||0)||null,
-    prioridade: PRIO_VALID.includes(g('os-f-prioridade')) ? g('os-f-prioridade') : 'normal',
-    data_entrega: g('os-f-delivery'),
-    forma_pagamento: PAY_VALID.includes(g('os-f-forma_pagamento')) ? g('os-f-forma_pagamento') : null,
-    n_parcelas: Math.min(Math.max(parseInt(g('os-f-n_parcelas'))||0,0),36)||null,
-    valor_mao_obra: maoObra,
-    valor_total: total,
-    itens: JSON.stringify((window._osItems||[]).slice(0,50)), // max 50 itens
-    observacoes: gc('os-f-observacoes', 1000),
+    garantia_dias: Math.max(0,parseInt(g('os-f-warranty')||0))||null,
+    prioridade: PRIO_V.includes(g('os-f-prioridade'))?g('os-f-prioridade'):'normal',
+    data_entrega:   g('os-f-delivery')||null,
+    forma_pagamento:PAY_V.includes(g('os-f-forma_pagamento'))?g('os-f-forma_pagamento'):null,
+    n_parcelas: Math.min(Math.max(parseInt(g('os-f-n_parcelas')||0),0),36)||null,
+    valor_mao_obra:maoObra, valor_total:Math.min(total,9999999),
+    itens:JSON.stringify((window._osItems||[]).slice(0,50)),
+    observacoes:gc('os-f-observacoes',1000),
   };
 
   // Remove nulos
@@ -613,17 +635,16 @@ async function saveClient(id) {
   const nome = _clean(document.getElementById('cli-nome')?.value||'',100);
   if (!nome) { UI.toast('⚠ Nome obrigatório','warning'); return; }
   const emailVal = _clean(document.getElementById('cli-email')?.value||'',100);
-  if (emailVal && !/^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/.test(emailVal)) {
-    UI.toast('⚠ E-mail inválido','warning'); return;
-  }
+  const NIVEL_V = ['normal','vip','corporativo'];
+  const nivelEl = document.getElementById('cli-nivel');
   const dados = {
     nome,
-    telefone: _clean(document.getElementById('cli-tel')?.value||'',20)||null,
-    cpf:      _clean(document.getElementById('cli-cpf')?.value||'',20)||null,
-    email:    emailVal||null,
+    telefone:    _clean(document.getElementById('cli-tel')?.value||'',20)||null,
+    cpf:         _clean(document.getElementById('cli-cpf')?.value||'',20)||null,
+    email:       emailVal||null,
     aniversario: document.getElementById('cli-aniv')?.value||null,
-    nivel:    ['normal','vip','corporativo'].includes(document.getElementById('cli-nivel')?.value) ? document.getElementById('cli-nivel').value : 'normal',
-    endereco: _clean(document.getElementById('cli-end')?.value||'',200)||null,
+    nivel:       NIVEL_V.includes(nivelEl?.value)?nivelEl.value:'normal',
+    endereco:    _clean(document.getElementById('cli-end')?.value||'',200)||null,
     observacoes: _clean(document.getElementById('cli-obs')?.value||'',500)||null,
   };
   try {
@@ -695,17 +716,14 @@ async function saveProduct(id) {
   id = id || window._productId || '';
   const nome = _clean(document.getElementById('prd-nome')?.value||'',100);
   if(!nome) { UI.toast('⚠ Nome obrigatório','warning'); return; }
-  const custo = _cleanNum(document.getElementById('prd-custo')?.value,0,9999999);
-  const venda = _cleanNum(document.getElementById('prd-venda')?.value,0,9999999);
-  if (venda > 0 && custo > venda) { UI.toast('⚠ Preço de custo maior que venda','warning'); return; }
   const dados={
     nome,
     codigo:        _clean(document.getElementById('prd-cod')?.value||'',50)||null,
     codigo_barras: _clean(document.getElementById('prd-barcode')?.value||'',50)||null,
-    preco_custo:   custo,
-    preco_venda:   venda,
-    quantidade:    Math.max(0, parseInt(document.getElementById('prd-qtd')?.value)||0),
-    estoque_minimo:Math.max(0, parseInt(document.getElementById('prd-min')?.value)||0),
+    preco_custo:   _cleanNum(document.getElementById('prd-custo')?.value,0,9999999),
+    preco_venda:   _cleanNum(document.getElementById('prd-venda')?.value,0,9999999),
+    quantidade:    Math.max(0,parseInt(document.getElementById('prd-qtd')?.value)||0),
+    estoque_minimo:Math.max(0,parseInt(document.getElementById('prd-min')?.value)||0),
     categoria:     _clean(document.getElementById('prd-cat')?.value||'',50)||null,
     fornecedor:    _clean(document.getElementById('prd-forn')?.value||'',100)||null,
   };
@@ -798,8 +816,8 @@ function setTipoLanc(tipo) {
 }
 
 async function saveLancamento() {
-  const desc=_clean(document.getElementById('lanc-desc')?.value||'',200);
-  const valor=_cleanNum(document.getElementById('lanc-valor')?.value,0.01,9999999);
+  const desc = _clean(document.getElementById('lanc-desc')?.value||'',200);
+  const valor = _cleanNum(document.getElementById('lanc-valor')?.value,0.01,9999999);
   if(!desc||!valor) { UI.toast('⚠ Preencha todos os campos','warning'); return; }
   try {
     await API.addCaixaEntry(STATE.empresa.id,{tipo:window._lancTipo||'entrada',descricao:desc,valor,forma:document.getElementById('lanc-forma')?.value||'dinheiro'});
@@ -977,27 +995,19 @@ function renderSettings(tab) {
   const lang=_lang();
   const tabs={
     company:`<div class="card"><h4 style="font-size:.92rem;font-weight:700;margin-bottom:20px">Dados da Empresa</h4><div class="form-group"><label class="form-label">Nome</label><input type="text" id="cfg-nome" class="form-control" value="${emp.nome||''}"></div><div class="form-row"><div class="form-group"><label class="form-label">Telefone</label><input type="tel" id="cfg-tel" class="form-control" value="${emp.telefone||''}"></div><div class="form-group"><label class="form-label">CNPJ</label><input type="text" id="cfg-cnpj" class="form-control" value="${emp.cnpj||''}"></div></div><div class="form-group"><label class="form-label">Endereço</label><input type="text" id="cfg-end" class="form-control" value="${emp.endereco||''}"></div><div class="form-group"><label class="form-label">Chave PIX</label><input type="text" id="cfg-pix" class="form-control" value="${emp.pix||emp.chave_pix||''}"></div><button class="btn btn-primary" onclick="saveEmpresaConfig()"><i data-lucide="save" style="width:14px;height:14px"></i> Salvar</button></div>`,
-    appearance:`<div class="card"><h4 style="font-size:.92rem;font-weight:700;margin-bottom:20px">Aparência</h4>
-  <div class="setting-row">
-    <div class="setting-info"><div class="setting-label">Idioma</div></div>
-    <select class="form-control" style="width:140px" id="cfg-lang">
-      <option value="pt" ${lang==='pt'?'selected':''}>🇧🇷 PT-BR</option>
-      <option value="en" ${lang==='en'?'selected':''}>🇺🇸 EN</option>
-      <option value="es" ${lang==='es'?'selected':''}>🇪🇸 ES</option>
-    </select>
-  </div>
-  <div class="setting-row">
-    <div class="setting-info"><div class="setting-label">Assinatura nas OS</div><div class="setting-desc">Coleta assinatura do cliente</div></div>
-    <label class="toggle"><input type="checkbox" id="cfg-signature" ${prefs.signature_enabled?'checked':''}><span class="toggle-slider"></span></label>
-  </div>
-  <div class="setting-row">
-    <div class="setting-info"><div class="setting-label">Fotos nas OS</div></div>
-    <label class="toggle"><input type="checkbox" id="cfg-photos" ${prefs.photos_enabled?'checked':''}><span class="toggle-slider"></span></label>
-  </div>
-  <div style="margin-top:16px">
-    <button class="btn btn-primary" onclick="saveAppearanceConfig()"><i data-lucide="save" style="width:14px;height:14px"></i> Salvar Preferências</button>
-  </div>
-</div>`,
+    appearance:`<div class="card"><h4 style="font-size:.92rem;font-weight:700;margin-bottom:20px">Aparência & Preferências</h4>
+      <div class="setting-row"><div class="setting-info"><div class="setting-label">Idioma</div></div>
+        <select id="cfg-lang" class="form-control" style="width:140px">
+          <option value="pt" ${lang==='pt'?'selected':''}>🇧🇷 PT-BR</option>
+          <option value="en" ${lang==='en'?'selected':''}>🇺🇸 EN</option>
+          <option value="es" ${lang==='es'?'selected':''}>🇪🇸 ES</option>
+        </select></div>
+      <div class="setting-row"><div class="setting-info"><div class="setting-label">Assinatura nas OS</div><div class="setting-desc">Coleta assinatura do cliente</div></div>
+        <label class="toggle"><input type="checkbox" id="cfg-signature" ${prefs.signature_enabled?'checked':''}><span class="toggle-slider"></span></label></div>
+      <div class="setting-row"><div class="setting-info"><div class="setting-label">Fotos nas OS</div></div>
+        <label class="toggle"><input type="checkbox" id="cfg-photos" ${prefs.photos_enabled?'checked':''}><span class="toggle-slider"></span></label></div>
+      <div style="margin-top:16px"><button class="btn btn-primary" onclick="saveAppearanceConfig()"><i data-lucide="save" style="width:14px;height:14px"></i> Salvar Preferências</button></div>
+    </div>`,
     employees:`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><h4 style="font-size:.92rem;font-weight:700;margin:0">Funcionários</h4><button class="btn btn-primary btn-sm" onclick="openNewEmployee()"><i data-lucide="user-plus" style="width:13px;height:13px"></i> Novo</button></div><div id="employees-list">${renderEmployeesList()}</div></div>`,
     segment:`<div class="card"><h4 style="font-size:.92rem;font-weight:700;margin-bottom:20px">Segmento</h4><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${SEGMENTS.list.map(s=>`<div class="segment-card ${emp.segmento===s.id?'selected':''}" onclick="changeSegment('${s.id}',this)"><div class="segment-card-icon" style="background:${s.color}22"><i data-lucide="${s.icon}" style="width:22px;height:22px;color:${s.color}"></i></div><div class="segment-card-name">${s.labels[lang]?.name||s.labels.pt.name}</div></div>`).join('')}</div></div>`,
     goals:`<div class="card"><h4 style="font-size:.92rem;font-weight:700;margin-bottom:20px">Metas do Mês</h4><div class="form-group"><label class="form-label">Meta de Faturamento (R$)</label><input type="number" id="meta-fat" class="form-control" placeholder="Ex: 10000" min="0"></div><div class="form-group"><label class="form-label">Meta de OS</label><input type="number" id="meta-os" class="form-control" placeholder="Ex: 50" min="0"></div><button class="btn btn-primary" onclick="saveMetas()"><i data-lucide="save" style="width:14px;height:14px"></i> Salvar</button></div>`,
@@ -1017,12 +1027,23 @@ function renderEmployeesList() {
 function togglePref(key,value) { const p=(() => { try { return JSON.parse(localStorage.getItem('nexos_prefs')||'{}'); } catch(e){ return {}; } })(); p[key]=value; localStorage.setItem('nexos_prefs',JSON.stringify(p)); UI.toast('✅ Salvo!','success'); }
 
 async function saveEmpresaConfig() {
-  const updates={ nome:document.getElementById('cfg-nome')?.value?.trim(), telefone:document.getElementById('cfg-tel')?.value||null, cnpj:document.getElementById('cfg-cnpj')?.value||null, endereco:document.getElementById('cfg-end')?.value||null, pix:document.getElementById('cfg-pix')?.value||null };
-  try { await API.updateEmpresa(STATE.empresa.id,updates); Object.assign(STATE.empresa,updates); UI.toast('✅ Salvo!','success'); } catch(e) { UI.toast('❌ '+e.message,'error'); }
+  const nome = _clean(document.getElementById('cfg-nome')?.value||'',100);
+  if(!nome){UI.toast('⚠ Nome obrigatório','warning');return;}
+  const updates={
+    nome,
+    telefone:_clean(document.getElementById('cfg-tel')?.value||'',20)||null,
+    cnpj:    _clean(document.getElementById('cfg-cnpj')?.value||'',20)||null,
+    endereco:_clean(document.getElementById('cfg-end')?.value||'',200)||null,
+    pix:     _clean(document.getElementById('cfg-pix')?.value||'',100)||null,
+  };
+  try{await API.updateEmpresa(STATE.empresa.id,updates);Object.assign(STATE.empresa,updates);UI.toast('✅ Salvo!','success');}
+  catch(e){UI.toast('❌ '+e.message,'error');}
 }
 
 function changeSegment(id,el) {
-  if(window.SEGMENTS) { SEGMENTS._current=null; SEGMENTS.set(id); }
+  const SEGS=['tech','retail','beauty','garage'];
+  if(!SEGS.includes(id)) return;
+  if(window.SEGMENTS){SEGMENTS._current=null;SEGMENTS.set(id);}
   API.updateEmpresa(STATE.empresa.id,{segmento:id}).catch(()=>{});
   document.querySelectorAll('#settings-content .segment-card').forEach(c=>c.classList.remove('selected'));
   if(el) el.classList.add('selected');
@@ -1030,7 +1051,15 @@ function changeSegment(id,el) {
   UI.toast('✅ Segmento alterado!','success');
 }
 
-// saveMetas() redefinida abaixo com validação melhorada
+async function saveMetas() {
+  const fat=_cleanNum(document.getElementById('meta-fat')?.value,0,9999999);
+  const os=Math.max(0,parseInt(document.getElementById('meta-os')?.value)||0);
+  try{
+    if(fat>0) await API.setMeta(STATE.empresa.id,'faturamento',fat);
+    if(os>0)  await API.setMeta(STATE.empresa.id,'os',os);
+    UI.toast('✅ Metas salvas!','success');
+  }catch(e){UI.toast('❌ '+e.message,'error');}
+}
 
 function openNewEmployee() { UI.toast('Em breve — funcionários via configurações avançadas','info'); }
 function openEditEmployee(id) { UI.toast('Em breve','info'); }
@@ -1049,37 +1078,20 @@ async function renderMaster() {
 
 // ── Funções de compatibilidade ─────────────────────────────
 function selectSegment(id)     { if(window.SEGMENTS) SEGMENTS.set(id); }
-function openDashCustomize()   { UI.toast('Em breve!','info'); }
 function clearSignature()      { const c=document.getElementById('sig-pad'); if(c){const ctx=c.getContext('2d');ctx.clearRect(0,0,c.width,c.height);} }
 function addOSPhotos()         { UI.toast('Upload em breve!','info'); }
 function openPIX()             { UI.toast('PIX em breve!','info'); }
 function copyEmpresaCode()     { const c=STATE.empresa?.codigo; if(c) navigator.clipboard?.writeText(c).then(()=>UI.toast('✅ Copiado!','success')); }
 
-// ── Salva configurações de aparência ────────────────────────
+// ── FUNÇÕES ADICIONAIS ────────────────────────────────────
 function saveAppearanceConfig() {
-  const lang = document.getElementById('cfg-lang')?.value;
-  const sig  = document.getElementById('cfg-signature')?.checked ?? false;
-  const photos = document.getElementById('cfg-photos')?.checked ?? false;
-
-  // Whitelist de idiomas
-  const validLangs = ['pt','en','es'];
-  if (lang && validLangs.includes(lang) && window.I18N) I18N.set(lang);
-
-  const prefs = (() => { try { return JSON.parse(localStorage.getItem('nexos_prefs')||'{}'); } catch { return {}; } })();
-  prefs.signature_enabled = sig;
-  prefs.photos_enabled    = photos;
-  if (lang && validLangs.includes(lang)) prefs.lang = lang;
-  localStorage.setItem('nexos_prefs', JSON.stringify(prefs));
-  UI.toast('✅ Preferências salvas!', 'success');
-}
-
-// ── Salva configurações de metas com validação ───────────────
-async function saveMetas() {
-  const fat = _cleanNum(document.getElementById('meta-fat')?.value, 0, 9999999);
-  const os  = Math.max(0, parseInt(document.getElementById('meta-os')?.value)||0);
-  try {
-    if (fat > 0) await API.setMeta(STATE.empresa.id, 'faturamento', fat);
-    if (os  > 0) await API.setMeta(STATE.empresa.id, 'os', os);
-    UI.toast('✅ Metas salvas!', 'success');
-  } catch(e) { UI.toast('❌ ' + e.message, 'error'); }
+  const LANGS=['pt','en','es'];
+  const langEl=document.getElementById('cfg-lang')?.value;
+  if(langEl&&LANGS.includes(langEl)&&window.I18N) I18N.set(langEl);
+  const p=(()=>{try{return JSON.parse(localStorage.getItem('nexos_prefs')||'{}');}catch{return{};}})();
+  p.signature_enabled=document.getElementById('cfg-signature')?.checked??false;
+  p.photos_enabled=document.getElementById('cfg-photos')?.checked??false;
+  if(langEl&&LANGS.includes(langEl)) p.lang=langEl;
+  localStorage.setItem('nexos_prefs',JSON.stringify(p));
+  UI.toast('✅ Preferências salvas!','success');
 }
