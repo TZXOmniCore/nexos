@@ -1,11 +1,12 @@
 {
-  "name": "NexOS v3.5",
+  "name": "NexOS v4.0",
   "short_name": "NexOS",
-  "description": "Sistema de Gestão Inteligente",
-  "start_url": "/nexos/frontend/index.html",
+  "description": "Sistema de Gestão para Negócios",
+  "start_url": "/frontend/index.html",
   "display": "standalone",
-  "background_color": "#0a0e1a",
-  "theme_color": "#0a0e1a",
+  "background_color": "#0a0f1e",
+  "theme_color": "#0a0f1e",
+  "orientation": "any",
   "icons": [
     { "src": "NexOS.png", "sizes": "192x192", "type": "image/png" },
     { "src": "NexOS.png", "sizes": "512x512", "type": "image/png" }
