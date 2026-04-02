@@ -1,1093 +1,1111 @@
 /* ============================================================
-   NexOS v3.5 — app.js CORRIGIDO COMPLETO
+   NexOS v4.0 — app.js | Nav v3.5 + Forms V_TEST
    ============================================================ */
+'use strict';
 
-// ── SANITIZAÇÃO ───────────────────────────────────────────
-function _clean(s,max){if(typeof s!=='string')return'';return s.trim().slice(0,max||500).replace(/[<>"'`]/g,'').replace(/javascript:/gi,'');}
-function _cleanNum(v,mn,mx){const n=parseFloat(v);return isNaN(n)?0:Math.min(Math.max(n,mn||0),mx||9999999);}
-function _esc(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+// ── Estado local ───────────────────────────────────────────
+const APP = { os:[], clientes:[], produtos:[], agenda:[], _page:'dashboard' };
 
+// ── Sanitização ────────────────────────────────────────────
+function _c(s,n)  { return typeof s==='string'?s.trim().slice(0,n||300).replace(/[<>"'`]/g,''):''; }
+function _n(s,mn,mx){ const v=parseFloat(s); return isNaN(v)?0:Math.min(Math.max(v,mn??0),mx??9999999); }
+function _e(s)    { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function gv(id,d) { const el=document.getElementById(id);return el?el.value:(d!==undefined?d:''); }
+function gi(id,d) { const v=parseInt(gv(id,''));return isNaN(v)?(d||0):v; }
+function gn(id,d) { const v=parseFloat(gv(id,''));return isNaN(v)?(d||0):v; }
 
-const APP = {
-  os:[], clientes:[], produtos:[], notifs:[], funcionarios:[],
-  agenda:[], contasPagar:[], contasReceber:[],
-  charts:{}, calDate:new Date(), osFiltro:'all', osSearch:'',
-  anPeriodo:'month', settingsTab:'company', realtimeSubs:[],
+// Calcular margem
+function calcMargem(custo,venda){ return venda>0?((((venda-custo)/venda)*100).toFixed(0)):0; }
+
+// ── Navegação (estilo v3.5) ────────────────────────────────
+const PAGE_TITLES = {
+  dashboard:'Dashboard', os:'Ordens de Serviço', clientes:'Clientes',
+  estoque:'Estoque', caixa:'Caixa', agenda:'Agenda', config:'Configurações',
 };
-
-// ── Helpers ────────────────────────────────────────────────
-function _getDefaultFields(id) {
-  const isTech   = !id || id === 'tech';
-  const isGarage = id === 'garage';
-  const isBeauty = id === 'beauty';
-  const itemLabel = isGarage ? 'Veículo' : isBeauty ? 'Serviço' : id === 'retail' ? 'Produto' : 'Equipamento';
-  const itemPH    = isGarage ? 'Ex: Fiat Uno 2018...' : isBeauty ? 'Ex: Corte, Escova...' : 'Ex: iPhone 13, Samsung A52...';
-  const fields = [
-    { id:'client',    type:'client_select' },
-    { id:'item',      type:'text',     required:true,  label:itemLabel, placeholder:itemPH },
-    { id:'extra_1',   type:'text',     label: isGarage?'Placa':'IMEI / Nº de Série' },
-    { id:'extra_2',   type:'text',     label: isGarage?'Quilometragem':'Senha do Dispositivo' },
-    { id:'defect',    type:'textarea', label:'Defeito Relatado', placeholder:'Descreva o problema...' },
-    { id:'diagnosis', type:'textarea', label:'Diagnóstico Técnico' },
-    { id:'extra_3',   type:'text',     label:'Acessórios / Observação' },
-    { id:'parts',     type:'parts_list' },
-    { id:'technician',type:'staff_select', label:'Técnico Responsável' },
-    { id:'warranty',  type:'number',   label:'Garantia (dias)', default:90 },
-    { id:'priority',  type:'priority_select' },
-    { id:'delivery',  type:'date' },
-    { id:'payment',   type:'payment_select' },
-  ];
-  return fields;
-}
-
-function _seg() {
-  if (!window.SEGMENTS) return { labels:{pt:{}}, os_form_fields:_getDefaultFields('tech'), id:'tech' };
-  const id = localStorage.getItem('nexos_segment') || window.STATE?.empresa?.segmento || 'tech';
-  const cfg = SEGMENTS.configs[id] || SEGMENTS.configs.tech;
-  // Garante que os_form_fields sempre tem campos válidos
-  if (!cfg.os_form_fields || cfg.os_form_fields.length === 0) {
-    cfg.os_form_fields = _getDefaultFields(id);
-  }
-  return cfg;
-}
-function _lang() { return window.I18N ? I18N.lang : 'pt'; }
-
-// ── Navegação ──────────────────────────────────────────────
-let _prevPage = 'dashboard';
 
 function goPage(page) {
-  const cur = document.querySelector('.page.active');
-  if (cur) _prevPage = cur.id.replace('page-','');
-
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('[data-nav]').forEach(n => n.classList.remove('active'));
-
-  const el = document.getElementById('page-' + page);
-  if (!el) return;
-  el.classList.add('active');
-  document.querySelectorAll(`[data-nav="${page}"]`).forEach(n => n.classList.add('active'));
-  localStorage.setItem('nexos_page', page);
-
-  const titles = {
-    dashboard:'Dashboard', os:'Ordens de Serviço', clients:'Clientes',
-    stock:'Estoque', cash:'Financeiro', schedule:'Agenda',
-    analytics:'Relatórios', ai:'Inteligência Artificial',
-    notifications:'Notificações', settings:'Configurações',
-    'os-form':'Nova OS', 'os-view':'Ver OS',
-    'client-form':'Novo Cliente', 'client-view':'Cliente',
-    'product-form':'Novo Produto', 'transaction-form':'Novo Lançamento',
-    'event-form':'Novo Evento',
-  };
-  UI.setPageTitle(titles[page] || page);
-
-  if (window.moreOpen) toggleMobileMore();
-
-  const renders = {
-    dashboard: renderDashboard, os: renderOSList,
-    clients: renderClients, stock: renderStock,
-    cash: renderCash, schedule: renderCalendar,
-    analytics: renderAnalytics, ai: renderAI,
-    notifications: renderNotifications,
-    settings: () => renderSettings(APP.settingsTab),
-    master: renderMaster,
-    // Páginas de formulário sem render automático (populadas por openNew*)
-    'os-form': null, 'os-view': null, 'client-form': null,
-    'client-view': null, 'product-form': null, 'transaction-form': null, 'event-form': null,
-  };
-  try { renders[page]?.(); } catch(e) { console.error('render '+page+':', e); }
-
-  if (window.lucide) setTimeout(() => lucide.createIcons(), 60);
-  window.scrollTo({ top:0, behavior:'smooth' });
+  APP._page = page;
+  // Fechar modal se aberto
+  const mw=document.getElementById('mwrap');if(mw)mw.classList.remove('open');
+  document.body.style.overflow='';
+  // Ativar página
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  const pg=document.getElementById('page-'+page);if(pg)pg.classList.add('active');
+  // Nav desktop
+  document.querySelectorAll('.nav-item').forEach(i=>i.classList.toggle('active',i.dataset.page===page));
+  // Nav mobile
+  document.querySelectorAll('.mobile-nav-item').forEach(i=>i.classList.toggle('active',i.dataset.page===page));
+  // FAB
+  const fab=document.getElementById('fab');
+  if(fab) fab.style.display=['os','clientes','estoque','agenda'].includes(page)?'flex':'none';
+  // Título
+  UI.setPageTitle(PAGE_TITLES[page]||page);
+  localStorage.setItem('nexos_v4_page',page);
+  // Render
+  const r={dashboard:renderDash,os:renderOS,clientes:renderClientes,estoque:renderEstoque,caixa:renderCaixa,agenda:renderAgenda,config:renderConfig};
+  if(r[page]) r[page]();
 }
 
-function goBack() {
-  goPage(_prevPage || 'dashboard');
+function fabAction() {
+  const a={os:novaOS,clientes:novoCliente,estoque:novoProduto,agenda:novoEvento};
+  if(a[APP._page]) a[APP._page]();
 }
 
-// ── Boot ───────────────────────────────────────────────────
+// ── Modal V_TEST ───────────────────────────────────────────
+function openModal(html) {
+  const mb=document.getElementById('mbody');if(!mb)return;
+  mb.innerHTML=html;
+  document.getElementById('mwrap').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function closeModal() {
+  document.getElementById('mwrap')?.classList.remove('open');
+  document.body.style.overflow='';
+}
+
+// ── App init ───────────────────────────────────────────────
 const App = {
   async init() {
-    if (!STATE.empresa) return;
-    UI.loading(true, 'Carregando...');
     try {
-      await App._loadData();
-      App._realtime();
-      App._greeting();
-      goPage(localStorage.getItem('nexos_page') || 'dashboard');
-    } catch(e) {
-      UI.toast('Erro ao carregar: ' + e.message, 'error');
-    } finally { UI.loading(false); }
+      [APP.os, APP.clientes, APP.produtos, APP.agenda] = await Promise.all([
+        API.getOS(STATE.user.id),
+        API.getClientes(STATE.user.id),
+        API.getProdutos(STATE.user.id),
+        API.getAgenda(STATE.user.id, today()+'T00:00:00', today()+'T23:59:59'),
+      ]);
+    } catch(e){ console.error('App.init error:',e); }
+    this._ui();
+    // Verificar agenda do dia
+    this._agendaAlert();
+    // Verificar carnês vencidos
+    this._carnesAlert();
+    const last = localStorage.getItem('nexos_v4_page')||'dashboard';
+    goPage(last);
   },
-
-  async _loadData() {
-    const id = STATE.empresa.id;
-    const [os, cli, prod, notif, funcs, agenda] = await Promise.all([
-      API.getOS(id), API.getClientes(id), API.getProdutos(id),
-      API.getNotificacoes(id), API.getFuncionarios(id), API.getAgendaHoje(id),
-    ]);
-    APP.os=os||[]; APP.clientes=cli||[]; APP.produtos=prod||[];
-    APP.notifs=notif||[]; APP.funcionarios=funcs||[]; APP.agenda=agenda||[];
-    App._badges();
+  _ui() {
+    const p=STATE.perfil||{};
+    const nome=p.empresa_nome||STATE.user?.email||'NexOS';
+    const ini=initials(nome);
+    ['sidebar-avatar','header-avatar'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=ini;});
+    const sn=document.getElementById('sidebar-name');if(sn)sn.textContent=nome;
+    const sr=document.getElementById('sidebar-role');if(sr)sr.textContent='Proprietário';
   },
-
-  _realtime() {
-    const id = STATE.empresa.id;
-    APP.realtimeSubs.forEach(s => { try{s.unsubscribe?.();}catch(e){} });
-    APP.realtimeSubs = [
-      API.subscribeOS(id, async () => {
-        APP.os = await API.getOS(id);
-        App._badges();
-        const pg = document.querySelector('.page.active')?.id;
-        if (pg === 'page-os') renderOSList();
-      }),
-      API.subscribeNotifs(id, async (p) => {
-        APP.notifs = await API.getNotificacoes(id);
-        App._badges();
-        if (p?.new) UI.toast('🔔 ' + (p.new.titulo||'Nova notificação'), 'info');
-      }),
-    ];
+  async _agendaAlert() {
+    if(!APP.agenda.length) return;
+    const msg=APP.agenda.map(e=>`• ${e.titulo} ${e.hora?'às '+e.hora:''}`).join('\n');
+    if(APP.agenda.length>0) UI.toast(`📅 ${APP.agenda.length} compromisso(s) hoje`,'info');
+    // Notificação nativa
+    if('Notification'in window&&Notification.permission==='granted') {
+      new Notification('NexOS — Agenda de Hoje',{body:msg,icon:'NexOS.png'});
+    }
   },
-
-  _badges() {
-    const unread = APP.notifs.filter(n=>!n.lida).length;
-    UI.badge('notif-badge', unread); UI.badge('mobile-notif-badge', unread);
-    const dot = document.getElementById('notif-dot');
-    if (dot) dot.style.display = unread > 0 ? 'block' : 'none';
-    const ab = APP.os.filter(o=>['aguardando','andamento'].includes(o.status)).length;
-    UI.badge('nav-os-badge', ab);
-  },
-
-  _greeting() {
-    const h = new Date().getHours();
-    const nome = STATE.perfil?.nome?.split(' ')[0] || '';
-    const s = h<12?'Bom dia':h<18?'Boa tarde':'Boa noite';
-    const el = document.getElementById('dash-greeting');
-    if (el) el.textContent = s + (nome?', '+nome+'!':'!');
+  async _carnesAlert() {
+    try {
+      const vencidas = await API.getParcelas(STATE.user.id,true);
+      if(vencidas.length>0) UI.toast(`⚠️ ${vencidas.length} parcela(s) vencida(s)`,'warning');
+    } catch{}
   },
 };
 
-// ── Dashboard ──────────────────────────────────────────────
-async function renderDashboard() {
-  if (!STATE.empresa) return;
+// ════════════════════════════════════════════════════════════
+// DASHBOARD — dados reais, sem gráficos
+// ════════════════════════════════════════════════════════════
+async function renderDash() {
   try {
-    const data = await API.getDashboardData(STATE.empresa.id);
-    const set = (id,v) => { const e=document.getElementById(id); if(e) e.textContent=v; };
-    set('kpi-revenue', fmt(data.faturamento_mes));
-    set('kpi-os',      data.os_abertas);
-    set('kpi-done',    data.os_concluidas_mes);
-    set('kpi-profit',  fmt(data.faturamento_mes*0.35));
-    if (data.delta_pct !== null) {
-      const de = document.getElementById('kpi-revenue-delta');
-      if (de) { const up=parseFloat(data.delta_pct)>=0; de.textContent=(up?'+':'')+data.delta_pct+'%'; de.className='kpi-delta '+(up?'up':'down'); }
+    const d = await API.getDashboard(STATE.user.id);
+    // KPIs
+    const kf=document.getElementById('kpi-fat');if(kf)kf.textContent=fmt(d.faturamento);
+    const kl=document.getElementById('kpi-lucro');if(kl)kl.textContent=fmt(d.lucro);
+    const ko=document.getElementById('kpi-os');if(ko)ko.textContent=d.os_abertas;
+    // Alertas
+    const ka=document.getElementById('kpi-alertas');
+    if(ka){
+      const bx=APP.produtos.filter(p=>p.quantidade<=(p.estoque_min||0)).length;
+      ka.textContent=(d.parcelas_vencidas+bx)||'✓';
+      ka.style.color=(d.parcelas_vencidas+bx)>0?'var(--red)':'var(--green)';
     }
-    renderDashAlerts(data);
-    renderDashRanking(data.top_clientes);
-    renderDashAgenda(data.agenda_hoje);
-    renderDashOS();
-    renderDashChart(7);
-  } catch(e) { console.error('dash:', e); }
-}
-
-function renderDashAlerts(data) {
-  const wrap = document.getElementById('dash-alerts');
-  if (!wrap) return;
-  const al = [];
-  if (data.estoques_baixos>0) al.push({icon:'alert-triangle',color:'var(--orange)',text:data.estoques_baixos+' produto(s) com estoque baixo',page:'stock'});
-  if (data.parcelas_vencidas>0) al.push({icon:'clock',color:'var(--red)',text:data.parcelas_vencidas+' parcela(s) vencida(s)',page:'cash'});
-  if (data.aniversarios?.length>0) al.push({icon:'cake',color:'var(--purple)',text:data.aniversarios.map(a=>a.nome.split(' ')[0]).join(', ')+' fazem aniversário hoje!',page:'clients'});
-  wrap.innerHTML = al.map(a=>`<div onclick="goPage('${a.page}')" style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg-2);border:1px solid var(--border);border-left:3px solid ${a.color};border-radius:8px;cursor:pointer;font-size:.8rem;flex:1;min-width:200px"><i data-lucide="${a.icon}" style="width:14px;height:14px;color:${a.color};flex-shrink:0"></i>${a.text}</div>`).join('');
-  if (al.length && window.lucide) lucide.createIcons();
-}
-
-function renderDashRanking(clientes) {
-  const wrap = document.getElementById('dash-ranking');
-  if (!wrap) return;
-  if (!clientes?.length) { wrap.innerHTML='<div style="color:var(--text-3);padding:20px 0;font-size:.84rem">Sem dados ainda</div>'; return; }
-  wrap.innerHTML = clientes.map((c,i)=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;${i<clientes.length-1?'border-bottom:1px solid var(--border)':''}"><div style="width:22px;height:22px;border-radius:50%;background:${['var(--yellow)','var(--text-2)','var(--orange)'][i]||'var(--bg-3)'};display:flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:800;color:var(--bg)">${i+1}</div><div style="width:32px;height:32px;border-radius:50%;background:${avatarColor(c.nome)};display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;color:#fff">${initials(c.nome)}</div><div style="flex:1;min-width:0"><div style="font-size:.84rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nome}</div><div style="font-size:.72rem;color:var(--text-3)">${c.count} serviço(s)</div></div><div style="font-size:.82rem;font-weight:700;color:var(--green)">${fmt(c.total)}</div></div>`).join('');
-}
-
-function renderDashAgenda(eventos) {
-  const wrap = document.getElementById('dash-agenda');
-  if (!wrap) return;
-  if (!eventos?.length) { wrap.innerHTML='<div style="color:var(--text-3);padding:20px 0;font-size:.84rem">Sem compromissos hoje</div>'; return; }
-  wrap.innerHTML = eventos.map(e=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)"><div style="width:4px;height:36px;border-radius:2px;background:${e.cor||'var(--blue)'};flex-shrink:0"></div><div><div style="font-size:.84rem;font-weight:600">${e.titulo}</div><div style="font-size:.74rem;color:var(--text-3)">${e.data_inicio?new Date(e.data_inicio).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):''}</div></div></div>`).join('');
-}
-
-function renderDashOS() {
-  const wrap = document.getElementById('dash-os-list');
-  if (!wrap) return;
-  const rec = APP.os.slice(0,5);
-  if (!rec.length) { wrap.innerHTML='<div style="color:var(--text-3);font-size:.84rem">Nenhuma OS ainda</div>'; return; }
-  wrap.innerHTML = rec.map(o=>osCard(o)).join('');
-  if (window.lucide) lucide.createIcons();
-}
-
-async function renderDashChart(days) {
-  try {
-    const data = await API.getFaturamentoDiario(STATE.empresa.id, days);
-    const canvas = document.getElementById('dash-chart');
-    if (!canvas || typeof Chart==='undefined') return;
-    APP.charts.dash?.destroy();
-    APP.charts.dash = new Chart(canvas, {
-      type:'line',
-      data:{ labels:data.map(d=>new Date(d.date+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})), datasets:[{data:data.map(d=>d.value),borderColor:'#38BDF8',backgroundColor:'rgba(56,189,248,.08)',fill:true,tension:.4,pointRadius:3,pointBackgroundColor:'#38BDF8',borderWidth:2}] },
-      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#6B7280',font:{size:10}}}, y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#6B7280',font:{size:10},callback:v=>'R$'+v.toLocaleString('pt-BR')}} } }
-    });
-  } catch(e) {}
-}
-
-function setChartPeriod(days,btn) {
-  document.querySelectorAll('.chart-header .filter-btn').forEach(b=>b.classList.remove('active'));
-  if(btn) btn.classList.add('active');
-  renderDashChart(days);
-}
-function openDashCustomize() { UI.toast('Em breve!', 'info'); }
-
-// ── OS Lista ───────────────────────────────────────────────
-function renderOSList() {
-  const list = document.getElementById('os-list');
-  if (!list) return;
-  let f = [...APP.os];
-  if (APP.osFiltro!=='all') f=f.filter(o=>o.status===APP.osFiltro);
-  if (APP.osSearch) { const q=APP.osSearch.toLowerCase(); f=f.filter(o=>String(o.numero||'').includes(APP.osSearch)||(o.item||'').toLowerCase().includes(q)||(o.clientes?.nome||'').toLowerCase().includes(q)); }
-  const count = document.getElementById('os-page-count');
-  if (count) count.textContent = f.length+' registro'+(f.length!==1?'s':'');
-  if (!f.length) {
-    list.innerHTML=`<div class="empty-state"><div class="empty-icon"><i data-lucide="clipboard-list" style="width:36px;height:36px"></i></div><div class="empty-title">${APP.osFiltro==='all'?'Nenhuma OS ainda':'Sem OS com este status'}</div>${APP.osFiltro==='all'?'<button class="btn btn-primary mt-3" onclick="openNewOS()"><i data-lucide="plus" style="width:14px;height:14px"></i> Nova OS</button>':''}</div>`;
-    if(window.lucide) lucide.createIcons();
-    return;
-  }
-  list.innerHTML = f.map(o=>osCard(o)).join('');
-  if(window.lucide) lucide.createIcons();
-}
-
-function osCard(os) {
-  const st = STATUS_CONFIG[os.status]||{label:os.status,color:'var(--text-3)'};
-  return `<div class="os-card" onclick="openViewOS('${os.id}')">
-    <div class="os-card-left">
-      <div class="os-card-num">#${os.numero||'?'}</div>
-      <div class="os-card-info">
-        <div class="os-card-title">${os.item||'–'}</div>
-        ${os.extra_1?`<div class="os-card-sub">${os.extra_1}</div>`:''}
-        <div class="os-card-meta"><i data-lucide="user" style="width:11px;height:11px"></i> ${os.clientes?.nome||'Sem cadastro'}</div>
-      </div>
-    </div>
-    <div class="os-card-right">
-      <span class="badge" style="background:${st.color}22;color:${st.color};border-color:${st.color}33">${st.label}</span>
-      <div class="os-card-value">${fmt(os.valor_total||0)}</div>
-      <div class="os-card-date">${fmtDate(os.criado_em)}</div>
-    </div>
-  </div>`;
-}
-
-function filterOS() { APP.osSearch=document.getElementById('os-search')?.value||''; renderOSList(); }
-function filterOSStatus(status,btn) {
-  APP.osFiltro=status;
-  document.querySelectorAll('#os-status-filters .filter-btn').forEach(b=>b.classList.remove('active'));
-  if(btn) btn.classList.add('active');
-  renderOSList();
-}
-
-// ── OS Formulário (PÁGINA) ─────────────────────────────────
-window._osModalId = null;
-window._osItems   = [];
-window._osStatus  = 'aguardando';
-
-function openNewOS() {
-  window._osModalId = null;
-  window._osItems   = [];
-  window._osStatus  = 'aguardando';
-  _buildOSForm(null);
-  goPage('os-form');
-}
-
-async function openViewOS(id) {
-  try {
-    const os = await API.getOSById(id);
-    if (!os) { UI.toast('OS não encontrada', 'error'); return; }
-    _buildOSView(os);
-    goPage('os-view');
-  } catch(e) { UI.toast('Erro: '+e.message, 'error'); }
-}
-
-async function openEditOS(id) {
-  try {
-    const os = await API.getOSById(id);
-    if (!os) { UI.toast('OS não encontrada', 'error'); return; }
-    window._osModalId = id;
-    _buildOSForm(os);
-    goPage('os-form');
-  } catch(e) { UI.toast('Erro: '+e.message, 'error'); }
-}
-
-function editCurrentOS() {
-  if (window._currentOSId) openEditOS(window._currentOSId);
-}
-
-function deleteCurrentOS() {
-  if (!window._currentOSId) return;
-  UI.confirm('Excluir esta OS? Ação irreversível.', async () => {
-    try {
-      await API.deleteOS(window._currentOSId);
-      APP.os = await API.getOS(STATE.empresa.id);
-      App._badges();
-      goPage('os');
-      UI.toast('🗑 OS excluída', 'info');
-    } catch(e) { UI.toast('Erro: '+e.message, 'error'); }
-  });
-}
-
-function _buildOSForm(os) {
-  const seg    = _seg();
-  const lang   = _lang();
-  const fields = (seg.os_form_fields && seg.os_form_fields.length > 0) ? seg.os_form_fields : _getDefaultFields('tech');
-  const labels = (seg.labels && seg.labels[lang]) ? seg.labels[lang] : ((seg.labels && seg.labels.pt) ? seg.labels.pt : {parts_field:'Itens',item_field:'Equipamento',os_new:'Nova OS',os_single:'OS'});
-  const prefs  = (() => { try { return JSON.parse(localStorage.getItem('nexos_prefs')||'{}'); } catch(e){ return {}; } })();
-
-  const title = document.getElementById('os-form-title');
-  if (title) title.textContent = os ? 'Editar ' + (labels.os_single||'OS') : (labels.os_new||'Nova OS');
-
-  window._osStatus = os?.status || 'aguardando';
-  window._osItems  = [];
-  if (os?.itens) { try { window._osItems = typeof os.itens==='string' ? JSON.parse(os.itens) : (os.itens||[]); } catch(e){ window._osItems=[]; } }
-
-  const FIELD_DB = { item:'item', defect:'defeito', diagnosis:'diagnostico', technician:'tecnico_id', warranty:'garantia_dias', extra_1:'extra_1', extra_2:'extra_2', extra_3:'extra_3', notes:'observacoes', delivery:'data_entrega', priority:'prioridade' };
-  const funcsOpts   = APP.funcionarios.map(f=>`<option value="${f.id}" ${os?.tecnico_id===f.id?'selected':''}>${f.nome}</option>`).join('');
-  const clientsOpts = APP.clientes.map(c=>`<option value="${c.id}" ${os?.cliente_id===c.id?'selected':''}>${c.nome}</option>`).join('');
-
-  const rf = (f) => {
-    if (!f?.type) return '';
-    // Resolve label: label_key -> labels[key] || f.label || f.id
-    const label = f.label_key ? (labels[f.label_key] || f.label || '') : (f.label || '');
-    const ph    = f.placeholder_key ? (labels[f.placeholder_key] || f.placeholder || '') : (f.placeholder || '');
-    const dbKey = FIELD_DB[f.id]||f.id;
-    const val   = os ? (os[dbKey]??'') : '';
-    switch(f.type) {
-      case 'client_select': return `<div class="form-group"><label class="form-label">Cliente</label><div style="display:flex;gap:8px"><select id="os-f-cliente_id" class="form-control" style="flex:1"><option value="">Sem cadastro</option>${clientsOpts}</select><button type="button" class="btn btn-secondary btn-sm" onclick="openNewClientInOS()">+</button></div></div>`;
-      case 'text': return label ? `<div class="form-group"><label class="form-label">${label}${f.required?'<span style="color:var(--red)"> *</span>':''}</label><input type="text" id="os-f-${f.id}" class="form-control" value="${String(val).replace(/"/g,'&quot;')}" placeholder="${ph}"></div>` : '';
-      case 'textarea': return label ? `<div class="form-group"><label class="form-label">${label}</label><textarea id="os-f-${f.id}" class="form-control" rows="3" placeholder="${ph}">${String(val).replace(/</g,'&lt;')}</textarea></div>` : '';
-      case 'number': return label ? `<div class="form-group"><label class="form-label">${label}</label><input type="number" id="os-f-${f.id}" class="form-control" value="${val||f.default||''}" min="0"></div>` : '';
-      case 'date': return `<div class="form-group"><label class="form-label">Data de Entrega</label><input type="date" id="os-f-${f.id}" class="form-control" value="${val}"></div>`;
-      case 'staff_select': return `<div class="form-group"><label class="form-label">${label||'Técnico'}</label><select id="os-f-tecnico_id" class="form-control"><option value="">Sem atribuição</option>${funcsOpts}</select></div>`;
-      case 'priority_select': return `<div class="form-group"><label class="form-label">Prioridade</label><select id="os-f-prioridade" class="form-control"><option value="normal" ${(!os||os.prioridade==='normal')?'selected':''}>Normal</option><option value="alta" ${os?.prioridade==='alta'?'selected':''}>Alta</option><option value="urgente" ${os?.prioridade==='urgente'?'selected':''}>Urgente</option></select></div>`;
-      case 'payment_select': return `<div class="form-group"><label class="form-label">Pagamento</label><select id="os-f-forma_pagamento" class="form-control" onchange="onPaymentChange(this.value)"><option value="">Selecionar...</option>${Object.entries(PAY_CONFIG).map(([k,v])=>`<option value="${k}" ${os?.forma_pagamento===k?'selected':''}>${v.label}</option>`).join('')}</select><div id="parcelas-wrap" style="display:${os?.forma_pagamento==='parcelado'?'block':'none'};margin-top:8px"><label class="form-label">Nº Parcelas</label><select id="os-f-n_parcelas" class="form-control">${[2,3,4,5,6,7,8,9,10,11,12].map(n=>`<option value="${n}">${n}x</option>`).join('')}</select></div></div>`;
-      case 'parts_list': return `<div class="form-group"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><label class="form-label" style="margin:0">${labels.parts_field||'Itens'}</label><button type="button" class="btn btn-secondary btn-sm" onclick="addOSItem()">+ Adicionar</button></div><div id="os-items-list"></div><div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:.74rem;color:var(--text-3)">Mão de obra</div><input type="number" id="os-f-valor_mao_obra" class="form-control" style="width:130px;margin-top:4px" placeholder="0,00" value="${os?.valor_mao_obra||''}" min="0" step="0.01" oninput="recalcTotal()"></div><div style="text-align:right"><div style="font-size:.74rem;color:var(--text-3)">Total</div><div style="font-size:1.1rem;font-weight:800;color:var(--green)" id="os-total-display">${fmt(os?.valor_total||0)}</div></div></div></div>`;
-      default: return '';
-    }
-  };
-
-  const body = document.getElementById('os-form-body');
-  if (!body) return;
-
-  body.innerHTML = `<div class="card">
-    ${os ? `<div class="form-group"><label class="form-label">Status</label><div style="display:flex;gap:6px;flex-wrap:wrap" id="os-status-btns">${Object.entries(STATUS_CONFIG).map(([k,v])=>`<button type="button" class="filter-btn ${os.status===k?'active':''}" onclick="setOSStatus('${k}',this)" style="${os.status===k?'border-color:'+v.color+';color:'+v.color+';background:'+v.color+'22':''}">${v.label}</button>`).join('')}</div></div>` : ''}
-    ${fields.map(f=>{ try{return rf(f);}catch(e){console.error(f.id,e);return '';} }).join('')}
-    <div class="form-group"><label class="form-label">Observações Internas</label><textarea id="os-f-observacoes" class="form-control" rows="2" placeholder="Observações...">${os?.observacoes||''}</textarea></div>
-  </div>`;
-
-  renderOSItems();
-  if(window.lucide) setTimeout(()=>lucide.createIcons(), 60);
-}
-
-function _buildOSView(os) {
-  window._currentOSId = os.id;
-  const seg  = _seg();
-  const lang = _lang();
-  const labels = seg.labels[lang] || seg.labels.pt || {};
-  const st   = STATUS_CONFIG[os.status] || { label:os.status, color:'var(--text-3)' };
-  const itens = (() => { try { return typeof os.itens==='string' ? JSON.parse(os.itens||'[]') : (os.itens||[]); } catch(e){ return []; } })();
-
-  const titleEl = document.getElementById('os-view-title');
-  if (titleEl) titleEl.textContent = (labels.os_single||'OS') + ' #' + os.numero;
-
-  const editBtn = document.getElementById('os-view-edit-btn');
-  if (editBtn) editBtn.onclick = () => openEditOS(os.id);
-
-  const body = document.getElementById('os-view-body');
-  if (!body) return;
-
-  body.innerHTML = `
-    <div class="card" style="margin-bottom:12px">
-      <span class="badge" style="background:${st.color}22;color:${st.color};border-color:${st.color}33;margin-bottom:12px">${st.label}</span>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div><div style="font-size:.72rem;color:var(--text-3)">${labels.item_field||'Item'}</div><div style="font-weight:600">${os.item||'–'}</div></div>
-        ${os.extra_1?`<div><div style="font-size:.72rem;color:var(--text-3)">${labels.extra_field_1||'Info'}</div><div style="font-weight:600">${os.extra_1}</div></div>`:''}
-        ${os.clientes?`<div><div style="font-size:.72rem;color:var(--text-3)">Cliente</div><div style="font-weight:600">${os.clientes.nome}</div>${os.clientes.telefone?`<div style="font-size:.78rem;color:var(--text-3)">${os.clientes.telefone}</div>`:''}</div>`:''}
-        ${os.funcionarios?`<div><div style="font-size:.72rem;color:var(--text-3)">${labels.staff_field||'Técnico'}</div><div style="font-weight:600">${os.funcionarios.nome}</div></div>`:''}
-        ${os.prioridade&&os.prioridade!=='normal'?`<div><div style="font-size:.72rem;color:var(--text-3)">Prioridade</div><div style="font-weight:600;color:var(--orange)">${os.prioridade}</div></div>`:''}
-        ${os.data_entrega?`<div><div style="font-size:.72rem;color:var(--text-3)">Entrega</div><div style="font-weight:600">${fmtDate(os.data_entrega)}</div></div>`:''}
-      </div>
-    </div>
-    ${os.defeito?`<div class="card" style="margin-bottom:12px"><div style="font-size:.72rem;color:var(--text-3);margin-bottom:6px">${labels.defect_field||'Defeito'}</div><div style="font-size:.88rem;line-height:1.6">${os.defeito}</div></div>`:''}
-    ${os.diagnostico?`<div class="card" style="margin-bottom:12px"><div style="font-size:.72rem;color:var(--text-3);margin-bottom:6px">${labels.diagnosis_field||'Diagnóstico'}</div><div style="font-size:.88rem;line-height:1.6">${os.diagnostico}</div></div>`:''}
-    <div class="card" style="margin-bottom:12px">
-      ${itens.length?itens.map(i=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:.88rem"><span>${i.descricao} × ${i.quantidade}</span><span style="font-weight:600">${fmt((i.quantidade||1)*(i.valor_unit||0))}</span></div>`).join(''):''}
-      ${os.valor_mao_obra>0?`<div style="display:flex;justify-content:space-between;padding:8px 0;font-size:.88rem;color:var(--text-2)"><span>Mão de obra</span><span>${fmt(os.valor_mao_obra)}</span></div>`:''}
-      <div style="display:flex;justify-content:space-between;padding:12px 0 0;font-weight:800;font-size:1rem"><span>Total</span><span style="color:var(--green)">${fmt(os.valor_total||0)}</span></div>
-      ${os.forma_pagamento?`<div style="font-size:.82rem;color:var(--text-2);margin-top:4px">Pagamento: ${payLabel(os.forma_pagamento)}</div>`:''}
-    </div>
-    ${os.observacoes?`<div class="card" style="margin-bottom:12px"><div style="font-size:.72rem;color:var(--text-3);margin-bottom:6px">Observações</div><div style="font-size:.88rem">${os.observacoes}</div></div>`:''}
-    ${os.clientes?.telefone?`<button class="btn btn-secondary w-full" style="margin-bottom:8px" onclick="openWhatsApp('${os.clientes.telefone}','${(os.clientes.nome||'').replace(/'/g,"\\'")}','${os.numero}','${st.label}')"><i data-lucide="message-circle" style="width:14px;height:14px"></i> WhatsApp para ${os.clientes.nome}</button>`:''}
-    <button class="btn btn-danger w-full" onclick="deleteCurrentOS()"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Excluir OS</button>
-  `;
-  if(window.lucide) setTimeout(()=>lucide.createIcons(), 60);
-}
-
-// ── OS helpers ─────────────────────────────────────────────
-function setOSStatus(status,btn) {
-  window._osStatus = status;
-  document.querySelectorAll('#os-status-btns .filter-btn').forEach(b=>{ b.classList.remove('active'); b.style.cssText=''; });
-  const st = STATUS_CONFIG[status];
-  if(btn&&st) { btn.classList.add('active'); btn.style.borderColor=st.color; btn.style.color=st.color; btn.style.background=st.color+'22'; }
-}
-
-function addOSItem() { window._osItems.push({descricao:'',quantidade:1,valor_unit:0}); renderOSItems(); }
-
-function renderOSItems() {
-  const wrap = document.getElementById('os-items-list');
-  if (!wrap) return;
-  if (!window._osItems?.length) { wrap.innerHTML='<div style="font-size:.78rem;color:var(--text-3);padding:8px 0">Nenhum item adicionado</div>'; recalcTotal(); return; }
-  wrap.innerHTML = window._osItems.map((item,i)=>`<div style="display:grid;grid-template-columns:1fr 60px 90px 28px;gap:6px;align-items:center;margin-bottom:6px">
-    <input type="text" class="form-control" style="font-size:.82rem" placeholder="Descrição" value="${(item.descricao||'').replace(/"/g,'&quot;')}" oninput="window._osItems[${i}].descricao=this.value">
-    <input type="number" class="form-control" style="font-size:.82rem;text-align:center" value="${item.quantidade||1}" min="1" oninput="window._osItems[${i}].quantidade=+this.value;recalcTotal()">
-    <input type="number" class="form-control" style="font-size:.82rem;text-align:right" placeholder="0,00" value="${item.valor_unit||''}" min="0" step="0.01" oninput="window._osItems[${i}].valor_unit=+this.value;recalcTotal()">
-    <button type="button" onclick="window._osItems.splice(${i},1);renderOSItems()" style="background:none;border:none;cursor:pointer;color:var(--red);padding:4px"><i data-lucide="x" style="width:14px;height:14px"></i></button>
-  </div>`).join('');
-  recalcTotal();
-  if(window.lucide) lucide.createIcons();
-}
-
-function recalcTotal() {
-  const t = (window._osItems||[]).reduce((s,i)=>s+((i.quantidade||1)*(i.valor_unit||0)),0);
-  const m = parseFloat(document.getElementById('os-f-valor_mao_obra')?.value)||0;
-  const el = document.getElementById('os-total-display');
-  if(el) el.textContent = fmt(t+m);
-}
-
-function onPaymentChange(val) {
-  const wrap = document.getElementById('parcelas-wrap');
-  if(wrap) wrap.style.display = val==='parcelado'?'block':'none';
-}
-
-async function saveOS() {
-  const seg  = _seg();
-  const lang = _lang();
-  const labels = seg.labels[lang] || seg.labels.pt || {};
-  const item = _clean(document.getElementById('os-f-item')?.value||'',200);
-  if (!item) { UI.toast('⚠ Preencha o campo '+(labels.item_field||'equipamento'), 'warning'); return; }
-
-  const itensTotal = (window._osItems||[]).reduce((s,i)=>s+((i.quantidade||1)*(i.valor_unit||0)),0);
-  const maoObra    = _cleanNum(document.getElementById('os-f-valor_mao_obra')?.value,0,9999999);
-  const total      = itensTotal + maoObra;
-  const g = id => document.getElementById(id)?.value || null;
-
-  const STATUS_V=['aguardando','andamento','concluido','retirada','cancelado','fiado','orcamento'];
-  const PRIO_V=['normal','alta','urgente'];
-  const PAY_V=Object.keys(PAY_CONFIG||{});
-  const gc=(id,max)=>{ const v=document.getElementById(id)?.value||''; return _clean(v,max)||null; };
-
-  const osData = {
-    status:          STATUS_V.includes(window._osStatus)?window._osStatus:'aguardando',
-    cliente_id:      g('os-f-cliente_id')||null,
-    item,
-    extra_1:    gc('os-f-extra_1',200), extra_2:gc('os-f-extra_2',200), extra_3:gc('os-f-extra_3',200),
-    defeito:    gc('os-f-defect',1000), diagnostico:gc('os-f-diagnosis',1000),
-    tecnico_id: g('os-f-tecnico_id')||null,
-    garantia_dias: Math.max(0,parseInt(g('os-f-warranty')||0))||null,
-    prioridade: PRIO_V.includes(g('os-f-prioridade'))?g('os-f-prioridade'):'normal',
-    data_entrega:   g('os-f-delivery')||null,
-    forma_pagamento:PAY_V.includes(g('os-f-forma_pagamento'))?g('os-f-forma_pagamento'):null,
-    n_parcelas: Math.min(Math.max(parseInt(g('os-f-n_parcelas')||0),0),36)||null,
-    valor_mao_obra:maoObra, valor_total:Math.min(total,9999999),
-    itens:JSON.stringify((window._osItems||[]).slice(0,50)),
-    observacoes:gc('os-f-observacoes',1000),
-  };
-
-  // Remove nulos
-  Object.keys(osData).forEach(k=>{ if(osData[k]===null||osData[k]==='') delete osData[k]; });
-
-  const btn = document.querySelector('#page-os-form .btn-primary');
-  if(btn) { btn.disabled=true; btn.textContent='Salvando...'; }
-
-  try {
-    let saved;
-    if (window._osModalId) {
-      saved = await API.updateOS(window._osModalId, osData);
-      await API.addHistoricoOS(window._osModalId, 'Status: '+statusLabel(osData.status));
-    } else {
-      saved = await API.createOS(STATE.empresa.id, osData);
-      if (osData.forma_pagamento==='parcelado' && osData.n_parcelas>1)
-        await API.createParcelas(STATE.empresa.id, saved.id, total, osData.n_parcelas, today());
-      if (!['orcamento','fiado','parcelado'].includes(osData.forma_pagamento) && total>0)
-        await API.addCaixaEntry(STATE.empresa.id, { tipo:'entrada', descricao:`OS #${saved.numero} - ${item}`, valor:total, forma:osData.forma_pagamento, ordem_id:saved.id });
-    }
-    UI.toast('✅ OS salva!', 'success');
-    APP.os = await API.getOS(STATE.empresa.id);
-    App._badges();
-    goPage('os');
-  } catch(e) {
-    UI.toast('❌ Erro: '+e.message, 'error');
-    if(btn) { btn.disabled=false; btn.innerHTML='<i data-lucide="save" style="width:14px;height:14px"></i> Salvar'; if(window.lucide) lucide.createIcons(); }
-  }
-}
-
-function openWhatsApp(tel,nome,numero,status) {
-  const seg = _seg(); const lang = _lang();
-  const msg = `Olá ${nome}! Sua ${seg.labels[lang]?.os_single||'OS'} #${numero} está: *${status}*. Qualquer dúvida estamos à disposição! 😊`;
-  window.open(API.buildWhatsAppLink(tel, msg), '_blank');
-}
-
-function openNewClientInOS() {
-  const nome = prompt('Nome do novo cliente:');
-  if (!nome) return;
-  API.createCliente(STATE.empresa.id, { nome }).then(c => {
-    APP.clientes.push(c);
-    const sel = document.getElementById('os-f-cliente_id');
-    if (sel) { const opt=document.createElement('option'); opt.value=c.id; opt.textContent=c.nome; opt.selected=true; sel.appendChild(opt); }
-    UI.toast('✅ Cliente criado!', 'success');
-  }).catch(e => UI.toast('❌ '+e.message, 'error'));
-}
-
-function openGenerateDocs() { UI.toast('PDF em breve!', 'info'); }
-function openOSBatch()      { UI.toast('Em lote em breve!', 'info'); }
-function openScanner(id)    { UI.toast('Scanner em breve!', 'info'); }
-
-// ── Clientes ───────────────────────────────────────────────
-function renderClients() {
-  const wrap = document.getElementById('clients-list');
-  if (!wrap) return;
-  const q = (document.getElementById('client-search')?.value||'').toLowerCase();
-  let lista = [...APP.clientes];
-  if (q) lista=lista.filter(c=>(c.nome||'').toLowerCase().includes(q)||(c.telefone||'').includes(q));
-  const count = document.getElementById('clients-count');
-  if(count) count.textContent=lista.length+' cadastrado'+(lista.length!==1?'s':'');
-  if (!lista.length) {
-    wrap.innerHTML=`<div class="empty-state"><div class="empty-icon"><i data-lucide="users" style="width:36px;height:36px"></i></div><div class="empty-title">Nenhum cliente</div><button class="btn btn-primary mt-3" onclick="openNewClient()"><i data-lucide="user-plus" style="width:14px;height:14px"></i> Novo Cliente</button></div>`;
-    if(window.lucide) lucide.createIcons();
-    return;
-  }
-  wrap.innerHTML=`<div style="display:grid;gap:8px">${lista.map(c=>`<div class="card card-sm" style="cursor:pointer" onclick="openViewClient('${c.id}')"><div style="display:flex;align-items:center;gap:12px"><div style="width:42px;height:42px;border-radius:50%;background:${avatarColor(c.nome)};display:flex;align-items:center;justify-content:center;font-size:.84rem;font-weight:700;color:#fff;flex-shrink:0">${initials(c.nome)}</div><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:.9rem">${c.nome}</div><div style="font-size:.78rem;color:var(--text-3)">${c.telefone||'Sem telefone'}</div></div>${c.total_gasto?`<div style="font-size:.82rem;font-weight:700;color:var(--green)">${fmt(c.total_gasto)}</div>`:''}</div></div>`).join('')}</div>`;
-}
-
-function filterClients()   { renderClients(); }
-function filterClientLevel() { renderClients(); }
-function sortClients()     { renderClients(); }
-
-function openNewClient() {
-  window._clientId = '';
-  const title = document.getElementById('client-form-title');
-  if(title) title.textContent = 'Novo Cliente';
-  ['cli-nome','cli-tel','cli-cpf','cli-email','cli-end','cli-obs'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
-  const aniv = document.getElementById('cli-aniv'); if(aniv) aniv.value='';
-  const nivel = document.getElementById('cli-nivel'); if(nivel) nivel.value='normal';
-  goPage('client-form');
-}
-
-async function openViewClient(id) {
-  const c = APP.clientes.find(x=>x.id===id);
-  if (!c) return;
-  window._currentClientId = id;
-  const nameEl = document.getElementById('client-view-name');
-  if(nameEl) nameEl.textContent = c.nome;
-  const body = document.getElementById('client-view-body');
-  if (!body) return;
-  try {
-    const hist = await API.getHistoricoCliente(id);
-    body.innerHTML=`
-      <div class="card" style="margin-bottom:12px">
-        <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
-          <div style="width:56px;height:56px;border-radius:50%;background:${avatarColor(c.nome)};display:flex;align-items:center;justify-content:center;font-size:1.1rem;font-weight:700;color:#fff">${initials(c.nome)}</div>
-          <div><div style="font-size:1rem;font-weight:700">${c.nome}</div><div style="font-size:.82rem;color:var(--text-3)">${c.telefone||''}</div></div>
+    // OS recentes
+    const box=document.getElementById('dash-os-list');if(!box)return;
+    const recent=APP.os.slice(0,8);
+    if(!recent.length){box.innerHTML='<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">Nenhuma OS ainda</div><button class="btn btn-primary mt-3" onclick="novaOS()">+ Nova OS</button></div>';return;}
+    box.innerHTML=recent.map(o=>`
+      <div class="os-item s-${_normSt(o.status)}" onclick="verOS('${o.id}')">
+        <div class="osi-top">
+          <div class="osi-num">OS #${o.numero||'?'}</div>
+          <span class="sbadge sb-${_normSt(o.status)}">${statusLabel(o.status)}</span>
         </div>
-        ${c.email?`<div style="font-size:.84rem;color:var(--text-2);margin-bottom:6px">✉ ${c.email}</div>`:''}
-        ${c.endereco?`<div style="font-size:.84rem;color:var(--text-2);margin-bottom:6px">📍 ${c.endereco}</div>`:''}
-        ${c.aniversario?`<div style="font-size:.84rem;color:var(--text-2);margin-bottom:12px">🎂 ${fmtDate(c.aniversario)}</div>`:''}
-        ${c.telefone?`<a href="https://wa.me/55${c.telefone.replace(/\D/g,'')}" target="_blank" class="btn btn-secondary w-full" style="margin-top:8px"><i data-lucide="message-circle" style="width:14px;height:14px"></i> WhatsApp</a>`:''}
+        <div class="osi-name">${_e(o.clientes?.nome||o.cliente_nome||'–')}</div>
+        <div class="osi-desc">${_e(o.equipamento||o.item||'')}${o.defeito?' · '+_e(o.defeito.slice(0,35)):''}</div>
+        <div class="osi-meta">
+          <span class="pay-pill pp-${o.forma_pagamento||''}">${payLabel(o.forma_pagamento)}</span>
+          <span style="font-family:var(--mono);font-size:11px;color:var(--text-3)">${fmtDate(o.criado_em)}</span>
+          <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--green);margin-left:auto">${fmt(o.valor_total)}</span>
+        </div>
+      </div>`).join('');
+    // Agenda hoje
+    const agb=document.getElementById('dash-agenda');
+    if(agb&&d.agenda_hoje.length){
+      agb.innerHTML=d.agenda_hoje.map(e=>`
+        <div class="agenda-item">
+          <div class="agenda-dot" style="background:${e.cor||'var(--blue)'}"></div>
+          <div class="agenda-info">
+            <div class="agenda-title">${_e(e.titulo)}</div>
+            <div class="agenda-time">${e.hora||'Dia todo'}${e.clientes?.nome?' · '+_e(e.clientes.nome):''}</div>
+          </div>
+        </div>`).join('');
+    } else if(agb) {
+      agb.innerHTML='<p style="font-size:.8rem;color:var(--text-3)">Sem compromissos hoje</p>';
+    }
+  } catch(e){ console.error('renderDash:',e); }
+}
+
+function _normSt(s){return{concluido:'concluido',retirada:'concluido',aguardando:'aguardando',andamento:'andamento',cancelado:'cancelado',fiado:'fiado'}[s]||s||'aguardando';}
+function _sbStBack(s){return{paga:'concluido',aberta:'aguardando',fiado:'fiado',cancelada:'cancelado',parcial:'andamento'}[s]||'aguardando';}
+
+// ════════════════════════════════════════════════════════════
+// ORDENS DE SERVIÇO — lista estilo V_TEST
+// ════════════════════════════════════════════════════════════
+let _osFilter='all', _newItens=[], _newFotos=[], _curPay='', _sigDraw=false, _sigLX=0, _sigLY=0;
+
+function renderOS() {
+  const box=document.getElementById('os-list');if(!box)return;
+  const q=gv('os-search','').toLowerCase();
+  let list=[...APP.os];
+  if(_osFilter!=='all') list=list.filter(o=>o.status===_osFilter);
+  if(q) list=list.filter(o=>(o.clientes?.nome||o.cliente_nome||'').toLowerCase().includes(q)||String(o.numero||'').includes(q)||(o.equipamento||o.item||'').toLowerCase().includes(q));
+  const cnt=document.getElementById('os-count');if(cnt)cnt.textContent=list.length+' registro'+(list.length!==1?'s':'');
+  if(!list.length){box.innerHTML='<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">'+(APP.os.length?'Nenhuma OS neste filtro':'Nenhuma OS ainda')+'</div>'+(APP.os.length?'':`<button class="btn btn-primary mt-3" onclick="novaOS()">+ Nova OS</button>`)+'</div>';return;}
+  box.innerHTML=list.map(o=>{
+    const st=_normSt(o.status);
+    return`<div class="os-item s-${st}" onclick="verOS('${o.id}')">
+      <div class="osi-top">
+        <div class="osi-num">OS #${o.numero||'?'}</div>
+        <span class="sbadge sb-${st}">${statusLabel(o.status)}</span>
       </div>
-      <div class="card">
-        <div style="font-size:.78rem;font-weight:600;color:var(--text-3);margin-bottom:12px">HISTÓRICO (${hist.length})</div>
-        ${hist.length?hist.map(o=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="openViewOS('${o.id}')"><div><span style="color:var(--text-3);font-size:.82rem">#${o.numero}</span> <span style="font-size:.84rem">${o.item}</span></div><span style="font-weight:600;color:var(--green);font-size:.84rem">${fmt(o.valor_total||0)}</span></div>`).join(''):'<div style="font-size:.82rem;color:var(--text-3)">Sem histórico</div>'}
-      </div>`;
-    goPage('client-view');
-    if(window.lucide) setTimeout(()=>lucide.createIcons(),60);
-  } catch(e) { UI.toast('Erro: '+e.message,'error'); }
-}
-
-function editCurrentClient() {
-  const c = APP.clientes.find(x=>x.id===window._currentClientId);
-  if (!c) return;
-  window._clientId = c.id;
-  const title = document.getElementById('client-form-title');
-  if(title) title.textContent='Editar Cliente';
-  const set=(id,v)=>{ const el=document.getElementById(id); if(el) el.value=v||''; };
-  set('cli-nome',c.nome); set('cli-tel',c.telefone); set('cli-cpf',c.cpf);
-  set('cli-email',c.email); set('cli-aniv',c.aniversario); set('cli-end',c.endereco); set('cli-obs',c.observacoes);
-  const nivel=document.getElementById('cli-nivel'); if(nivel) nivel.value=c.nivel||'normal';
-  goPage('client-form');
-}
-
-async function saveClient(id) {
-  id = id || window._clientId || '';
-  const nome = _clean(document.getElementById('cli-nome')?.value||'',100);
-  if (!nome) { UI.toast('⚠ Nome obrigatório','warning'); return; }
-  const emailVal = _clean(document.getElementById('cli-email')?.value||'',100);
-  const NIVEL_V = ['normal','vip','corporativo'];
-  const nivelEl = document.getElementById('cli-nivel');
-  const dados = {
-    nome,
-    telefone:    _clean(document.getElementById('cli-tel')?.value||'',20)||null,
-    cpf:         _clean(document.getElementById('cli-cpf')?.value||'',20)||null,
-    email:       emailVal||null,
-    aniversario: document.getElementById('cli-aniv')?.value||null,
-    nivel:       NIVEL_V.includes(nivelEl?.value)?nivelEl.value:'normal',
-    endereco:    _clean(document.getElementById('cli-end')?.value||'',200)||null,
-    observacoes: _clean(document.getElementById('cli-obs')?.value||'',500)||null,
-  };
-  try {
-    if (id) { const up=await API.updateCliente(id,dados); const idx=APP.clientes.findIndex(c=>c.id===id); if(idx>=0) APP.clientes[idx]=up; }
-    else { APP.clientes.push(await API.createCliente(STATE.empresa.id,dados)); }
-    UI.toast('✅ Cliente salvo!','success');
-    goPage('clients');
-    renderClients();
-  } catch(e) { UI.toast('❌ '+e.message,'error'); }
-}
-
-// ── Estoque ────────────────────────────────────────────────
-function renderStock() {
-  const tbody = document.getElementById('stock-tbody');
-  if (!tbody) return;
-  const q=(document.getElementById('stock-search')?.value||'').toLowerCase();
-  let lista=[...APP.produtos];
-  if(q) lista=lista.filter(p=>(p.nome||'').toLowerCase().includes(q)||(p.codigo||'').toLowerCase().includes(q));
-  const count=document.getElementById('stock-count');
-  if(count) count.textContent=lista.length+' produto'+(lista.length!==1?'s':'');
-  if(!lista.length) { tbody.innerHTML=`<tr><td colspan="7" style="text-align:center;padding:48px;color:var(--text-3)">Nenhum produto</td></tr>`; return; }
-  tbody.innerHTML=lista.map(p=>{
-    const margin=p.preco_custo>0?((p.preco_venda-p.preco_custo)/p.preco_venda*100).toFixed(0):0;
-    const baixo=p.estoque_minimo>0&&(p.quantidade||0)<=p.estoque_minimo;
-    return `<tr ${baixo?'style="background:rgba(251,146,60,.05)"':''}><td><div style="font-weight:600;font-size:.86rem">${p.nome}</div>${p.codigo?`<div style="font-size:.72rem;color:var(--text-3)">${p.codigo}</div>`:''}${baixo?'<span class="badge badge-warning" style="font-size:.68rem">⚠ Baixo</span>':''}</td><td style="font-family:monospace;font-weight:600;color:${baixo?'var(--orange)':'var(--text-1)'}">${p.quantidade||0}</td><td style="font-size:.82rem;color:var(--text-2)">${fmt(p.preco_custo||0)}</td><td style="font-weight:600">${fmt(p.preco_venda||0)}</td><td><span class="badge ${margin>=50?'badge-success':margin>=30?'badge-warning':''}" style="font-size:.72rem">${margin}%</span></td><td style="font-size:.78rem;color:var(--text-3)">${p.fornecedor||'–'}</td><td><button class="btn btn-ghost btn-icon" onclick="openEditProduct('${p.id}')"><i data-lucide="pencil" style="width:13px;height:13px"></i></button><button class="btn btn-ghost btn-icon" onclick="confirmDeleteProduct('${p.id}','${(p.nome||'').replace(/'/g,"\\'")}')"><i data-lucide="trash-2" style="width:13px;height:13px"></i></button></td></tr>`;
+      <div class="osi-name">${_e(o.clientes?.nome||o.cliente_nome||'–')}</div>
+      <div class="osi-desc">${_e(o.equipamento||o.item||'')}${o.defeito?' · '+_e(o.defeito.slice(0,40)):''}</div>
+      <div class="osi-meta">
+        <span class="pay-pill pp-${o.forma_pagamento||''}">${payLabel(o.forma_pagamento)}</span>
+        <span style="font-family:var(--mono);font-size:11px;color:var(--text-3)">${fmtDate(o.criado_em)}</span>
+        <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--green);margin-left:auto">${fmt(o.valor_total)}</span>
+      </div>
+    </div>`;
   }).join('');
-  if(window.lucide) lucide.createIcons();
 }
 
-function filterStock()    { renderStock(); }
-function filterLowStock() { renderStock(); }
-function openSuppliers()  { UI.toast('Fornecedores em breve!','info'); }
-
-function openNewProduct() {
-  window._productId = '';
-  const title=document.getElementById('product-form-title'); if(title) title.textContent='Novo Produto';
-  ['prd-nome','prd-cod','prd-barcode','prd-cat','prd-forn'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
-  ['prd-custo','prd-venda'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
-  const qtd=document.getElementById('prd-qtd'); if(qtd) qtd.value='0';
-  const min=document.getElementById('prd-min'); if(min) min.value='';
-  const mg=document.getElementById('prd-margin-display'); if(mg) mg.textContent='Margem: –';
-  goPage('product-form');
+function setOsFilter(f,el) {
+  _osFilter=f;
+  document.querySelectorAll('.filter-chips .chip').forEach(c=>c.classList.remove('on'));
+  el.classList.add('on');
+  renderOS();
 }
 
-function openEditProduct(id) {
-  const p=APP.produtos.find(x=>x.id===id);
-  if(!p) return;
-  window._productId=p.id;
-  const title=document.getElementById('product-form-title'); if(title) title.textContent='Editar Produto';
-  const set=(el,v)=>{ const e=document.getElementById(el); if(e) e.value=v||''; };
-  set('prd-nome',p.nome); set('prd-cod',p.codigo); set('prd-barcode',p.codigo_barras);
-  set('prd-custo',p.preco_custo); set('prd-venda',p.preco_venda);
-  set('prd-qtd',p.quantidade||0); set('prd-min',p.estoque_minimo);
-  set('prd-cat',p.categoria); set('prd-forn',p.fornecedor);
-  goPage('product-form');
-  setTimeout(calcMargemProd, 100);
+// ── Nova OS — formulário V_TEST minimalista ────────────────
+function novaOS() {
+  _newItens=[]; _newFotos=[]; _curPay='';
+  const now=new Date();
+  const dtl=`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  const cliOpts=APP.clientes.map(c=>`<option value="${c.id}">${_e(c.nome)}</option>`).join('');
+  openModal(`
+  <h3 style="margin-bottom:14px;font-size:18px;font-weight:700">➕ Nova OS</h3>
+  <div class="card"><div class="card-title"><div class="ct-bar"></div>Cliente</div>
+    <label>Selecionar cadastrado</label>
+    <select id="m-cli-id" onchange="preencherCliente(this.value)" style="margin-bottom:8px"><option value="">– Sem cadastro –</option>${cliOpts}</select>
+    <label class="req">Nome</label><input id="m-cli-nome" type="text" placeholder="Nome completo">
+    <div class="frow">
+      <div><label>Telefone</label><input id="m-cli-tel" type="tel" placeholder="(00) 00000-0000"></div>
+      <div><label>CPF/Doc</label><input id="m-cli-doc" type="text" placeholder="000.000.000-00"></div>
+    </div>
+  </div>
+  <div class="card"><div class="card-title"><div class="ct-bar"></div>Equipamento</div>
+    <label class="req">Equipamento / Produto</label>
+    <input id="m-equip" type="text" placeholder="Ex: iPhone 13, Notebook Dell...">
+    <label>Defeito Relatado</label><textarea id="m-defeito" rows="2" placeholder="Descreva o defeito..."></textarea>
+    <label>Diagnóstico Técnico</label><textarea id="m-diag" rows="2" placeholder="Diagnóstico após análise..."></textarea>
+  </div>
+  <div class="card"><div class="card-title"><div class="ct-bar"></div>Itens / Peças</div>
+    <div class="it-head"><span>Descrição</span><span>Qtd</span><span>R$</span><span></span></div>
+    <div id="m-itens-rows"><p style="font-size:12px;color:var(--text-3);padding:8px 4px;font-family:var(--mono)">Nenhum item</p></div>
+    <div class="add-item-row" style="margin-top:8px">
+      <input id="m-i-desc" type="text" placeholder="Peça ou serviço" style="margin-bottom:0">
+      <input id="m-i-qty"  type="number" value="1" min="1" style="margin-bottom:0">
+      <input id="m-i-preco" type="number" placeholder="R$" step="0.01" style="margin-bottom:0">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn btn-outline btn-sm" onclick="addOSItem()">+ Adicionar</button>
+      <button class="btn btn-ghost btn-sm" onclick="addDoEstoque()">📦 Estoque</button>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 4px 0;border-top:1px solid var(--border);margin-top:8px">
+      <div>
+        <label style="margin-bottom:4px">Mão de Obra R$</label>
+        <input id="m-mao-obra" type="number" value="0" step="0.01" style="width:120px;margin-bottom:0" oninput="recalcTotalOS()">
+      </div>
+      <div style="text-align:right">
+        <div class="it-total-label">TOTAL</div>
+        <div class="it-total-val" id="m-total">R$ 0,00</div>
+      </div>
+    </div>
+  </div>
+  <div class="card"><div class="card-title"><div class="ct-bar"></div>📷 Fotos</div>
+    <div class="photo-zone" onclick="document.getElementById('fileInOS').click()">
+      <div style="font-size:28px;opacity:.4">📷</div>
+      <div style="font-size:12px;color:var(--text-3);font-family:var(--mono);margin-top:4px">Toque para adicionar fotos</div>
+    </div>
+    <div class="photo-grid" id="m-photo-grid"></div>
+  </div>
+  <div class="card"><div class="card-title"><div class="ct-bar"></div>Pagamento</div>
+    <div class="pay-chips" id="payChips">
+      <div class="pchip" onclick="setPay('dinheiro',this)">💵 Dinheiro</div>
+      <div class="pchip" onclick="setPay('pix',this)">📱 PIX</div>
+      <div class="pchip" onclick="setPay('credito',this)">💳 Crédito</div>
+      <div class="pchip" onclick="setPay('debito',this)">💳 Débito</div>
+      <div class="pchip" onclick="setPay('fiado',this)">📝 Fiado</div>
+      <div class="pchip" onclick="setPay('carne',this)">📜 Carnê</div>
+    </div>
+    <div id="carneConfig" style="display:none">
+      <div style="background:var(--purple-dim);border:1px solid rgba(167,139,250,.2);border-radius:9px;padding:12px;margin-bottom:10px">
+        <div class="frow3">
+          <div><label>Parcelas</label><input type="number" id="carneN" value="3" min="1" max="24" style="margin-bottom:0" oninput="calcCarne()"></div>
+          <div><label>Dia venc.</label><input type="number" id="carneDia" value="10" min="1" max="28" style="margin-bottom:0" oninput="calcCarne()"></div>
+          <div><label>Entrada R$</label><input type="number" id="carneEnt" value="0" step="0.01" style="margin-bottom:0" oninput="calcCarne()"></div>
+        </div>
+        <div id="carnePreview" style="font-family:var(--mono);font-size:11px;color:var(--text-2);margin-top:8px;line-height:1.8"></div>
+      </div>
+    </div>
+    <div id="fiadoWarn" style="display:none;background:var(--red-dim);border:1px solid rgba(248,113,113,.2);border-radius:8px;padding:10px;font-size:12px;color:var(--red);margin-bottom:10px">⚠️ Fiado: será registrado como conta a receber</div>
+    <div class="frow">
+      <div><label>Valor pago R$</label><input type="number" id="m-pago" placeholder="0,00" step="0.01" oninput="calcTrocoOS()"></div>
+      <div><label>Troco</label><input type="number" id="m-troco" readonly style="color:var(--green);margin-bottom:0"></div>
+    </div>
+    <label>Status</label>
+    <select id="m-status">
+      <option value="paga">Paga / Concluída</option>
+      <option value="aberta">Em Aberto</option>
+      <option value="fiado">Fiado</option>
+      <option value="parcial">Parcial / Carnê</option>
+      <option value="cancelada">Cancelada</option>
+    </select>
+    <div class="frow">
+      <div><label>Tipo</label><select id="m-tipo"><option value="servico">Serviço</option><option value="venda">Venda</option><option value="orcamento">Orçamento</option></select></div>
+      <div><label>Data/Hora</label><input type="datetime-local" id="m-data" value="${dtl}"></div>
+    </div>
+  </div>
+  <div class="card"><div class="card-title"><div class="ct-bar"></div>Observações</div>
+    <textarea id="m-obs" rows="3" placeholder="Anotações gerais, termos, etc."></textarea>
+  </div>
+  <div class="card"><div class="card-title"><div class="ct-bar"></div>✍️ Assinatura Digital</div>
+    <canvas id="sigCanvas"></canvas>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text-3);text-align:center;margin:6px 0 10px">Assine com o dedo para confirmar o serviço</div>
+    <button class="btn btn-ghost btn-sm" onclick="clearSig()">🗑️ Limpar assinatura</button>
+  </div>
+  <button class="btn btn-green btn-lg w-full" style="margin-bottom:32px" onclick="salvarOS()">✅ EMITIR ORDEM DE SERVIÇO</button>`);
+  setTimeout(initSig,100);
 }
 
-function calcMargemProd() {
-  const custo=parseFloat(document.getElementById('prd-custo')?.value)||0;
-  const venda=parseFloat(document.getElementById('prd-venda')?.value)||0;
-  const el=document.getElementById('prd-margin-display');
-  if(!el) return;
-  if(custo>0&&venda>0) { const m=((venda-custo)/venda*100).toFixed(1); el.textContent=`Margem: ${m}% · Lucro: ${fmt(venda-custo)}/un`; el.style.color=m>=40?'var(--green)':m>=20?'var(--yellow)':'var(--red)'; }
-  else { el.textContent='Margem: –'; el.style.color=''; }
+function preencherCliente(id) {
+  const c=APP.clientes.find(x=>x.id===id);if(!c)return;
+  const nome=document.getElementById('m-cli-nome');if(nome)nome.value=c.nome;
+  const tel=document.getElementById('m-cli-tel');if(tel)tel.value=c.telefone||'';
+  const doc=document.getElementById('m-cli-doc');if(doc)doc.value=c.cpf||'';
 }
 
-async function saveProduct(id) {
-  id = id || window._productId || '';
-  const nome = _clean(document.getElementById('prd-nome')?.value||'',100);
-  if(!nome) { UI.toast('⚠ Nome obrigatório','warning'); return; }
-  const dados={
-    nome,
-    codigo:        _clean(document.getElementById('prd-cod')?.value||'',50)||null,
-    codigo_barras: _clean(document.getElementById('prd-barcode')?.value||'',50)||null,
-    preco_custo:   _cleanNum(document.getElementById('prd-custo')?.value,0,9999999),
-    preco_venda:   _cleanNum(document.getElementById('prd-venda')?.value,0,9999999),
-    quantidade:    Math.max(0,parseInt(document.getElementById('prd-qtd')?.value)||0),
-    estoque_minimo:Math.max(0,parseInt(document.getElementById('prd-min')?.value)||0),
-    categoria:     _clean(document.getElementById('prd-cat')?.value||'',50)||null,
-    fornecedor:    _clean(document.getElementById('prd-forn')?.value||'',100)||null,
+// ── Itens ─────────────────────────────────────────────────
+function addOSItem() {
+  const desc=gv('m-i-desc','').trim();
+  const qty=gn('m-i-qty',1)||1;
+  const preco=gn('m-i-preco',0);
+  if(!desc){UI.toast('Descreva o item','warning');return;}
+  _newItens.push({desc,qty,preco});
+  document.getElementById('m-i-desc').value='';
+  document.getElementById('m-i-qty').value='1';
+  document.getElementById('m-i-preco').value='';
+  renderOSItens();
+}
+function renderOSItens() {
+  const box=document.getElementById('m-itens-rows');if(!box)return;
+  if(!_newItens.length){box.innerHTML='<p style="font-size:12px;color:var(--text-3);padding:8px 4px;font-family:var(--mono)">Nenhum item</p>';recalcTotalOS();return;}
+  box.innerHTML=_newItens.map((it,i)=>`
+    <div class="it-row">
+      <span style="font-size:13px">${_e(it.desc)}</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--text-2)">x${it.qty}</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--green)">${fmt(it.qty*it.preco)}</span>
+      <button class="it-del" onclick="_newItens.splice(${i},1);renderOSItens()">✕</button>
+    </div>`).join('');
+  recalcTotalOS();
+}
+function recalcTotalOS() {
+  const t=_newItens.reduce((a,i)=>a+i.qty*i.preco,0)+gn('m-mao-obra',0);
+  const el=document.getElementById('m-total');if(el)el.textContent=fmt(t);
+}
+function addDoEstoque() {
+  const sel=APP.produtos.filter(p=>p.quantidade>0);
+  if(!sel.length){UI.toast('Estoque vazio','warning');return;}
+  openModal('<h3 style="margin-bottom:14px;font-size:18px;font-weight:700">📦 Adicionar do Estoque</h3>'
+    +sel.map(p=>`<div class="prod-item" onclick="_addItemEst('${p.id}')">
+      <div style="display:flex;justify-content:space-between"><span style="font-weight:600">${_e(p.nome)}</span><span style="color:var(--green);font-family:var(--mono)">${fmt(p.preco_venda)}</span></div>
+      <div style="font-size:11px;color:var(--text-2);font-family:var(--mono)">Estoque: ${p.quantidade} | Custo: ${fmt(p.preco_custo)}</div>
+    </div>`).join('')
+    +'<button class="btn btn-ghost btn-sm" onclick="novaOS()" style="margin-top:8px">← Voltar</button>');
+}
+function _addItemEst(id) {
+  const p=APP.produtos.find(x=>x.id===id);if(!p)return;
+  _newItens.push({desc:p.nome,qty:1,preco:p.preco_venda||0,produto_id:id,preco_custo:p.preco_custo||0});
+  UI.toast('Adicionado: '+p.nome,'success');
+  novaOS(); // reabrir form com estado atual
+  setTimeout(renderOSItens,60);
+}
+
+// ── Pagamento (idêntico V_TEST) ───────────────────────────
+function setPay(p,el) {
+  _curPay=p;
+  document.querySelectorAll('.pchip').forEach(c=>c.className='pchip');
+  el.classList.add('p-'+p);
+  document.getElementById('fiadoWarn').style.display=p==='fiado'?'block':'none';
+  document.getElementById('carneConfig').style.display=p==='carne'?'block':'none';
+  if(p==='carne')calcCarne();
+}
+function calcTrocoOS() {
+  const paid=gn('m-pago',0);
+  const total=_newItens.reduce((a,i)=>a+i.qty*i.preco,0)+gn('m-mao-obra',0);
+  const tr=document.getElementById('m-troco');if(tr)tr.value=Math.max(0,paid-total).toFixed(2);
+}
+function calcCarne() {
+  const total=_newItens.reduce((a,i)=>a+i.qty*i.preco,0)+gn('m-mao-obra',0);
+  const n=gi('carneN',3)||3,dia=gi('carneDia',10)||10,ent=gn('carneEnt',0);
+  const parc=(total-ent)/n;const hoje=new Date();let txt='';
+  for(let i=1;i<=n;i++){const cd=new Date(hoje.getFullYear(),hoje.getMonth()+i,dia);txt+=`Parc ${i}/${n}: ${fmt(parc)} — ${fmtDate(cd.toISOString())}\n`;}
+  const prev=document.getElementById('carnePreview');if(prev)prev.innerHTML=`<pre style="margin:0;white-space:pre-wrap">${txt}</pre>`;
+}
+
+// ── Assinatura (idêntico V_TEST) ──────────────────────────
+function initSig() {
+  const cv=document.getElementById('sigCanvas');if(!cv)return;
+  const pr=window.devicePixelRatio||1;
+  cv.width=cv.offsetWidth*pr; cv.height=cv.offsetHeight*pr;
+  const ctx=cv.getContext('2d');
+  ctx.scale(pr,pr); ctx.strokeStyle='#38BDF8'; ctx.lineWidth=2; ctx.lineCap='round'; ctx.lineJoin='round';
+  function getP(e){const r=cv.getBoundingClientRect();if(e.touches)return{x:e.touches[0].clientX-r.left,y:e.touches[0].clientY-r.top};return{x:e.clientX-r.left,y:e.clientY-r.top};}
+  cv.addEventListener('mousedown',  e=>{_sigDraw=true;const p=getP(e);_sigLX=p.x;_sigLY=p.y;});
+  cv.addEventListener('mousemove',  e=>{if(!_sigDraw)return;const p=getP(e);ctx.beginPath();ctx.moveTo(_sigLX,_sigLY);ctx.lineTo(p.x,p.y);ctx.stroke();_sigLX=p.x;_sigLY=p.y;});
+  cv.addEventListener('mouseup',    ()=>_sigDraw=false);
+  cv.addEventListener('touchstart', e=>{e.preventDefault();_sigDraw=true;const p=getP(e);_sigLX=p.x;_sigLY=p.y;},{passive:false});
+  cv.addEventListener('touchmove',  e=>{e.preventDefault();if(!_sigDraw)return;const p=getP(e);ctx.beginPath();ctx.moveTo(_sigLX,_sigLY);ctx.lineTo(p.x,p.y);ctx.stroke();_sigLX=p.x;_sigLY=p.y;},{passive:false});
+  cv.addEventListener('touchend',   ()=>_sigDraw=false);
+}
+function clearSig(){const cv=document.getElementById('sigCanvas');if(cv)cv.getContext('2d').clearRect(0,0,cv.width,cv.height);}
+
+// ── Fotos ─────────────────────────────────────────────────
+function handlePhotos(e){Array.from(e.target.files).forEach(f=>{const r=new FileReader();r.onload=ev=>{_newFotos.push(ev.target.result);renderPhotoGrid();};r.readAsDataURL(f);});e.target.value='';}
+function renderPhotoGrid(){const g=document.getElementById('m-photo-grid');if(!g)return;g.innerHTML=_newFotos.map((f,i)=>`<div class="photo-thumb"><img src="${f}"><button class="rx" onclick="_newFotos.splice(${i},1);renderPhotoGrid()">✕</button></div>`).join('');}
+
+// ── Salvar OS ─────────────────────────────────────────────
+async function salvarOS() {
+  const nome=_c(gv('m-cli-nome','').trim(),100);
+  if(!nome){UI.toast('Nome do cliente é obrigatório','warning');return;}
+  if(!_newItens.length&&!gn('m-mao-obra',0)){UI.toast('Adicione ao menos 1 item ou mão de obra','warning');return;}
+  if(!_curPay){UI.toast('Selecione a forma de pagamento','warning');return;}
+  const totalItens=_newItens.reduce((a,i)=>a+i.qty*i.preco,0);
+  const maoObra=gn('m-mao-obra',0);
+  const total=totalItens+maoObra;
+  const status=gv('m-status','paga');
+  const sig=document.getElementById('sigCanvas');
+  const sigData=sig&&!isEmptySig(sig)?sig.toDataURL('image/png'):null;
+  // Carnê
+  let carneData=null;
+  if(_curPay==='carne'){
+    const n=gi('carneN',3)||3,dia=gi('carneDia',10)||10,ent=gn('carneEnt',0);
+    const parc=(total-ent)/n;const hoje=new Date();
+    carneData={total,entrada:ent,parcelas:n,valorParcela:parc,vencDia:dia,itens:[]};
+    for(let ci=1;ci<=n;ci++){const cd=new Date(hoje.getFullYear(),hoje.getMonth()+ci,dia);carneData.itens.push({num:ci,valor:parc,venc:cd.toISOString().slice(0,10),status:'pendente'});}
+  }
+  // Buscar/criar cliente
+  let clienteId=gv('m-cli-id','')||null;
+  const tel=_c(gv('m-cli-tel',''),20);
+  if(!clienteId&&(nome||tel)){
+    try{const nc=await API.saveCliente(STATE.user.id,{nome,telefone:tel,cpf:_c(gv('m-cli-doc',''),20)});clienteId=nc.id;APP.clientes.push(nc);}catch(e){console.error('criar cli:',e);}
+  }
+  const itensJSON=JSON.stringify(_newItens.map(i=>({descricao:i.desc,quantidade:i.qty,valor_unit:i.preco,produto_id:i.produto_id||null,preco_custo:i.preco_custo||0})));
+  const payload={
+    cliente_id:clienteId,cliente_nome:nome,
+    equipamento:_c(gv('m-equip',''),200),item:_c(gv('m-equip',''),200),
+    defeito:_c(gv('m-defeito',''),500),diagnostico:_c(gv('m-diag',''),500),
+    observacoes:_c(gv('m-obs',''),500),
+    itens:itensJSON,valor_pecas:totalItens,valor_mao_obra:maoObra,valor_total:total,
+    valor_pago:gn('m-pago',0),forma_pagamento:_curPay,
+    status:_sbStBack(status),tipo:gv('m-tipo','servico'),
+    assinatura:sigData,fotos:_newFotos.length?JSON.stringify(_newFotos):null,
+    carne_data:carneData?JSON.stringify(carneData):null,
+    hash_doc:genHash(nome+total+Date.now()),
   };
-  try {
-    if(id) { const up=await API.updateProduto(id,dados); const idx=APP.produtos.findIndex(p=>p.id===id); if(idx>=0) APP.produtos[idx]=up; }
-    else APP.produtos.push(await API.createProduto(STATE.empresa.id,dados));
-    UI.toast('✅ Produto salvo!','success');
-    goPage('stock');
-    renderStock();
-  } catch(e) { UI.toast('❌ '+e.message,'error'); }
+  Object.keys(payload).forEach(k=>{if(payload[k]===''||payload[k]===null)delete payload[k];});
+  const btn=document.querySelector('#mbody .btn-green');
+  if(btn){btn.disabled=true;btn.textContent='Salvando...';}
+  try{
+    const saved=await API.createOS(STATE.user.id,payload);
+    // Baixar estoque
+    for(const it of _newItens){
+      if(it.produto_id){const p=APP.produtos.find(x=>x.id===it.produto_id);if(p&&(p.quantidade||0)>=it.qty){const nq=(p.quantidade||0)-it.qty;await API.updateEstoque(it.produto_id,nq);p.quantidade=nq;}}
+    }
+    // Caixa
+    const dia=today();
+    if(status==='paga')await API.addCaixa(STATE.user.id,{tipo:'entrada',descricao:`OS #${saved.numero} - ${nome}`,valor:total,forma:_curPay,ordem_id:saved.id,data:dia});
+    else if(status==='fiado')await API.addCaixa(STATE.user.id,{tipo:'entrada',descricao:`Fiado - OS #${saved.numero} - ${nome}`,valor:0,forma:'fiado',ordem_id:saved.id,data:dia});
+    else if(status==='parcial'&&carneData?.entrada>0)await API.addCaixa(STATE.user.id,{tipo:'entrada',descricao:`Entrada carnê - OS #${saved.numero} - ${nome}`,valor:carneData.entrada,forma:'carne',ordem_id:saved.id,data:dia});
+    // Criar parcelas no banco
+    if(carneData){
+      for(const p of carneData.itens){
+        await window.sb.from('parcelas').insert({dono_id:STATE.user.id,ordem_id:saved.id,numero:p.num,total:carneData.parcelas,valor:p.valor,vencimento:p.venc,pago:false}).catch(()=>{});
+      }
+    }
+    APP.os.unshift(saved);
+    UI.toast(`OS #${saved.numero} emitida! ✅`,'success');
+    closeModal();
+    setTimeout(()=>abrirComp(saved.id),400);
+  }catch(e){UI.toast('Erro: '+e.message,'error');if(btn){btn.disabled=false;btn.textContent='✅ EMITIR ORDEM DE SERVIÇO';}}
 }
 
-function confirmDeleteProduct(id,nome) {
-  UI.confirm(`Excluir "${nome}"?`, async()=>{
-    try { await API.deleteProduto(id); APP.produtos=APP.produtos.filter(p=>p.id!==id); renderStock(); UI.toast('🗑 Produto excluído','info'); }
-    catch(e) { UI.toast('❌ '+e.message,'error'); }
+// ── Ver OS (detalhe) ──────────────────────────────────────
+async function verOS(id) {
+  const os=APP.os.find(o=>o.id===id)||await API.getOSById(id).catch(()=>null);
+  if(!os){UI.toast('OS não encontrada','error');return;}
+  let itens=[];try{itens=JSON.parse(os.itens||'[]');}catch{}
+  let fotos=[];try{fotos=JSON.parse(os.fotos||'[]');}catch{}
+  let hist=[];try{hist=JSON.parse(os.historico||'[]');}catch{}
+  const nome=os.clientes?.nome||os.cliente_nome||'–';
+  const tel=os.clientes?.telefone||'';
+  const st=_normSt(os.status);
+  const itensH=itens.map(it=>`
+    <div class="it-row">
+      <span style="font-size:13px">${_e(it.descricao||it.desc||'')}</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--text-2)">x${it.quantidade||1}</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--green)">${fmt((it.quantidade||1)*(it.valor_unit||0))}</span>
+      <span></span>
+    </div>`).join('');
+  const statusBtns=['concluido','aguardando','andamento','cancelado','fiado'].map(s=>`
+    <div onclick="alterarStatusOS('${id}','${s}')" style="padding:7px 11px;border-radius:8px;font-size:11px;font-family:var(--mono);cursor:pointer;border:1.5px solid ${st===s?'var(--blue)':'var(--bg-4)'};color:${st===s?'var(--blue)':'var(--text-3)'};background:${st===s?'var(--blue-dim)':'transparent'}">${statusLabel(s)}</div>`).join('');
+  const fotosH=fotos.length?`<div class="card"><div class="card-title"><div class="ct-bar"></div>Fotos (${fotos.length})</div><div class="photo-grid">${fotos.map((f,i)=>`<div class="photo-thumb"><img src="${f}" onclick="verFoto('${id}',${i})"></div>`).join('')}</div></div>`:'';
+  const sigH=os.assinatura?`<div class="card"><div class="card-title"><div class="ct-bar"></div>Assinatura Digital</div><div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center"><img src="${os.assinatura}" style="max-width:100%;max-height:60px"><div style="font-family:var(--mono);font-size:9px;color:var(--text-3);margin-top:4px">${_e(nome)}</div></div></div>`:'';
+  const histH=hist.length?hist.map(h=>`<div class="hist-item"><div class="hist-dot"></div><div><div class="hist-time">${fDateFull(h.at||h.criado_em)}</div><div class="hist-txt">${_e(h.txt||h.texto||'')}</div></div></div>`).join(''):'<p style="font-size:.8rem;color:var(--text-3)">Sem histórico</p>';
+  openModal(`
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:2px">
+      <div><div style="font-family:var(--mono);font-size:10px;color:var(--text-3);letter-spacing:2px">ORDEM DE SERVIÇO</div><div class="d-os-num">#${os.numero||id.slice(-4)}</div></div>
+      <span class="sbadge sb-${st}" style="margin-top:8px">${statusLabel(os.status)}</span>
+    </div>
+    <div class="d-os-date">${fDateFull(os.criado_em)} <span class="pay-pill pp-${os.forma_pagamento||''}">${payLabel(os.forma_pagamento)}</span></div>
+    <div class="total-hl"><div><div style="font-family:var(--mono);font-size:10px;color:var(--text-3)">TOTAL</div></div><div class="th-val">${fmt(os.valor_total)}</div></div>
+    <div class="card"><div class="card-title"><div class="ct-bar"></div>Cliente</div>
+      <div class="ir"><span class="irl">Nome</span><span class="irv">${_e(nome)}</span></div>
+      ${tel?`<div class="ir"><span class="irl">Tel</span><span class="irv">${_e(tel)}</span></div>`:''}
+    </div>
+    ${os.equipamento||os.item?`<div class="card"><div class="card-title"><div class="ct-bar"></div>Equipamento</div>
+      <div class="ir"><span class="irl">Equip.</span><span class="irv">${_e(os.equipamento||os.item||'')}</span></div>
+      ${os.defeito?`<div class="ir"><span class="irl">Defeito</span><span class="irv">${_e(os.defeito)}</span></div>`:''}
+      ${os.diagnostico?`<div class="ir"><span class="irl">Diag.</span><span class="irv">${_e(os.diagnostico)}</span></div>`:''}
+    </div>`:''}
+    <div class="card"><div class="card-title"><div class="ct-bar"></div>Itens</div>
+      ${itensH}
+      ${os.valor_mao_obra>0?`<div class="it-row"><span>Mão de Obra</span><span></span><span style="font-family:var(--mono);font-size:11px;color:var(--green)">${fmt(os.valor_mao_obra)}</span><span></span></div>`:''}
+      <div class="it-total-row"><span class="it-total-label">TOTAL</span><span class="it-total-val">${fmt(os.valor_total)}</span></div>
+    </div>
+    ${os.observacoes?`<div class="card"><div class="card-title"><div class="ct-bar"></div>Observações</div><p style="font-size:14px;line-height:1.65">${_e(os.observacoes)}</p></div>`:''}
+    ${fotosH}${sigH}
+    <div class="card"><div class="card-title"><div class="ct-bar"></div>Alterar Status</div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px">${statusBtns}</div>
+    </div>
+    <div class="card"><div class="card-title"><div class="ct-bar"></div>Histórico / Notas</div>
+      ${histH}
+      <textarea id="nota-txt" placeholder="Adicionar nota..." rows="2" style="margin-top:10px;margin-bottom:8px"></textarea>
+      <button class="btn btn-ghost btn-sm" onclick="addNotaOS('${id}')">📝 Salvar nota</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <button class="btn btn-primary" style="flex:1" onclick="abrirComp('${id}');closeModal()">🧾 Comprovante</button>
+      <button class="btn btn-green"  style="flex:1" onclick="enviarWA('${id}')">💬 WhatsApp</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <button class="btn btn-ghost" style="flex:1" onclick="gerarPDF('${id}')">📄 PDF</button>
+      <button class="btn btn-danger btn-sm" style="flex:.4" onclick="excluirOS('${id}')">🗑️</button>
+    </div>`);
+}
+
+async function alterarStatusOS(id,novoStatus) {
+  try{
+    await API.updateOS(id,STATE.user.id,{status:novoStatus});
+    await API.addHistorico(id,`Status alterado para: ${statusLabel(novoStatus)}`);
+    const os=APP.os.find(o=>o.id===id);if(os)os.status=novoStatus;
+    UI.toast('Status atualizado!','success');
+    closeModal();renderOS();renderDash();
+  }catch(e){UI.toast('Erro: '+e.message,'error');}
+}
+async function addNotaOS(id) {
+  const txt=_c(gv('nota-txt','').trim(),500);
+  if(!txt){UI.toast('Digite uma nota','warning');return;}
+  try{await API.addHistorico(id,txt);UI.toast('Nota salva!','success');verOS(id);}
+  catch(e){UI.toast('Erro: '+e.message,'error');}
+}
+async function excluirOS(id) {
+  await UI.confirmSecure('Excluir esta OS? Isso também remove os lançamentos do caixa.', async()=>{
+    try{await API.deleteOS(id,STATE.user.id);APP.os=APP.os.filter(o=>o.id!==id);UI.toast('OS excluída!','success');closeModal();renderOS();renderDash();}
+    catch(e){UI.toast('Erro: '+e.message,'error');}
+  });
+}
+function verFoto(osId,idx){const os=APP.os.find(o=>o.id===osId);if(!os)return;let f=[];try{f=JSON.parse(os.fotos||'[]');}catch{}openModal(`<div style="text-align:center"><img src="${f[idx]}" style="max-width:100%;border-radius:12px"><div style="margin-top:10px;font-family:var(--mono);font-size:11px;color:var(--text-2)">Foto ${idx+1}/${f.length}</div></div>`);}
+
+// ── Comprovante (V_TEST style) ────────────────────────────
+let _compId=null;
+function abrirComp(id) {
+  _compId=id;
+  const os=APP.os.find(o=>o.id===id);if(!os)return;
+  const p=STATE.perfil||{};
+  let itens=[];try{itens=JSON.parse(os.itens||'[]');}catch{}
+  let fotos=[];try{fotos=JSON.parse(os.fotos||'[]');}catch{}
+  const nome=os.clientes?.nome||os.cliente_nome||'–';
+  const tel=os.clientes?.telefone||'';
+  const st=_normSt(os.status);
+  const hash=os.hash_doc||genHash(id+(os.valor_total||0));
+  const qrId='qr'+Date.now();
+  const itensH=itens.map(it=>`<div class="comp-item-r"><span>${_e(it.descricao||it.desc||'')} (x${it.quantidade||1})</span><span><b>${fmt((it.quantidade||1)*(it.valor_unit||0))}</b></span></div>`).join('');
+  const fotosH=fotos.length?`<div class="comp-sec">Fotos</div><div class="comp-photos">${fotos.slice(0,6).map(f=>`<img src="${f}">`).join('')}</div>`:'';
+  document.getElementById('compContent').innerHTML=`
+  <div class="comp-paper" id="compPaper">
+    <div class="comp-header">
+      <div class="comp-store">${_e(p.empresa_nome||'NexOS')}</div>
+      ${p.cnpj?`<div class="comp-sub">CNPJ: ${_e(p.cnpj)}</div>`:''}
+      ${p.endereco?`<div class="comp-sub">${_e(p.endereco)}</div>`:''}
+      ${p.telefone?`<div class="comp-sub">${_e(p.telefone)}</div>`:''}
+    </div>
+    <div style="text-align:center;margin-bottom:10px">
+      <div style="font-size:10px;color:#888;font-weight:700;letter-spacing:2px;text-transform:uppercase">ORDEM DE SERVIÇO</div>
+      <div class="comp-os-num">#${os.numero||'–'}</div>
+      <div class="comp-date">${fDateFull(os.criado_em)}</div>
+      <div style="margin-top:6px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+        <span style="background:${statusBgColor(st)};color:#fff;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700;text-transform:uppercase">${statusLabel(os.status)}</span>
+        <span style="background:#eee;color:#555;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700">${payLabel(os.forma_pagamento)}</span>
+      </div>
+    </div>
+    <div class="comp-sec">Cliente</div>
+    <div class="comp-row"><span>Nome</span><span><b>${_e(nome)}</b></span></div>
+    ${tel?`<div class="comp-row"><span>Tel</span><span>${_e(tel)}</span></div>`:''}
+    ${os.equipamento||os.item?`<div class="comp-sec">Equipamento</div><div class="comp-row"><span>Equip.</span><span>${_e(os.equipamento||os.item||'')}</span></div>${os.defeito?`<div class="comp-row"><span>Defeito</span><span>${_e(os.defeito)}</span></div>`:''}`:''}
+    <div class="comp-sec">Itens</div>
+    <div class="comp-items">${itensH}${(os.valor_mao_obra||0)>0?`<div class="comp-item-r"><span>Mão de Obra</span><span><b>${fmt(os.valor_mao_obra)}</b></span></div>`:''}</div>
+    <div class="comp-total"><span>TOTAL</span><span>${fmt(os.valor_total)}</span></div>
+    ${(os.valor_pago||0)>0?`<div class="comp-row"><span>Pago</span><span>${fmt(os.valor_pago)}</span></div>`:''}
+    ${(os.valor_pago||0)>(os.valor_total||0)?`<div class="comp-row"><span>Troco</span><span>${fmt((os.valor_pago||0)-(os.valor_total||0))}</span></div>`:''}
+    ${os.observacoes?`<div class="comp-sec">Observações</div><div style="font-size:12px;color:#555;line-height:1.6;margin-bottom:8px">${_e(os.observacoes)}</div>`:''}
+    ${fotosH}
+    ${os.assinatura?`<div class="comp-sec">Assinatura</div><div style="border:1px solid #ddd;border-radius:6px;padding:8px;text-align:center;margin-bottom:8px"><img src="${os.assinatura}" style="max-width:100%;max-height:55px"><div style="font-size:10px;color:#888;margin-top:3px">${_e(nome)}</div></div>`:''}
+    ${p.termos?`<div class="comp-terms">${_e(p.termos)}</div>`:''}
+    <div class="comp-footer">
+      <div id="${qrId}" style="display:flex;justify-content:center;margin-bottom:8px"></div>
+      <div><b>Código de Verificação</b></div>
+      <div class="comp-hash">OS: #${os.numero} | HASH: ${hash} | ${fDateFull(os.criado_em)}</div>
+      ${p.pix?`<div style="margin-top:7px"><b>PIX:</b> ${_e(p.pix)}</div>`:''}
+      <div style="margin-top:8px">Obrigado pela preferência! 🙏</div>
+    </div>
+  </div>`;
+  setTimeout(()=>{try{const el=document.getElementById(qrId);if(el&&window.QRCode)new QRCode(el,{text:'OS:#'+os.numero+'|HASH:'+hash,width:80,height:80,colorDark:'#1a6cf0',colorLight:'#ffffff'});}catch{}},200);
+  document.getElementById('compView').classList.add('open');
+}
+function fecharComp(){document.getElementById('compView').classList.remove('open');}
+function compartilharComp(){
+  const os=APP.os.find(o=>o.id===_compId);if(!os)return;
+  const txt=`OS #${os.numero} - ${os.clientes?.nome||os.cliente_nome||'–'}\nTotal: ${fmt(os.valor_total)}\n${fDateFull(os.criado_em)}`;
+  if(navigator.share)navigator.share({title:'OS #'+os.numero,text:txt});
+  else navigator.clipboard.writeText(txt).then(()=>UI.toast('Copiado!','success'));
+}
+
+function enviarWA(id) {
+  const os=APP.os.find(o=>o.id===id);if(!os)return;
+  const p=STATE.perfil||{};
+  let itens=[];try{itens=JSON.parse(os.itens||'[]');}catch{}
+  const nome=os.clientes?.nome||os.cliente_nome||'–';
+  const tel=os.clientes?.telefone||'';
+  const hash=os.hash_doc||genHash(id+(os.valor_total||0));
+  const itensMsg=itens.map(it=>`- ${it.descricao||it.desc||''} x${it.quantidade||1} = ${fmt((it.quantidade||1)*(it.valor_unit||0))}`).join('\n');
+  const msg=`*${p.empresa_nome||'NexOS'}*\n\nOS #${os.numero}\n*${nome}*\n${fDateFull(os.criado_em)}\n\nItens:\n${itensMsg}${(os.valor_mao_obra||0)>0?`\nMão de Obra: ${fmt(os.valor_mao_obra)}`:''}\n\n*TOTAL: ${fmt(os.valor_total)}*\n${payLabel(os.forma_pagamento)} | ${statusLabel(os.status)}${p.pix?'\nPIX: '+p.pix:''}${p.telefone?'\n'+p.telefone:''}\n\nHash: ${hash}`;
+  window.open(API.buildWALink(tel,msg),'_blank');
+}
+
+async function gerarPDF(id) {
+  const os=APP.os.find(o=>o.id===id);if(!os){UI.toast('OS não encontrada','error');return;}
+  UI.toast('Gerando PDF...','info');
+  const p=STATE.perfil||{};
+  let itens=[];try{itens=JSON.parse(os.itens||'[]');}catch{}
+  let fotos=[];try{fotos=JSON.parse(os.fotos||'[]');}catch{}
+  const nome=os.clientes?.nome||os.cliente_nome||'–';
+  const st=_normSt(os.status);
+  const hash=os.hash_doc||genHash(id+(os.valor_total||0));
+  try{
+    const {jsPDF}=window.jspdf;
+    const doc=new jsPDF({unit:'mm',format:'a4'});
+    const W=210,M=15;let y=M;
+    doc.setFillColor(10,15,30);doc.rect(0,0,W,297,'F');
+    doc.setFillColor(17,24,39);doc.rect(0,0,W,44,'F');
+    const lx=M;
+    doc.setFont('helvetica','bold');doc.setFontSize(18);doc.setTextColor(56,189,248);doc.text(p.empresa_nome||'NexOS',lx,16);
+    doc.setFontSize(7.5);doc.setTextColor(90,112,153);
+    if(p.cnpj)doc.text('CNPJ: '+p.cnpj,lx,22);
+    if(p.endereco)doc.text(p.endereco,lx,27);
+    if(p.telefone)doc.text(p.telefone,lx,32);
+    doc.setFontSize(22);doc.setFont('helvetica','bold');doc.setTextColor(56,189,248);doc.text('#'+os.numero,W-M,16,{align:'right'});
+    doc.setFontSize(7.5);doc.setTextColor(90,112,153);
+    doc.text('ORDEM DE SERVIÇO',W-M,22,{align:'right'});
+    doc.text(fDateFull(os.criado_em),W-M,27,{align:'right'});
+    const scol={concluido:[0,200,100],aguardando:[255,140,66],andamento:[56,189,248],cancelado:[100,120,150],fiado:[167,139,250],retirada:[251,146,60]};
+    doc.setFillColor(...(scol[st]||[56,189,248]));doc.roundedRect(W-M-28,33,28,7,2,2,'F');
+    doc.setTextColor(255,255,255);doc.setFontSize(7);doc.text(statusLabel(os.status).toUpperCase(),W-M-14,38,{align:'center'});
+    y=53;
+    doc.setFillColor(10,35,20);doc.roundedRect(M,y,W-2*M,12,3,3,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(90,112,153);doc.text('TOTAL',M+4,y+8);
+    doc.setFontSize(15);doc.setTextColor(0,229,160);doc.text(fmt(os.valor_total),W-M-2,y+8,{align:'right'});y+=17;
+    const sec=(t)=>{doc.setFillColor(18,28,48);doc.rect(M,y,W-2*M,7,'F');doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(56,189,248);doc.text(t,M+3,y+5);y+=9;};
+    const row=(l,v)=>{if(!v)return;doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(90,112,153);doc.text(l+':',M+2,y);doc.setTextColor(220,232,255);doc.setFont('helvetica','bold');const ls=doc.splitTextToSize(String(v),W-2*M-36);doc.text(ls,M+36,y);y+=5.5*ls.length;};
+    sec('CLIENTE');row('Nome',nome);row('Tel',tel);y+=2;
+    if(os.equipamento||os.item){sec('EQUIPAMENTO');row('Equip.',os.equipamento||os.item);row('Defeito',os.defeito);row('Diag.',os.diagnostico);y+=2;}
+    sec('ITENS');
+    doc.setFillColor(16,24,42);doc.rect(M,y,W-2*M,5.5,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(90,112,153);
+    doc.text('Descrição',M+2,y+4);doc.text('Qtd',W-M-42,y+4);doc.text('Total',W-M-2,y+4,{align:'right'});y+=7;
+    itens.forEach((it,i)=>{
+      doc.setFillColor(i%2===0?16:18,i%2===0?24:26,i%2===0?40:42);doc.rect(M,y-1,W-2*M,6,'F');
+      doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(220,232,255);doc.text((it.descricao||it.desc||'').slice(0,45),M+2,y+4);
+      doc.setTextColor(90,112,153);doc.text('x'+(it.quantidade||1),W-M-42,y+4);
+      doc.setTextColor(0,229,160);doc.setFont('helvetica','bold');doc.text(fmt((it.quantidade||1)*(it.valor_unit||0)),W-M-2,y+4,{align:'right'});y+=6;
+    });
+    if((os.valor_mao_obra||0)>0){doc.setFillColor(16,24,40);doc.rect(M,y-1,W-2*M,6,'F');doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(220,232,255);doc.text('Mão de Obra',M+2,y+4);doc.setTextColor(0,229,160);doc.setFont('helvetica','bold');doc.text(fmt(os.valor_mao_obra),W-M-2,y+4,{align:'right'});y+=6;}
+    doc.setFillColor(12,30,18);doc.rect(M,y,W-2*M,7,'F');doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(0,229,160);
+    doc.text('TOTAL',M+2,y+5);doc.text(fmt(os.valor_total),W-M-2,y+5,{align:'right'});y+=10;
+    if(os.forma_pagamento){sec('PAGAMENTO');row('Forma',payLabel(os.forma_pagamento));if(os.valor_pago>0)row('Pago',fmt(os.valor_pago));y+=2;}
+    if(os.observacoes){sec('OBS');doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(220,232,255);const ls2=doc.splitTextToSize(os.observacoes,W-2*M-4);doc.text(ls2,M+2,y);y+=ls2.length*5+4;}
+    if(fotos.length){if(y>215){doc.addPage();doc.setFillColor(10,15,30);doc.rect(0,0,W,297,'F');y=M;}sec('FOTOS');const pw=(W-2*M-8)/3;for(let fi=0;fi<Math.min(fotos.length,3);fi++){try{doc.addImage(fotos[fi],'JPEG',M+fi*(pw+4),y,pw,pw*.75,'','FAST');}catch{}}y+=pw*.75+5;}
+    if(os.assinatura){if(y>235){doc.addPage();doc.setFillColor(10,15,30);doc.rect(0,0,W,297,'F');y=M;}sec('ASSINATURA DIGITAL');try{doc.addImage(os.assinatura,'PNG',M,y,70,20,'','FAST');}catch{}y+=25;doc.setFont('helvetica','italic');doc.setFontSize(8);doc.setTextColor(90,112,153);doc.text(nome+' - '+fDateFull(os.criado_em),M,y);y+=7;}
+    if(p.termos){if(y>245){doc.addPage();doc.setFillColor(10,15,30);doc.rect(0,0,W,297,'F');y=M;}sec('TERMOS');doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(90,112,153);const tl=doc.splitTextToSize(p.termos,W-2*M-4);doc.text(tl,M+2,y);y+=tl.length*4.5+4;}
+    if(y>260){doc.addPage();doc.setFillColor(10,15,30);doc.rect(0,0,W,297,'F');y=M;}
+    doc.setFillColor(16,22,38);doc.rect(M,y,W-2*M,18,'F');
+    doc.setFont('courier','bold');doc.setFontSize(7);doc.setTextColor(56,189,248);doc.text('DOCUMENTO VÁLIDO — NexOS v4.0',M+3,y+5);
+    doc.setFont('courier','normal');doc.setFontSize(6.5);doc.setTextColor(90,112,153);
+    doc.text('OS: #'+os.numero+' | '+fDateFull(os.criado_em),M+3,y+10);
+    doc.text('HASH: '+hash,M+3,y+15);
+    if(p.pix)doc.text('PIX: '+p.pix,W-M-2,y+12,{align:'right'});
+    doc.save(`OS_${os.numero}_${nome.replace(/\s+/g,'_')}.pdf`);
+    UI.toast('PDF gerado! ✅','success');
+  }catch(e){console.error(e);UI.toast('Erro PDF: '+e.message,'error');}
+}
+
+// ════════════════════════════════════════════════════════════
+// QR CODE — Ler QR da câmera para abrir OS
+// ════════════════════════════════════════════════════════════
+let _qrStream=null;
+function openQrReader() {
+  const w=document.getElementById('qrReaderWrap');if(!w)return;
+  w.classList.add('open');
+  navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}})
+    .then(stream=>{_qrStream=stream;document.getElementById('qrVideo').srcObject=stream;_scanQR();})
+    .catch(()=>{UI.toast('Sem acesso à câmera','error');closeQrReader();});
+}
+function closeQrReader(){if(_qrStream){_qrStream.getTracks().forEach(t=>t.stop());_qrStream=null;}document.getElementById('qrReaderWrap')?.classList.remove('open');}
+function _scanQR() {
+  if(!_qrStream||!window.jsQR)return;
+  const video=document.getElementById('qrVideo');
+  const canvas=document.createElement('canvas');
+  const ctx=canvas.getContext('2d');
+  function scan(){
+    if(!_qrStream)return;
+    if(video.readyState===video.HAVE_ENOUGH_DATA){
+      canvas.width=video.videoWidth;canvas.height=video.videoHeight;
+      ctx.drawImage(video,0,0);
+      const imgData=ctx.getImageData(0,0,canvas.width,canvas.height);
+      const code=window.jsQR(imgData.data,imgData.width,imgData.height,{inversionAttempts:'dontInvert'});
+      if(code){
+        closeQrReader();
+        const txt=code.data;
+        // Extrair número de OS do hash: "OS:#1|HASH:..."
+        const m=txt.match(/OS:#(\d+)/);
+        if(m){
+          const num=parseInt(m[1]);
+          const os=APP.os.find(o=>o.numero===num);
+          if(os){UI.toast(`OS #${num} encontrada!`,'success');verOS(os.id);}
+          else UI.toast(`OS #${num} não encontrada localmente`,'warning');
+        }else{UI.toast('QR não reconhecido: '+txt.slice(0,40),'info');}
+        return;
+      }
+    }
+    requestAnimationFrame(scan);
+  }
+  requestAnimationFrame(scan);
+}
+
+// ════════════════════════════════════════════════════════════
+// CLIENTES
+// ════════════════════════════════════════════════════════════
+function renderClientes() {
+  const box=document.getElementById('cli-list');if(!box)return;
+  const q=gv('cli-search','').toLowerCase();
+  const list=APP.clientes.filter(c=>!q||c.nome.toLowerCase().includes(q)||(c.telefone||'').includes(q));
+  if(!list.length){box.innerHTML='<div class="empty-state"><div class="empty-icon">👥</div><div class="empty-title">'+(APP.clientes.length?'Nenhum cliente encontrado':'Nenhum cliente ainda')+'</div></div>';return;}
+  box.innerHTML=list.map(c=>`
+    <div class="card" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:13px 15px" onclick="editarCliente('${c.id}')">
+      <div>
+        <div style="font-size:14px;font-weight:600">${_e(c.nome)}</div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--text-2);margin-top:3px">${_e(c.telefone||'–')} ${c.cpf?'| '+_e(c.cpf):''}</div>
+      </div>
+      <button onclick="excluirCliente(event,'${c.id}')" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:18px;padding:4px">🗑️</button>
+    </div>`).join('');
+}
+
+function novoCliente() {
+  openModal(`
+  <h3 style="margin-bottom:14px;font-size:18px;font-weight:700">👤 Novo Cliente</h3>
+  <input type="hidden" id="form-cli-id" value="">
+  <label class="req">Nome</label><input id="form-cli-nome" type="text" placeholder="Nome completo">
+  <label>Telefone</label><input id="form-cli-tel" type="tel" placeholder="(00) 00000-0000">
+  <label>CPF / CNPJ</label><input id="form-cli-doc" type="text" placeholder="000.000.000-00">
+  <button class="btn btn-green btn-lg w-full" onclick="salvarCliente()">✅ Salvar</button>`);
+}
+function editarCliente(id) {
+  const c=APP.clientes.find(x=>x.id===id);if(!c)return;
+  openModal(`
+  <h3 style="margin-bottom:14px;font-size:18px;font-weight:700">✏️ Editar Cliente</h3>
+  <input type="hidden" id="form-cli-id" value="${c.id}">
+  <label class="req">Nome</label><input id="form-cli-nome" type="text" value="${_e(c.nome)}">
+  <label>Telefone</label><input id="form-cli-tel" type="tel" value="${_e(c.telefone||'')}">
+  <label>CPF / CNPJ</label><input id="form-cli-doc" type="text" value="${_e(c.cpf||'')}">
+  <button class="btn btn-green btn-lg w-full" onclick="salvarCliente()">✅ Salvar</button>`);
+}
+async function salvarCliente() {
+  const nome=_c(gv('form-cli-nome','').trim(),100);if(!nome){UI.toast('Nome obrigatório','warning');return;}
+  const d={id:gv('form-cli-id','')||undefined,nome,telefone:_c(gv('form-cli-tel',''),20),cpf:_c(gv('form-cli-doc',''),20)};
+  try{
+    const saved=await API.saveCliente(STATE.user.id,d);
+    if(d.id){const i=APP.clientes.findIndex(x=>x.id===d.id);if(i!==-1)APP.clientes[i]=saved;}
+    else APP.clientes.push(saved);
+    UI.toast('Cliente salvo! ✅','success');closeModal();renderClientes();
+  }catch(e){UI.toast('Erro: '+e.message,'error');}
+}
+async function excluirCliente(e,id) {
+  e.stopPropagation();
+  if(!confirm('Excluir este cliente?'))return;
+  try{await API.deleteCliente(STATE.user.id,id);APP.clientes=APP.clientes.filter(c=>c.id!==id);UI.toast('Cliente excluído!','success');renderClientes();}
+  catch(err){UI.toast('Erro: '+err.message,'error');}
+}
+
+// ════════════════════════════════════════════════════════════
+// ESTOQUE
+// ════════════════════════════════════════════════════════════
+function renderEstoque() {
+  const box=document.getElementById('est-list');if(!box)return;
+  const q=gv('est-search','').toLowerCase();
+  const list=APP.produtos.filter(p=>!q||p.nome.toLowerCase().includes(q)||(p.codigo||'').toLowerCase().includes(q));
+  if(!list.length){box.innerHTML='<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">'+(APP.produtos.length?'Nenhum produto encontrado':'Nenhum produto ainda')+'</div></div>';return;}
+  box.innerHTML=list.map(p=>`
+    <div class="prod-item" onclick="editarProduto('${p.id}')">
+      <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+        <div>
+          <div style="font-size:14px;font-weight:600">${_e(p.nome)}</div>
+          <div style="font-family:var(--mono);font-size:10px;color:var(--text-2)">${p.codigo?'#'+_e(p.codigo)+' · ':''}</div>
+        </div>
+        <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--green)">${fmt(p.preco_venda)}</div>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        <span style="font-family:var(--mono);font-size:11px;color:${(p.quantidade||0)<=(p.estoque_min||0)?'var(--red)':'var(--green)'}">Est: ${p.quantidade||0} (mín:${p.estoque_min||0})</span>
+        ${p.preco_custo>0?`<span style="font-family:var(--mono);font-size:11px;color:var(--blue)">Mg: ${calcMargem(p.preco_custo,p.preco_venda)}%</span>`:''}
+        <span style="font-family:var(--mono);font-size:11px;color:var(--text-2)">Custo: ${fmt(p.preco_custo)}</span>
+      </div>
+    </div>`).join('');
+}
+
+function novoProduto() {
+  openModal(`
+  <h3 style="margin-bottom:14px;font-size:18px;font-weight:700">📦 Novo Produto</h3>
+  <input type="hidden" id="form-prd-id" value="">
+  <label class="req">Nome</label><input id="form-prd-nome" type="text" placeholder="Nome do produto">
+  <label>Código / SKU</label><input id="form-prd-cod" type="text" placeholder="SKU-001">
+  <div class="frow">
+    <div><label>Custo R$</label><input id="form-prd-custo" type="number" step="0.01" placeholder="0,00" oninput="updMgPrd()"></div>
+    <div><label>Venda R$</label><input id="form-prd-venda" type="number" step="0.01" placeholder="0,00" oninput="updMgPrd()"></div>
+  </div>
+  <div id="mg-prev" style="font-family:var(--mono);font-size:11px;color:var(--blue);margin-bottom:10px"></div>
+  <div class="frow">
+    <div><label>Quantidade</label><input id="form-prd-qtd" type="number" value="0" min="0"></div>
+    <div><label>Estoque Mín.</label><input id="form-prd-min" type="number" value="0" min="0"></div>
+  </div>
+  <button class="btn btn-green btn-lg w-full" onclick="salvarProduto()">✅ Salvar</button>`);
+}
+function editarProduto(id) {
+  const p=APP.produtos.find(x=>x.id===id);if(!p)return;
+  openModal(`
+  <h3 style="margin-bottom:14px;font-size:18px;font-weight:700">✏️ ${_e(p.nome)}</h3>
+  <input type="hidden" id="form-prd-id" value="${p.id}">
+  <div class="card">
+    <div class="ir"><span class="irl">Venda</span><span class="irv" style="color:var(--green)">${fmt(p.preco_venda)}</span></div>
+    <div class="ir"><span class="irl">Custo</span><span class="irv">${fmt(p.preco_custo)}</span></div>
+    <div class="ir"><span class="irl">Margem</span><span class="irv" style="color:var(--blue)">${calcMargem(p.preco_custo,p.preco_venda)}%</span></div>
+    <div class="ir"><span class="irl">Estoque</span><span class="irv" style="color:${(p.quantidade||0)<=(p.estoque_min||0)?'var(--red)':'var(--green)'}">${p.quantidade||0}</span></div>
+  </div>
+  <label>Nome</label><input id="form-prd-nome" type="text" value="${_e(p.nome)}">
+  <label>Código</label><input id="form-prd-cod" type="text" value="${_e(p.codigo||'')}">
+  <div class="frow">
+    <div><label>Custo R$</label><input id="form-prd-custo" type="number" value="${p.preco_custo||0}" step="0.01" oninput="updMgPrd()"></div>
+    <div><label>Venda R$</label><input id="form-prd-venda" type="number" value="${p.preco_venda||0}" step="0.01" oninput="updMgPrd()"></div>
+  </div>
+  <div id="mg-prev" style="font-family:var(--mono);font-size:11px;color:var(--blue);margin-bottom:10px"></div>
+  <div class="frow">
+    <div><label>Quantidade</label><input id="form-prd-qtd" type="number" value="${p.quantidade||0}" min="0"></div>
+    <div><label>Estoque Mín.</label><input id="form-prd-min" type="number" value="${p.estoque_min||0}" min="0"></div>
+  </div>
+  <div style="display:flex;gap:8px">
+    <button class="btn btn-green" style="flex:1" onclick="salvarProduto()">✅ Salvar</button>
+    <button class="btn btn-danger btn-sm" style="flex:.4" onclick="excluirProduto('${p.id}')">🗑️</button>
+  </div>`);
+  setTimeout(updMgPrd,50);
+}
+function updMgPrd(){
+  const c=parseFloat(gv('form-prd-custo',0)),v=parseFloat(gv('form-prd-venda',0));
+  const el=document.getElementById('mg-prev');
+  if(el&&c>0&&v>0)el.textContent=`Margem: ${calcMargem(c,v)}% | Lucro unit.: ${fmt(v-c)}`;
+  else if(el)el.textContent='';
+}
+async function salvarProduto(){
+  const nome=_c(gv('form-prd-nome','').trim(),100);if(!nome){UI.toast('Nome obrigatório','warning');return;}
+  const d={id:gv('form-prd-id','')||undefined,nome,codigo:_c(gv('form-prd-cod',''),50),preco_custo:gv('form-prd-custo',0),preco_venda:gv('form-prd-venda',0),quantidade:gi('form-prd-qtd',0),estoque_min:gi('form-prd-min',0)};
+  try{
+    const saved=await API.saveProduto(STATE.user.id,d);
+    if(d.id){const i=APP.produtos.findIndex(x=>x.id===d.id);if(i!==-1)APP.produtos[i]=saved;}
+    else APP.produtos.push(saved);
+    UI.toast('Produto salvo! ✅','success');closeModal();renderEstoque();
+  }catch(e){UI.toast('Erro: '+e.message,'error');}
+}
+async function excluirProduto(id){
+  if(!confirm('Excluir produto?'))return;
+  try{await API.deleteProduto(STATE.user.id,id);APP.produtos=APP.produtos.filter(p=>p.id!==id);UI.toast('Produto excluído!','success');closeModal();renderEstoque();}
+  catch(e){UI.toast('Erro: '+e.message,'error');}
+}
+
+// ════════════════════════════════════════════════════════════
+// CAIXA — direto e simples
+// ════════════════════════════════════════════════════════════
+async function renderCaixa() {
+  const dataSel=gv('cx-date',today())||today();
+  try{
+    const movs=await API.getCaixa(STATE.user.id,dataSel,dataSel);
+    const ent=movs.filter(m=>m.tipo==='entrada').reduce((a,m)=>a+(m.valor||0),0);
+    const said=movs.filter(m=>m.tipo==='saida').reduce((a,m)=>a+(m.valor||0),0);
+    const fiad=movs.filter(m=>m.tipo==='fiado').reduce((a,m)=>a+(m.valor||0),0);
+    const cx=document.getElementById('cx-cards');
+    if(cx)cx.innerHTML=`
+      <div class="cx-card c-green"><div class="cx-num">${fmt(ent)}</div><div class="cx-label">Entradas</div></div>
+      <div class="cx-card c-red"><div class="cx-num">${fmt(said)}</div><div class="cx-label">Saídas</div></div>
+      <div class="cx-card c-blue"><div class="cx-num">${fmt(ent-said)}</div><div class="cx-label">Saldo</div></div>
+      <div class="cx-card c-yellow"><div class="cx-num">${fmt(fiad)}</div><div class="cx-label">Fiado</div></div>`;
+    // Por pagamento
+    const pp={};movs.filter(m=>m.tipo==='entrada').forEach(m=>{pp[m.forma]=(pp[m.forma]||0)+(m.valor||0);});
+    const pg=document.getElementById('cx-pags');
+    if(pg)pg.innerHTML=Object.keys(pp).length?Object.entries(pp).map(([k,v])=>`<div class="mov-item"><span class="pay-pill pp-${k}">${payLabel(k)}</span><span class="mov-val mv-e">${fmt(v)}</span></div>`).join(''):'<p style="font-size:12px;color:var(--text-3);font-family:var(--mono)">Nenhuma entrada</p>';
+    // Lista
+    const mv=document.getElementById('cx-movs');
+    if(mv)mv.innerHTML=movs.length?movs.sort((a,b)=>new Date(b.criado_em)-new Date(a.criado_em)).map(m=>`
+      <div class="mov-item">
+        <div>
+          <div class="mov-desc">${_e(m.descricao||'')}</div>
+          <div class="mov-meta">${fTime(m.criado_em)}${m.forma?' – '+payLabel(m.forma):''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="mov-val mv-${m.tipo==='saida'?'s':m.tipo==='fiado'?'f':'e'}">${m.tipo==='saida'?'–':'+'}${fmt(m.valor)}</span>
+          <button onclick="excluirMov('${m.id}')" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:14px;padding:2px">🗑️</button>
+        </div>
+      </div>`).join(''):'<p style="font-size:12px;color:var(--text-3);font-family:var(--mono)">Nenhuma movimentação</p>';
+  }catch(e){console.error('renderCaixa:',e);}
+}
+
+async function registrarSaida() {
+  const desc=_c(gv('cx-saida-desc','').trim(),200);
+  const val=parseFloat(gv('cx-saida-val',''));
+  if(!desc){UI.toast('Descreva a saída','warning');return;}
+  if(!val||val<=0){UI.toast('Valor inválido','warning');return;}
+  const data=gv('cx-date',today())||today();
+  try{
+    await API.addCaixa(STATE.user.id,{tipo:'saida',descricao:desc,valor:val,forma:'dinheiro',data});
+    document.getElementById('cx-saida-desc').value='';
+    document.getElementById('cx-saida-val').value='';
+    UI.toast('Saída registrada! ✅','success');
+    renderCaixa();
+  }catch(e){UI.toast('Erro: '+e.message,'error');}
+}
+
+async function excluirMov(id) {
+  await UI.confirmSecure('Excluir esta movimentação do caixa?', async()=>{
+    try{await API.deleteCaixa(STATE.user.id,id);UI.toast('Excluído!','success');renderCaixa();}
+    catch(e){UI.toast('Erro: '+e.message,'error');}
   });
 }
 
-// ── Caixa ──────────────────────────────────────────────────
-async function renderCash() {
-  try {
-    const data=await API.getCaixaSummary(STATE.empresa.id,today(),today());
-    const set=(id,v)=>{ const e=document.getElementById(id); if(e) e.textContent=v; };
-    set('cash-entries-val',fmt(data.entradas)); set('cash-exits-val',fmt(data.saidas)); set('cash-balance-val',fmt(data.saldo));
-    const dateEl=document.getElementById('cash-date');
-    if(dateEl) dateEl.textContent=new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'});
-    renderCashTable(data.items);
-    renderContasPagar(); renderContasReceber();
-  } catch(e) { console.error('cash:',e); }
-}
-
-function renderCashTable(items) {
-  const tbody=document.getElementById('cash-tbody');
-  if(!tbody) return;
-  if(!(items||[]).length) { tbody.innerHTML='<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text-3)">Sem movimentações hoje</td></tr>'; return; }
-  tbody.innerHTML=items.map(i=>`<tr><td style="font-size:.78rem;color:var(--text-3);white-space:nowrap">${fmtDatetime(i.criado_em)}</td><td style="font-size:.84rem">${i.descricao||'–'}</td><td style="font-family:monospace;font-weight:600;color:${i.tipo==='entrada'?'var(--green)':'var(--red)'}">${i.tipo==='entrada'?'+':'-'}${fmt(i.valor)}</td><td style="font-size:.78rem;color:var(--text-2)">${payLabel(i.forma)||'–'}</td><td style="font-size:.78rem;color:var(--text-3)">${i.ordem_id?'#OS':''}</td></tr>`).join('');
-}
-
-async function renderContasPagar() {
-  try {
-    const lista=await API.getContasPagar(STATE.empresa.id);
-    APP.contasPagar=lista;
-    const tbody=document.getElementById('payable-tbody');
-    if(!tbody) return;
-    if(!lista.length) { tbody.innerHTML='<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text-3)">Nenhuma conta</td></tr>'; return; }
-    tbody.innerHTML=lista.map(c=>{ const venc=c.vencimento<today(); const st=c.pago?'<span class="badge badge-success">Pago</span>':venc?'<span class="badge badge-danger">Vencido</span>':'<span class="badge">Pendente</span>'; return `<tr><td style="font-size:.86rem">${c.descricao}</td><td style="font-weight:600;color:var(--red)">${fmt(c.valor)}</td><td style="font-size:.82rem;color:${venc&&!c.pago?'var(--red)':'var(--text-2)'}">${fmtDate(c.vencimento)}</td><td>${st}</td><td>${!c.pago?`<button class="btn btn-ghost btn-sm" onclick="pagarConta('${c.id}')"><i data-lucide="check" style="width:12px;height:12px"></i></button>`:''}<button class="btn btn-ghost btn-icon" onclick="deleteContaPagar('${c.id}')" style="color:var(--red)"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button></td></tr>`; }).join('');
-    if(window.lucide) lucide.createIcons();
-  } catch(e) {}
-}
-
-async function renderContasReceber() {
-  try {
-    const lista=await API.getContasReceber(STATE.empresa.id);
-    APP.contasReceber=lista;
-    const tbody=document.getElementById('receivable-tbody');
-    if(!tbody) return;
-    tbody.innerHTML=lista.map(c=>{ const venc=c.vencimento<today(); const st=c.recebido?'<span class="badge badge-success">Recebido</span>':venc?'<span class="badge badge-danger">Vencido</span>':'<span class="badge">Pendente</span>'; return `<tr><td style="font-size:.86rem">${c.clientes?.nome||'–'}</td><td style="font-weight:600;color:var(--green)">${fmt(c.valor)}</td><td style="font-size:.82rem;color:${venc&&!c.recebido?'var(--red)':'var(--text-2)'}">${fmtDate(c.vencimento)}</td><td>${st}</td><td>${!c.recebido?`<button class="btn btn-ghost btn-sm" onclick="receberConta('${c.id}')"><i data-lucide="check" style="width:12px;height:12px"></i></button>`:''}</td></tr>`; }).join('');
-    if(window.lucide) lucide.createIcons();
-  } catch(e) {}
-}
-
-function switchFinanceTab(tab,btn) {
-  ['cash','payable','receivable','cashflow'].forEach(t=>{ const el=document.getElementById('finance-tab-'+t); if(el) el.style.display=t===tab?'':'none'; });
-  document.querySelectorAll('.finance-tab').forEach(b=>b.classList.remove('active'));
-  if(btn) btn.classList.add('active');
-  if(tab==='cashflow') renderCashFlowChart();
-}
-
-function renderCashFlowChart() {
-  const canvas=document.getElementById('cashflow-chart');
-  if(!canvas||typeof Chart==='undefined') return;
-  APP.charts.cashflow?.destroy();
-  APP.charts.cashflow=new Chart(canvas,{type:'bar',data:{labels:Array.from({length:30},(_,i)=>{const d=new Date();d.setDate(d.getDate()+i);return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});}),datasets:[{label:'Entrada',data:Array.from({length:30},()=>Math.random()*500),backgroundColor:'rgba(52,211,153,.5)',borderColor:'#34D399',borderWidth:1},{label:'Saída',data:Array.from({length:30},()=>Math.random()*200),backgroundColor:'rgba(248,113,113,.5)',borderColor:'#F87171',borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#9CA3AF',font:{size:11}}}},scales:{x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#6B7280',font:{size:9}}},y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#6B7280',font:{size:10}}}}}});
-}
-
-function openNewTransaction() {
-  window._lancTipo='entrada';
-  const ldesc=document.getElementById('lanc-desc'); if(ldesc) ldesc.value='';
-  const lval=document.getElementById('lanc-valor'); if(lval) lval.value='';
-  goPage('transaction-form');
-}
-
-function setTipoLanc(tipo) {
-  window._lancTipo=tipo;
-  const e=document.getElementById('tipo-entrada'); const s=document.getElementById('tipo-saida');
-  if(e) e.className=tipo==='entrada'?'btn btn-primary':'btn btn-ghost';
-  if(s) s.className=tipo==='saida'?'btn btn-danger':'btn btn-ghost';
-  if(s&&tipo!=='saida') { s.style.color='var(--red)'; s.style.borderColor='var(--red)'; } else if(s) { s.style.color=''; s.style.borderColor=''; }
-}
-
-async function saveLancamento() {
-  const desc = _clean(document.getElementById('lanc-desc')?.value||'',200);
-  const valor = _cleanNum(document.getElementById('lanc-valor')?.value,0.01,9999999);
-  if(!desc||!valor) { UI.toast('⚠ Preencha todos os campos','warning'); return; }
-  try {
-    await API.addCaixaEntry(STATE.empresa.id,{tipo:window._lancTipo||'entrada',descricao:desc,valor,forma:document.getElementById('lanc-forma')?.value||'dinheiro'});
-    UI.toast('✅ Lançamento registrado!','success');
-    goPage('cash');
-  } catch(e) { UI.toast('❌ '+e.message,'error'); }
-}
-
-function openCashBleed() {
-  const v=prompt('Valor da sangria (R$):');
-  if(!v||isNaN(parseFloat(v))) return;
-  API.addCaixaEntry(STATE.empresa.id,{tipo:'saida',descricao:'Sangria de caixa',valor:parseFloat(v),forma:'dinheiro'})
-    .then(()=>{ renderCash(); UI.toast('✅ Sangria registrada!','success'); })
-    .catch(e=>UI.toast('❌ '+e.message,'error'));
-}
-
-function openNewPayable() {
-  const desc=prompt('Descrição da conta:'); if(!desc) return;
-  const valor=parseFloat(prompt('Valor (R$):')); if(!valor||isNaN(valor)) return;
-  const venc=prompt('Vencimento (AAAA-MM-DD):')||today();
-  API.createContaPagar(STATE.empresa.id,{descricao:desc,valor,vencimento:venc})
-    .then(()=>{ renderContasPagar(); UI.toast('✅ Conta adicionada!','success'); })
-    .catch(e=>UI.toast('❌ '+e.message,'error'));
-}
-
-async function pagarConta(id) { try { await API.updateContaPagar(id,{pago:true,pago_em:today()}); renderContasPagar(); UI.toast('✅ Pago!','success'); } catch(e) { UI.toast('❌ '+e.message,'error'); } }
-async function deleteContaPagar(id) { try { await API.deleteContaPagar(id); renderContasPagar(); UI.toast('🗑 Removida','info'); } catch(e) { UI.toast('❌ '+e.message,'error'); } }
-async function receberConta(id) { try { await API.updateContaReceber(id,{recebido:true,recebido_em:today()}); renderContasReceber(); UI.toast('✅ Confirmado!','success'); } catch(e) { UI.toast('❌ '+e.message,'error'); } }
-function generateCashFlowAI() { UI.toast('IA em breve!','info'); }
-
-// ── Agenda ─────────────────────────────────────────────────
-function renderCalendar() {
-  const wrap=document.getElementById('cal-grid-wrap');
-  if(!wrap) return;
-  const date=APP.calDate; const year=date.getFullYear(); const month=date.getMonth();
-  const title=document.getElementById('cal-title');
-  if(title) title.textContent=date.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
-  const firstDay=new Date(year,month,1).getDay(); const daysInMonth=new Date(year,month+1,0).getDate();
-  const todayStr=today(); const dayNames=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-  const evsByDay={};
-  APP.agenda.forEach(e=>{ const d=e.data_inicio?.split('T')[0]; if(d){ if(!evsByDay[d]) evsByDay[d]=[]; evsByDay[d].push(e); } });
-  let html=`<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;margin-bottom:8px">${dayNames.map(d=>`<div style="text-align:center;font-size:.72rem;font-weight:600;color:var(--text-3);padding:8px 4px">${d}</div>`).join('')}</div><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">`;
-  for(let i=0;i<firstDay;i++) html+=`<div style="height:60px;background:var(--bg);border-radius:6px"></div>`;
-  for(let d=1;d<=daysInMonth;d++){
-    const ds=`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const isTd=ds===todayStr; const evs=evsByDay[ds]||[];
-    html+=`<div onclick="selectCalDay('${ds}')" style="min-height:60px;background:${isTd?'var(--blue-dim)':'var(--bg-2)'};border:1px solid ${isTd?'var(--blue)':'var(--border)'};border-radius:6px;padding:5px;cursor:pointer"><div style="font-size:.78rem;font-weight:${isTd?800:500};color:${isTd?'var(--blue)':'var(--text-2)'};margin-bottom:3px">${d}</div>${evs.slice(0,2).map(e=>`<div style="font-size:.66rem;padding:2px 4px;border-radius:3px;background:${e.cor||'var(--blue)'}33;color:${e.cor||'var(--blue)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.titulo}</div>`).join('')}${evs.length>2?`<div style="font-size:.62rem;color:var(--text-3)">+${evs.length-2}</div>`:''}</div>`;
-  }
-  html+='</div>';
-  wrap.innerHTML=html;
-  const periodoEl=document.getElementById('schedule-period');
-  if(periodoEl) periodoEl.textContent=date.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
-}
-
-async function selectCalDay(dateStr) {
-  const evs=APP.agenda.filter(e=>e.data_inicio?.startsWith(dateStr));
-  if(!evs.length) { openNewSchedule(dateStr); return; }
-  UI.toast(evs.length+' evento(s) em '+fmtDate(dateStr),'info');
-}
-
-function calPrev() { const d=APP.calDate; APP.calDate=new Date(d.getFullYear(),d.getMonth()-1,1); renderCalendar(); }
-function calNext() { const d=APP.calDate; APP.calDate=new Date(d.getFullYear(),d.getMonth()+1,1); renderCalendar(); }
-function setCalView(view,btn) {
-  document.querySelectorAll('.page-header .filter-btn').forEach(b=>b.classList.remove('active'));
-  if(btn) btn.classList.add('active');
-  renderCalendar();
-}
-
-function openNewSchedule(data) {
-  const dataEl=document.getElementById('sched-data'); if(dataEl) dataEl.value=data||today();
-  const titulo=document.getElementById('sched-titulo'); if(titulo) titulo.value='';
-  const obs=document.getElementById('sched-obs'); if(obs) obs.value='';
-  // Popula clientes
-  const sel=document.getElementById('sched-cliente-sel')||document.getElementById('sched-cliente');
-  if(sel) sel.innerHTML='<option value="">Sem cliente</option>'+APP.clientes.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');
-  goPage('event-form');
-}
-
-async function saveSchedule() {
-  const titulo=document.getElementById('sched-titulo')?.value?.trim();
-  const data=document.getElementById('sched-data')?.value;
-  if(!titulo||!data) { UI.toast('⚠ Preencha título e data','warning'); return; }
-  const hora=document.getElementById('sched-hora')?.value||'00:00';
-  try {
-    const novo=await API.createEvento(STATE.empresa.id,{titulo,tipo:document.getElementById('sched-tipo')?.value||'geral',cor:document.getElementById('sched-cor')?.value||'#38BDF8',data_inicio:data+'T'+hora+':00',cliente_id:document.getElementById('sched-cliente-sel')?.value||document.getElementById('sched-cliente')?.value||null,descricao:document.getElementById('sched-obs')?.value||null});
-    APP.agenda.push(novo);
-    UI.toast('✅ Evento criado!','success');
-    goPage('schedule');
-    renderCalendar();
-  } catch(e) { UI.toast('❌ '+e.message,'error'); }
-}
-
-// ── Analytics ──────────────────────────────────────────────
-async function renderAnalytics() {
-  try {
-    const periodos={ month:{from:today().slice(0,7)+'-01',to:today()}, year:{from:today().slice(0,4)+'-01-01',to:today()} };
-    const {from,to}=periodos[APP.anPeriodo]||periodos.month;
-    const data=await API.getAnalytics(STATE.empresa.id,from,to);
-    const set=(id,v)=>{ const e=document.getElementById(id); if(e) e.textContent=v; };
-    set('an-revenue',fmt(data.faturamento)); set('an-profit',fmt(data.lucro)); set('an-ticket',fmt(data.ticket_medio));
-    const metas=await API.getMetas(STATE.empresa.id);
-    const metaFat=metas.find(m=>m.tipo==='faturamento')?.valor_meta||0;
-    const pct=metaFat>0?Math.min(100,(data.faturamento/metaFat*100)).toFixed(0):0;
-    set('an-goal-pct',pct+'%');
-    renderPaymentChart(data.by_payment);
-    const tsWrap=document.getElementById('top-services-list');
-    if(tsWrap) tsWrap.innerHTML=(data.top_services||[]).map(([nome,count])=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:.84rem"><span>${nome}</span><span class="badge">${count}x</span></div>`).join('')||'<div style="color:var(--text-3);font-size:.82rem;padding:12px 0">Sem dados</div>';
-  } catch(e) { console.error('analytics:',e); }
-}
-
-function setAnalyticsPeriod(periodo,btn) {
-  APP.anPeriodo=periodo;
-  document.querySelectorAll('#page-analytics .filter-btn').forEach(b=>b.classList.remove('active'));
-  if(btn) btn.classList.add('active');
-  renderAnalytics();
-}
-
-function renderPaymentChart(byPayment) {
-  const canvas=document.getElementById('payment-chart');
-  if(!canvas||!Object.keys(byPayment||{}).length||typeof Chart==='undefined') return;
-  APP.charts.payment?.destroy();
-  APP.charts.payment=new Chart(canvas,{type:'doughnut',data:{labels:Object.keys(byPayment).map(payLabel),datasets:[{data:Object.values(byPayment),backgroundColor:['#38BDF8','#34D399','#A78BFA','#FB923C','#F472B6','#FBBF24','#60A5FA'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#9CA3AF',font:{size:10},padding:8,boxWidth:10}}}}});
-}
-
-function exportAnalytics() { UI.toast('Exportando...','info'); }
-
-// ── IA ─────────────────────────────────────────────────────
-function renderAI() {
-  const wrap=document.getElementById('ai-cards');
-  if(!wrap) return;
-  const cards=[
-    {icon:'trending-up',color:'var(--blue)',title:'Análise do Negócio',desc:'Visão geral com base nos seus dados',fn:'askAI_business'},
-    {icon:'target',color:'var(--green)',title:'Meta do Mês',desc:'Projeção baseada no histórico',fn:'askAI_goal'},
-    {icon:'wrench',color:'var(--text-2)',title:'Diagnóstico Técnico',desc:'Descreva o defeito e a IA sugere o diagnóstico',fn:'askAI_diagnosis'},
-    {icon:'lightbulb',color:'var(--yellow)',title:'Sugestões de Preço',desc:'IA analisa sua margem',fn:'askAI_pricing'},
-  ];
-  wrap.innerHTML=cards.map(c=>`<div class="card" style="cursor:pointer" onclick="${c.fn}()"><div style="width:44px;height:44px;border-radius:12px;background:${c.color}22;display:flex;align-items:center;justify-content:center;margin-bottom:14px"><i data-lucide="${c.icon}" style="width:22px;height:22px;color:${c.color}"></i></div><div style="font-size:.92rem;font-weight:700;margin-bottom:6px">${c.title}</div><div style="font-size:.78rem;color:var(--text-2)">${c.desc}</div></div>`).join('');
-  if(window.lucide) lucide.createIcons();
-}
-
-async function askAI_business() { UI.toast('Analisando...','info'); try { const data=await API.getDashboardData(STATE.empresa.id); const resp=await API.askAI(`Analise: ${JSON.stringify(data)}`); _showAIPage('Análise',resp); } catch(e) { UI.toast('IA indisponível','error'); } }
-async function askAI_goal()     { UI.toast('Calculando...','info'); try { const data=await API.getAnalytics(STATE.empresa.id,today().slice(0,7)+'-01',today()); const resp=await API.askAI(`Faturamento: ${fmt(data.faturamento)}. Sugira uma meta.`); _showAIPage('Meta',resp); } catch(e) { UI.toast('IA indisponível','error'); } }
-async function askAI_diagnosis(){ const def=prompt('Descreva o defeito:'); if(!def) return; UI.toast('Consultando...','info'); try { const resp=await API.askAI(`Defeito: "${def}". Diagnósticos prováveis?`); _showAIPage('Diagnóstico',resp); } catch(e) { UI.toast('IA indisponível','error'); } }
-async function askAI_pricing()  { UI.toast('Em desenvolvimento...','info'); }
-async function askAI_message()  { UI.toast('Em desenvolvimento...','info'); }
-async function askAI_stock()    { UI.toast('Em desenvolvimento...','info'); }
-
-function _showAIPage(titulo, conteudo) {
-  UI.confirm(`${titulo}\n\n${conteudo}`, () => {});
-}
-
-// ── Notificações ───────────────────────────────────────────
-function renderNotifications() {
-  const wrap=document.getElementById('notif-list');
-  if(!wrap) return;
-  if(!APP.notifs.length) { wrap.innerHTML=`<div class="empty-state"><div class="empty-icon"><i data-lucide="bell-off" style="width:32px;height:32px"></i></div><div class="empty-title">Sem notificações</div></div>`; if(window.lucide) lucide.createIcons(); return; }
-  const icons={os_ready:'package-check',payment:'dollar-sign',low_stock:'alert-triangle',birthday:'cake',overdue:'clock',new_client:'user-plus'};
-  wrap.innerHTML=APP.notifs.map(n=>`<div onclick="markNotifRead('${n.id}',this)" style="display:flex;gap:12px;padding:14px 0;border-bottom:1px solid var(--border);cursor:pointer;opacity:${n.lida?.6:1}"><div style="width:36px;height:36px;border-radius:10px;background:var(--blue-dim);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i data-lucide="${icons[n.tipo]||'bell'}" style="width:16px;height:16px;color:var(--blue)"></i></div><div style="flex:1"><div style="font-size:.86rem;font-weight:${n.lida?400:600}">${n.titulo||n.mensagem||'Notificação'}</div><div style="font-size:.76rem;color:var(--text-3)">${fmtDatetime(n.criado_em)}</div></div>${!n.lida?'<div style="width:8px;height:8px;border-radius:50%;background:var(--blue);flex-shrink:0;margin-top:4px"></div>':''}</div>`).join('');
-  if(window.lucide) lucide.createIcons();
-}
-
-async function markNotifRead(id,el) { try { await API.marcarNotifLida(id); const n=APP.notifs.find(x=>x.id===id); if(n) n.lida=true; if(el) el.style.opacity='.6'; App._badges(); } catch(e){} }
-async function markAllNotifRead() { try { await API.marcarTodasLidas(STATE.empresa.id); APP.notifs.forEach(n=>n.lida=true); renderNotifications(); App._badges(); UI.toast('✅ Todas lidas!','success'); } catch(e){} }
-
-// ── Configurações ──────────────────────────────────────────
-function renderSettings(tab) {
-  APP.settingsTab=tab||'company';
-  document.querySelectorAll('#settings-nav .nav-item').forEach(i=>i.classList.remove('active'));
-  const active=document.querySelector(`#settings-nav .nav-item[onclick*="${APP.settingsTab}"]`);
-  if(active) active.classList.add('active');
-  const content=document.getElementById('settings-content');
-  if(!content) return;
-  const emp=STATE.empresa||{};
-  const prefs=(() => { try { return JSON.parse(localStorage.getItem('nexos_prefs')||'{}'); } catch(e){ return {}; } })();
-  const lang=_lang();
-  const tabs={
-    company:`<div class="card"><h4 style="font-size:.92rem;font-weight:700;margin-bottom:20px">Dados da Empresa</h4><div class="form-group"><label class="form-label">Nome</label><input type="text" id="cfg-nome" class="form-control" value="${emp.nome||''}"></div><div class="form-row"><div class="form-group"><label class="form-label">Telefone</label><input type="tel" id="cfg-tel" class="form-control" value="${emp.telefone||''}"></div><div class="form-group"><label class="form-label">CNPJ</label><input type="text" id="cfg-cnpj" class="form-control" value="${emp.cnpj||''}"></div></div><div class="form-group"><label class="form-label">Endereço</label><input type="text" id="cfg-end" class="form-control" value="${emp.endereco||''}"></div><div class="form-group"><label class="form-label">Chave PIX</label><input type="text" id="cfg-pix" class="form-control" value="${emp.pix||emp.chave_pix||''}"></div><button class="btn btn-primary" onclick="saveEmpresaConfig()"><i data-lucide="save" style="width:14px;height:14px"></i> Salvar</button></div>`,
-    appearance:`<div class="card"><h4 style="font-size:.92rem;font-weight:700;margin-bottom:20px">Aparência & Preferências</h4>
-      <div class="setting-row"><div class="setting-info"><div class="setting-label">Idioma</div></div>
-        <select id="cfg-lang" class="form-control" style="width:140px">
-          <option value="pt" ${lang==='pt'?'selected':''}>🇧🇷 PT-BR</option>
-          <option value="en" ${lang==='en'?'selected':''}>🇺🇸 EN</option>
-          <option value="es" ${lang==='es'?'selected':''}>🇪🇸 ES</option>
-        </select></div>
-      <div class="setting-row"><div class="setting-info"><div class="setting-label">Assinatura nas OS</div><div class="setting-desc">Coleta assinatura do cliente</div></div>
-        <label class="toggle"><input type="checkbox" id="cfg-signature" ${prefs.signature_enabled?'checked':''}><span class="toggle-slider"></span></label></div>
-      <div class="setting-row"><div class="setting-info"><div class="setting-label">Fotos nas OS</div></div>
-        <label class="toggle"><input type="checkbox" id="cfg-photos" ${prefs.photos_enabled?'checked':''}><span class="toggle-slider"></span></label></div>
-      <div style="margin-top:16px"><button class="btn btn-primary" onclick="saveAppearanceConfig()"><i data-lucide="save" style="width:14px;height:14px"></i> Salvar Preferências</button></div>
-    </div>`,
-    employees:`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><h4 style="font-size:.92rem;font-weight:700;margin:0">Funcionários</h4><button class="btn btn-primary btn-sm" onclick="openNewEmployee()"><i data-lucide="user-plus" style="width:13px;height:13px"></i> Novo</button></div><div id="employees-list">${renderEmployeesList()}</div></div>`,
-    segment:`<div class="card"><h4 style="font-size:.92rem;font-weight:700;margin-bottom:20px">Segmento</h4><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${SEGMENTS.list.map(s=>`<div class="segment-card ${emp.segmento===s.id?'selected':''}" onclick="changeSegment('${s.id}',this)"><div class="segment-card-icon" style="background:${s.color}22"><i data-lucide="${s.icon}" style="width:22px;height:22px;color:${s.color}"></i></div><div class="segment-card-name">${s.labels[lang]?.name||s.labels.pt.name}</div></div>`).join('')}</div></div>`,
-    goals:`<div class="card"><h4 style="font-size:.92rem;font-weight:700;margin-bottom:20px">Metas do Mês</h4><div class="form-group"><label class="form-label">Meta de Faturamento (R$)</label><input type="number" id="meta-fat" class="form-control" placeholder="Ex: 10000" min="0"></div><div class="form-group"><label class="form-label">Meta de OS</label><input type="number" id="meta-os" class="form-control" placeholder="Ex: 50" min="0"></div><button class="btn btn-primary" onclick="saveMetas()"><i data-lucide="save" style="width:14px;height:14px"></i> Salvar</button></div>`,
-    about:`<div class="card" style="text-align:center;padding:32px"><img src="NexOS.png" alt="NexOS" style="width:64px;height:64px;border-radius:14px;margin-bottom:16px"><div style="font-size:1.4rem;font-weight:800;background:var(--grad-logo);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">NexOS</div><div style="font-size:.82rem;color:var(--text-3);margin-top:4px">Versão 3.5</div><div style="font-size:.78rem;color:var(--text-3);margin-top:20px;line-height:1.8">Empresa: <strong>${emp.nome||'–'}</strong><br>ID: <code>${emp.id?.slice(0,8)||'–'}</code></div><button class="btn btn-ghost btn-sm" style="margin-top:20px" onclick="Auth.logout()"><i data-lucide="log-out" style="width:13px;height:13px"></i> Sair</button></div>`,
-  };
-  content.innerHTML=tabs[APP.settingsTab]||'<div class="card"><div style="color:var(--text-3);padding:20px">Em breve...</div></div>';
-  if(window.lucide) setTimeout(()=>lucide.createIcons(),60);
-}
-
-function showSettingsTab(tab) { APP.settingsTab=tab; renderSettings(tab); }
-
-function renderEmployeesList() {
-  if(!APP.funcionarios.length) return '<div style="font-size:.84rem;color:var(--text-3);padding:12px 0">Nenhum funcionário</div>';
-  return APP.funcionarios.map(f=>`<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)"><div style="width:36px;height:36px;border-radius:50%;background:${avatarColor(f.nome)};display:flex;align-items:center;justify-content:center;font-size:.76rem;font-weight:700;color:#fff">${initials(f.nome)}</div><div style="flex:1"><div style="font-size:.88rem;font-weight:600">${f.nome}</div><div style="font-size:.74rem;color:var(--text-3)">${f.funcao||'Funcionário'}</div></div><button class="btn btn-ghost btn-icon" onclick="openEditEmployee('${f.id}')"><i data-lucide="pencil" style="width:13px;height:13px"></i></button></div>`).join('');
-}
-
-function togglePref(key,value) { const p=(() => { try { return JSON.parse(localStorage.getItem('nexos_prefs')||'{}'); } catch(e){ return {}; } })(); p[key]=value; localStorage.setItem('nexos_prefs',JSON.stringify(p)); UI.toast('✅ Salvo!','success'); }
-
-async function saveEmpresaConfig() {
-  const nome = _clean(document.getElementById('cfg-nome')?.value||'',100);
-  if(!nome){UI.toast('⚠ Nome obrigatório','warning');return;}
-  const updates={
-    nome,
-    telefone:_clean(document.getElementById('cfg-tel')?.value||'',20)||null,
-    cnpj:    _clean(document.getElementById('cfg-cnpj')?.value||'',20)||null,
-    endereco:_clean(document.getElementById('cfg-end')?.value||'',200)||null,
-    pix:     _clean(document.getElementById('cfg-pix')?.value||'',100)||null,
-  };
-  try{await API.updateEmpresa(STATE.empresa.id,updates);Object.assign(STATE.empresa,updates);UI.toast('✅ Salvo!','success');}
-  catch(e){UI.toast('❌ '+e.message,'error');}
-}
-
-function changeSegment(id,el) {
-  const SEGS=['tech','retail','beauty','garage'];
-  if(!SEGS.includes(id)) return;
-  if(window.SEGMENTS){SEGMENTS._current=null;SEGMENTS.set(id);}
-  API.updateEmpresa(STATE.empresa.id,{segmento:id}).catch(()=>{});
-  document.querySelectorAll('#settings-content .segment-card').forEach(c=>c.classList.remove('selected'));
-  if(el) el.classList.add('selected');
-  if(STATE.empresa) STATE.empresa.segmento=id;
-  UI.toast('✅ Segmento alterado!','success');
-}
-
-async function saveMetas() {
-  const fat=_cleanNum(document.getElementById('meta-fat')?.value,0,9999999);
-  const os=Math.max(0,parseInt(document.getElementById('meta-os')?.value)||0);
+// ════════════════════════════════════════════════════════════
+// AGENDA com alertas
+// ════════════════════════════════════════════════════════════
+async function renderAgenda() {
+  const from=gv('ag-date',today())||today();
   try{
-    if(fat>0) await API.setMeta(STATE.empresa.id,'faturamento',fat);
-    if(os>0)  await API.setMeta(STATE.empresa.id,'os',os);
-    UI.toast('✅ Metas salvas!','success');
-  }catch(e){UI.toast('❌ '+e.message,'error');}
+    const eventos=await API.getAgenda(STATE.user.id,from+'T00:00:00',from+'T23:59:59');
+    const box=document.getElementById('ag-list');if(!box)return;
+    if(!eventos.length){box.innerHTML='<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Sem compromissos neste dia</div></div>';return;}
+    box.innerHTML=eventos.map(e=>`
+      <div class="card" style="cursor:pointer" onclick="editarEvento('${e.id}')">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="font-size:14px;font-weight:600">${_e(e.titulo)}</div>
+            <div style="font-family:var(--mono);font-size:11px;color:var(--text-2)">${e.hora||'Dia todo'}${e.clientes?.nome?' · '+_e(e.clientes.nome):''}</div>
+            ${e.descricao?`<div style="font-size:12px;color:var(--text-2);margin-top:4px">${_e(e.descricao)}</div>`:''}
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+            <div style="width:12px;height:12px;border-radius:50%;background:${e.cor||'var(--blue)'};flex-shrink:0"></div>
+            <button onclick="excluirEvento(event,'${e.id}')" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:14px">🗑️</button>
+          </div>
+        </div>
+      </div>`).join('');
+  }catch(e){console.error('renderAgenda:',e);}
 }
 
-function openNewEmployee() { UI.toast('Em breve — funcionários via configurações avançadas','info'); }
-function openEditEmployee(id) { UI.toast('Em breve','info'); }
-
-// ── Master ─────────────────────────────────────────────────
-async function renderMaster() {
-  if(!STATE.isMaster) return;
-  const content=document.getElementById('master-content');
-  if(!content) return;
-  try {
-    const {data:empresas}=await window.sb.from('empresas').select('*').order('criado_em',{ascending:false});
-    content.innerHTML=`<div class="kpi-grid" style="margin-bottom:20px"><div class="kpi-card blue"><div class="kpi-value">${empresas?.length||0}</div><div class="kpi-label">Empresas</div></div></div><div class="card"><h4 style="font-size:.92rem;font-weight:700;margin-bottom:16px">Empresas</h4><div class="table-wrap"><table><thead><tr><th>Empresa</th><th>Plano</th><th>Cadastro</th><th>Status</th></tr></thead><tbody>${(empresas||[]).map(e=>`<tr><td><div style="font-weight:600;font-size:.86rem">${e.nome}</div></td><td><span class="badge">${e.plano||'basico'}</span></td><td style="font-size:.78rem;color:var(--text-3)">${fmtDate(e.criado_em)}</td><td><span class="badge ${e.ativo||e.ativa?'badge-success':'badge-danger'}">${e.ativo||e.ativa?'Ativo':'Inativo'}</span></td></tr>`).join('')}</tbody></table></div></div>`;
-    if(window.lucide) lucide.createIcons();
-  } catch(e) { if(content) content.innerHTML='<div class="card"><p style="color:var(--red)">Erro: '+e.message+'</p></div>'; }
+function novoEvento() {
+  openModal(`
+  <h3 style="margin-bottom:14px;font-size:18px;font-weight:700">📅 Novo Evento</h3>
+  <input type="hidden" id="form-ev-id" value="">
+  <label class="req">Título</label><input id="form-ev-titulo" type="text" placeholder="Ex: Visita técnica...">
+  <div class="frow">
+    <div><label>Data</label><input id="form-ev-data" type="date" value="${today()}"></div>
+    <div><label>Hora</label><input id="form-ev-hora" type="time"></div>
+  </div>
+  <label>Cliente</label>
+  <select id="form-ev-cli" style="margin-bottom:11px"><option value="">Sem cliente</option>${APP.clientes.map(c=>`<option value="${c.id}">${_e(c.nome)}</option>`).join('')}</select>
+  <label>Cor</label><input type="color" id="form-ev-cor" value="#38BDF8" style="height:44px;cursor:pointer;margin-bottom:11px">
+  <label>Descrição</label><textarea id="form-ev-desc" rows="2" placeholder="Detalhes..."></textarea>
+  <button class="btn btn-green btn-lg w-full" onclick="salvarEvento()">✅ Salvar</button>`);
+}
+function editarEvento(id) {
+  const e=APP.agenda.find(x=>x.id===id);if(!e)return;
+  openModal(`
+  <h3 style="margin-bottom:14px;font-size:18px;font-weight:700">✏️ Editar Evento</h3>
+  <input type="hidden" id="form-ev-id" value="${e.id}">
+  <label class="req">Título</label><input id="form-ev-titulo" type="text" value="${_e(e.titulo)}">
+  <div class="frow">
+    <div><label>Data</label><input id="form-ev-data" type="date" value="${e.data_inicio?.slice(0,10)||today()}"></div>
+    <div><label>Hora</label><input id="form-ev-hora" type="time" value="${e.hora||''}"></div>
+  </div>
+  <label>Cliente</label>
+  <select id="form-ev-cli" style="margin-bottom:11px"><option value="">Sem cliente</option>${APP.clientes.map(c=>`<option value="${c.id}" ${e.cliente_id===c.id?'selected':''}>${_e(c.nome)}</option>`).join('')}</select>
+  <label>Cor</label><input type="color" id="form-ev-cor" value="${e.cor||'#38BDF8'}" style="height:44px;cursor:pointer;margin-bottom:11px">
+  <label>Descrição</label><textarea id="form-ev-desc" rows="2">${_e(e.descricao||'')}</textarea>
+  <div style="display:flex;gap:8px">
+    <button class="btn btn-green" style="flex:1" onclick="salvarEvento()">✅ Salvar</button>
+    <button class="btn btn-danger btn-sm" style="flex:.4" onclick="excluirEvento(event,'${e.id}')">🗑️</button>
+  </div>`);
+}
+async function salvarEvento(){
+  const titulo=_c(gv('form-ev-titulo','').trim(),100);if(!titulo){UI.toast('Título obrigatório','warning');return;}
+  const data=gv('form-ev-data',today());
+  const d={
+    id:gv('form-ev-id','')||undefined,
+    titulo,hora:gv('form-ev-hora','')||null,
+    data_inicio:data+'T'+(gv('form-ev-hora','')||'00:00'),
+    cliente_id:gv('form-ev-cli','')||null,
+    cor:gv('form-ev-cor','#38BDF8'),
+    descricao:_c(gv('form-ev-desc',''),300),
+  };
+  try{
+    const saved=await API.saveEvento(STATE.user.id,d);
+    if(d.id){const i=APP.agenda.findIndex(x=>x.id===d.id);if(i!==-1)APP.agenda[i]=saved;}
+    else APP.agenda.push(saved);
+    UI.toast('Evento salvo! ✅','success');closeModal();renderAgenda();
+  }catch(e){UI.toast('Erro: '+e.message,'error');}
+}
+async function excluirEvento(e,id){
+  e.stopPropagation();
+  if(!confirm('Excluir evento?'))return;
+  try{await API.deleteEvento(STATE.user.id,id);APP.agenda=APP.agenda.filter(x=>x.id!==id);UI.toast('Evento excluído!','success');renderAgenda();}
+  catch(err){UI.toast('Erro: '+err.message,'error');}
 }
 
-// ── Funções de compatibilidade ─────────────────────────────
-function selectSegment(id)     { if(window.SEGMENTS) SEGMENTS.set(id); }
-function clearSignature()      { const c=document.getElementById('sig-pad'); if(c){const ctx=c.getContext('2d');ctx.clearRect(0,0,c.width,c.height);} }
-function addOSPhotos()         { UI.toast('Upload em breve!','info'); }
-function openPIX()             { UI.toast('PIX em breve!','info'); }
-function copyEmpresaCode()     { const c=STATE.empresa?.codigo; if(c) navigator.clipboard?.writeText(c).then(()=>UI.toast('✅ Copiado!','success')); }
-
-// ── FUNÇÕES ADICIONAIS ────────────────────────────────────
-function saveAppearanceConfig() {
-  const LANGS=['pt','en','es'];
-  const langEl=document.getElementById('cfg-lang')?.value;
-  if(langEl&&LANGS.includes(langEl)&&window.I18N) I18N.set(langEl);
-  const p=(()=>{try{return JSON.parse(localStorage.getItem('nexos_prefs')||'{}');}catch{return{};}})();
-  p.signature_enabled=document.getElementById('cfg-signature')?.checked??false;
-  p.photos_enabled=document.getElementById('cfg-photos')?.checked??false;
-  if(langEl&&LANGS.includes(langEl)) p.lang=langEl;
-  localStorage.setItem('nexos_prefs',JSON.stringify(p));
-  UI.toast('✅ Preferências salvas!','success');
+// Solicitar permissão de notificação
+async function requestNotifPermission(){
+  if('Notification'in window&&Notification.permission==='default') await Notification.requestPermission().catch(()=>{});
 }
+
+// ════════════════════════════════════════════════════════════
+// CARNÊ — cobrança automática WhatsApp
+// ════════════════════════════════════════════════════════════
+async function renderCarnes() {
+  const box=document.getElementById('carne-list');if(!box)return;
+  try{
+    const parc=await API.getParcelas(STATE.user.id);
+    if(!parc.length){box.innerHTML='<div class="empty-state"><div class="empty-icon">📜</div><div class="empty-title">Nenhum carnê ativo</div></div>';return;}
+    box.innerHTML=parc.map(p=>{
+      const venc=isVenc(p.vencimento);
+      const os=p.ordens_servico;
+      const nome=os?.clientes?.nome||os?.cliente_nome||'–';
+      const tel=os?.clientes?.telefone||'';
+      return`<div class="card">
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+          <div>
+            <div style="font-family:var(--mono);font-size:11px;color:var(--blue)">${os?'OS #'+os.numero:'–'}</div>
+            <div style="font-size:15px;font-weight:600">${_e(nome)}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--green)">${fmt(p.valor)}</div>
+            <div style="font-size:11px;color:${venc?'var(--red)':'var(--text-2)'};font-family:var(--mono)">Venc: ${fmtDate(p.vencimento)}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-green btn-sm" style="flex:1" onclick="pagarParcelaUI('${p.id}','${p.valor}','${p.ordem_id||''}')">✅ Marcar Pago</button>
+          ${tel?`<button class="btn btn-ghost btn-sm" onclick="cobrarWA('${p.id}','${tel}','${nome}','${fmt(p.valor)}','${fmtDate(p.vencimento)}')">💬 Cobrar WA</button>`:''}
+        </div>
+      </div>`;
+    }).join('');
+  }catch(e){console.error('renderCarnes:',e);}
+}
+
+async function pagarParcelaUI(id,valor,ordemId){
+  if(!confirm(`Confirmar pagamento de ${fmt(valor)}?`))return;
+  try{await API.pagarParcela(STATE.user.id,id,parseFloat(valor),ordemId||null);UI.toast('Parcela paga! ✅','success');renderCarnes();}
+  catch(e){UI.toast('Erro: '+e.message,'error');}
+}
+function cobrarWA(id,tel,nome,valor,venc){
+  const p=STATE.perfil||{};
+  const msg=`Olá *${nome}*! 👋\n\nPassando para lembrá-lo(a) do pagamento pendente:\n\n💰 *Valor:* ${valor}\n📅 *Vencimento:* ${venc}\n\n${p.pix?`🔑 *PIX:* ${p.pix}\n\n`:''}Qualquer dúvida estamos à disposição!\n\n_${p.empresa_nome||'NexOS'}_`;
+  window.open(API.buildWALink(tel,msg),'_blank');
+}
+
+// ════════════════════════════════════════════════════════════
+// CONFIGURAÇÕES
+// ════════════════════════════════════════════════════════════
+function renderConfig() {
+  const p=STATE.perfil||{};
+  const fields={
+    'cfg-nome':p.empresa_nome||'','cfg-cnpj':p.cnpj||'','cfg-tel':p.telefone||'',
+    'cfg-end':p.endereco||'','cfg-pix':p.pix||'','cfg-termos':p.termos||'',
+    'cfg-zapi-inst':p.zapi_instance||'','cfg-zapi-tok':p.zapi_token||'',
+  };
+  Object.entries(fields).forEach(([id,v])=>{const el=document.getElementById(id);if(el)el.value=v;});
+}
+
+async function salvarConfig() {
+  const empresa_nome=_c(gv('cfg-nome',''),100);
+  if(!empresa_nome){UI.toast('Nome da empresa obrigatório','warning');return;}
+  const d={
+    empresa_nome,cnpj:_c(gv('cfg-cnpj',''),20),telefone:_c(gv('cfg-tel',''),20),
+    endereco:_c(gv('cfg-end',''),200),pix:_c(gv('cfg-pix',''),100),
+    termos:_c(gv('cfg-termos',''),800),
+    zapi_instance:_c(gv('cfg-zapi-inst',''),100),zapi_token:_c(gv('cfg-zapi-tok',''),200),
+  };
+  try{STATE.perfil=await API.upsertPerfil(STATE.user.id,d);Auth._ui();UI.toast('Configurações salvas! ✅','success');}
+  catch(e){UI.toast('Erro: '+e.message,'error');}
+}
+
+async function salvarPIN() {
+  const p1=gv('cfg-pin-new',''),p2=gv('cfg-pin-conf','');
+  if(p1.length!==4||!/^\d{4}$/.test(p1)){UI.toast('PIN deve ter 4 dígitos','warning');return;}
+  if(p1!==p2){UI.toast('PINs não coincidem','warning');return;}
+  const pin_hash=btoa(p1);
+  try{STATE.perfil=await API.upsertPerfil(STATE.user.id,{pin_hash});UI.toast('PIN salvo! ✅','success');document.getElementById('cfg-pin-new').value='';document.getElementById('cfg-pin-conf').value='';}
+  catch(e){UI.toast('Erro: '+e.message,'error');}
+}
+
+window.App=App;
