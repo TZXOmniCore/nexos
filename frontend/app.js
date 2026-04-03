@@ -21,33 +21,53 @@ function calcMargem(custo,venda){ return venda>0?((((venda-custo)/venda)*100).to
 const PAGE_TITLES = {
   dashboard:'Dashboard', os:'Ordens de Serviço', clientes:'Clientes',
   estoque:'Estoque', caixa:'Caixa', agenda:'Agenda', config:'Configurações',
+  carnes:'Carnês',
+  'nova-os':'Nova OS', 'ver-os':'OS', 'novo-cliente':'Novo Cliente',
+  'novo-produto':'Novo Produto', 'novo-evento':'Novo Evento',
 };
 
-function goPage(page) {
+// Páginas secundárias (não aparecem no nav)
+const SECONDARY_PAGES = ['nova-os','ver-os','novo-cliente','novo-produto','novo-evento'];
+
+let _prevPage = 'dashboard';
+let _verOsId  = null;
+
+function goPage(page, opts={}) {
+  // Guardar página anterior para goBack
+  if(!SECONDARY_PAGES.includes(APP._page)) _prevPage = APP._page;
   APP._page = page;
-  // Fechar modal se aberto
-  const mw=document.getElementById('mwrap');if(mw)mw.classList.remove('open');
-  document.body.style.overflow='';
-  // Ativar página
+  // Ativar página no DOM
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   const pg=document.getElementById('page-'+page);if(pg)pg.classList.add('active');
-  // Nav desktop
-  document.querySelectorAll('.nav-item').forEach(i=>i.classList.toggle('active',i.dataset.page===page));
-  // Nav mobile
-  document.querySelectorAll('.mobile-nav-item').forEach(i=>i.classList.toggle('active',i.dataset.page===page));
-  // FAB
+  // Nav — só atualizar para páginas principais
+  const navPage = SECONDARY_PAGES.includes(page) ? _prevPage : page;
+  document.querySelectorAll('.nav-item').forEach(i=>i.classList.toggle('active',i.dataset.page===navPage));
+  document.querySelectorAll('.mobile-nav-item').forEach(i=>i.classList.toggle('active',i.dataset.page===navPage));
+  // FAB — esconder em páginas de formulário
   const fab=document.getElementById('fab');
-  if(fab) fab.style.display=['os','clientes','estoque','agenda'].includes(page)?'flex':'none';
+  if(fab) fab.style.display=(!SECONDARY_PAGES.includes(page)&&['os','clientes','estoque','agenda'].includes(page))?'flex':'none';
   // Título
   UI.setPageTitle(PAGE_TITLES[page]||page);
-  localStorage.setItem('nexos_v4_page',page);
+  if(!SECONDARY_PAGES.includes(page)) localStorage.setItem('nexos_v4_page',page);
+  // Scroll topo
+  const pc=document.getElementById('page-content');if(pc)pc.scrollTop=0;
   // Render
-  const r={dashboard:renderDash,os:renderOS,clientes:renderClientes,estoque:renderEstoque,caixa:renderCaixa,agenda:renderAgenda,config:renderConfig};
+  const r={
+    dashboard:renderDash, os:renderOS, clientes:renderClientes,
+    estoque:renderEstoque, caixa:renderCaixa, agenda:renderAgenda,
+    config:renderConfig, carnes:renderCarnes,
+  };
   if(r[page]) r[page]();
+  // Reiniciar lucide
+  if(window.lucide) lucide.createIcons();
+}
+
+function goBack() {
+  goPage(_prevPage);
 }
 
 function fabAction() {
-  const a={os:novaOS,clientes:novoCliente,estoque:novoProduto,agenda:novoEvento};
+  const a={os:()=>goPage('nova-os'),clientes:()=>goPage('novo-cliente'),estoque:()=>goPage('novo-produto'),agenda:()=>goPage('novo-evento')};
   if(a[APP._page]) a[APP._page]();
 }
 
@@ -80,7 +100,9 @@ const App = {
     // Verificar carnês vencidos
     this._carnesAlert();
     const last = localStorage.getItem('nexos_v4_page')||'dashboard';
-    goPage(last);
+    // Não restaurar páginas de formulário
+    goPage(SECONDARY_PAGES.includes(last)?'dashboard':last);
+    if(window.lucide) lucide.createIcons();
   },
   _ui() {
     const p=STATE.perfil||{};
@@ -200,113 +222,36 @@ function setOsFilter(f,el) {
   renderOS();
 }
 
-// ── Nova OS — formulário V_TEST minimalista ────────────────
+// ── Nova OS — navega para página nova-os ─────────────────────
 function novaOS() {
   _newItens=[]; _newFotos=[]; _curPay='';
-  const now=new Date();
-  const dtl=`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-  const cliOpts=APP.clientes.map(c=>`<option value="${c.id}">${_e(c.nome)}</option>`).join('');
-  openModal(`
-  <h3 style="margin-bottom:14px;font-size:18px;font-weight:700">➕ Nova OS</h3>
-  <div class="card"><div class="card-title"><div class="ct-bar"></div>Cliente</div>
-    <label>Selecionar cadastrado</label>
-    <select id="m-cli-id" onchange="preencherCliente(this.value)" style="margin-bottom:8px"><option value="">– Sem cadastro –</option>${cliOpts}</select>
-    <label class="req">Nome</label><input id="m-cli-nome" type="text" placeholder="Nome completo">
-    <div class="frow">
-      <div><label>Telefone</label><input id="m-cli-tel" type="tel" placeholder="(00) 00000-0000"></div>
-      <div><label>CPF/Doc</label><input id="m-cli-doc" type="text" placeholder="000.000.000-00"></div>
-    </div>
-  </div>
-  <div class="card"><div class="card-title"><div class="ct-bar"></div>Equipamento</div>
-    <label class="req">Equipamento / Produto</label>
-    <input id="m-equip" type="text" placeholder="Ex: iPhone 13, Notebook Dell...">
-    <label>Defeito Relatado</label><textarea id="m-defeito" rows="2" placeholder="Descreva o defeito..."></textarea>
-    <label>Diagnóstico Técnico</label><textarea id="m-diag" rows="2" placeholder="Diagnóstico após análise..."></textarea>
-  </div>
-  <div class="card"><div class="card-title"><div class="ct-bar"></div>Itens / Peças</div>
-    <div class="it-head"><span>Descrição</span><span>Qtd</span><span>R$</span><span></span></div>
-    <div id="m-itens-rows"><p style="font-size:12px;color:var(--text-3);padding:8px 4px;font-family:var(--mono)">Nenhum item</p></div>
-    <div class="add-item-row" style="margin-top:8px">
-      <input id="m-i-desc" type="text" placeholder="Peça ou serviço" style="margin-bottom:0">
-      <input id="m-i-qty"  type="number" value="1" min="1" style="margin-bottom:0">
-      <input id="m-i-preco" type="number" placeholder="R$" step="0.01" style="margin-bottom:0">
-    </div>
-    <div style="display:flex;gap:8px;margin-top:8px">
-      <button class="btn btn-outline btn-sm" onclick="addOSItem()">+ Adicionar</button>
-      <button class="btn btn-ghost btn-sm" onclick="addDoEstoque()">📦 Estoque</button>
-    </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 4px 0;border-top:1px solid var(--border);margin-top:8px">
-      <div>
-        <label style="margin-bottom:4px">Mão de Obra R$</label>
-        <input id="m-mao-obra" type="number" value="0" step="0.01" style="width:120px;margin-bottom:0" oninput="recalcTotalOS()">
-      </div>
-      <div style="text-align:right">
-        <div class="it-total-label">TOTAL</div>
-        <div class="it-total-val" id="m-total">R$ 0,00</div>
-      </div>
-    </div>
-  </div>
-  <div class="card"><div class="card-title"><div class="ct-bar"></div>📷 Fotos</div>
-    <div class="photo-zone" onclick="document.getElementById('fileInOS').click()">
-      <div style="font-size:28px;opacity:.4">📷</div>
-      <div style="font-size:12px;color:var(--text-3);font-family:var(--mono);margin-top:4px">Toque para adicionar fotos</div>
-    </div>
-    <div class="photo-grid" id="m-photo-grid"></div>
-  </div>
-  <div class="card"><div class="card-title"><div class="ct-bar"></div>Pagamento</div>
-    <div class="pay-chips" id="payChips">
-      <div class="pchip" onclick="setPay('dinheiro',this)">💵 Dinheiro</div>
-      <div class="pchip" onclick="setPay('pix',this)">📱 PIX</div>
-      <div class="pchip" onclick="setPay('credito',this)">💳 Crédito</div>
-      <div class="pchip" onclick="setPay('debito',this)">💳 Débito</div>
-      <div class="pchip" onclick="setPay('fiado',this)">📝 Fiado</div>
-      <div class="pchip" onclick="setPay('carne',this)">📜 Carnê</div>
-    </div>
-    <div id="carneConfig" style="display:none">
-      <div style="background:var(--purple-dim);border:1px solid rgba(167,139,250,.2);border-radius:9px;padding:12px;margin-bottom:10px">
-        <div class="frow3">
-          <div><label>Parcelas</label><input type="number" id="carneN" value="3" min="1" max="24" style="margin-bottom:0" oninput="calcCarne()"></div>
-          <div><label>Dia venc.</label><input type="number" id="carneDia" value="10" min="1" max="28" style="margin-bottom:0" oninput="calcCarne()"></div>
-          <div><label>Entrada R$</label><input type="number" id="carneEnt" value="0" step="0.01" style="margin-bottom:0" oninput="calcCarne()"></div>
-        </div>
-        <div id="carnePreview" style="font-family:var(--mono);font-size:11px;color:var(--text-2);margin-top:8px;line-height:1.8"></div>
-      </div>
-    </div>
-    <div id="fiadoWarn" style="display:none;background:var(--red-dim);border:1px solid rgba(248,113,113,.2);border-radius:8px;padding:10px;font-size:12px;color:var(--red);margin-bottom:10px">⚠️ Fiado: será registrado como conta a receber</div>
-    <div class="frow">
-      <div><label>Valor pago R$</label><input type="number" id="m-pago" placeholder="0,00" step="0.01" oninput="calcTrocoOS()"></div>
-      <div><label>Troco</label><input type="number" id="m-troco" readonly style="color:var(--green);margin-bottom:0"></div>
-    </div>
-    <label>Status</label>
-    <select id="m-status">
-      <option value="paga">Paga / Concluída</option>
-      <option value="aberta">Em Aberto</option>
-      <option value="fiado">Fiado</option>
-      <option value="parcial">Parcial / Carnê</option>
-      <option value="cancelada">Cancelada</option>
-    </select>
-    <div class="frow">
-      <div><label>Tipo</label><select id="m-tipo"><option value="servico">Serviço</option><option value="venda">Venda</option><option value="orcamento">Orçamento</option></select></div>
-      <div><label>Data/Hora</label><input type="datetime-local" id="m-data" value="${dtl}"></div>
-    </div>
-  </div>
-  <div class="card"><div class="card-title"><div class="ct-bar"></div>Observações</div>
-    <textarea id="m-obs" rows="3" placeholder="Anotações gerais, termos, etc."></textarea>
-  </div>
-  <div class="card"><div class="card-title"><div class="ct-bar"></div>✍️ Assinatura Digital</div>
-    <canvas id="sigCanvas"></canvas>
-    <div style="font-family:var(--mono);font-size:10px;color:var(--text-3);text-align:center;margin:6px 0 10px">Assine com o dedo para confirmar o serviço</div>
-    <button class="btn btn-ghost btn-sm" onclick="clearSig()">🗑️ Limpar assinatura</button>
-  </div>
-  <button class="btn btn-green btn-lg w-full" style="margin-bottom:32px" onclick="salvarOS()">✅ EMITIR ORDEM DE SERVIÇO</button>`);
-  setTimeout(initSig,100);
-}
-
-function preencherCliente(id) {
-  const c=APP.clientes.find(x=>x.id===id);if(!c)return;
-  const nome=document.getElementById('m-cli-nome');if(nome)nome.value=c.nome;
-  const tel=document.getElementById('m-cli-tel');if(tel)tel.value=c.telefone||'';
-  const doc=document.getElementById('m-cli-doc');if(doc)doc.value=c.cpf||'';
+  // Preencher select de clientes na página
+  const sel=document.getElementById('m-cli-id');
+  if(sel){
+    sel.innerHTML='<option value="">– Sem cadastro –</option>'+APP.clientes.map(c=>`<option value="${c.id}">${_e(c.nome)}</option>`).join('');
+  }
+  // Limpar campos
+  ['m-cli-nome','m-cli-tel','m-cli-doc','m-equip','m-defeito','m-diag','m-obs','m-pago','m-troco'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['m-mao-obra'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='0';});
+  document.getElementById('m-status').value='paga';
+  document.getElementById('m-tipo').value='servico';
+  // Chips de pagamento
+  document.querySelectorAll('.pchip').forEach(c=>c.className='pchip');
+  _curPay='';
+  document.getElementById('carneConfig').style.display='none';
+  document.getElementById('fiadoWarn').style.display='none';
+  // Itens
+  const box=document.getElementById('m-itens-rows');if(box)box.innerHTML='<p style="font-size:12px;color:var(--text-3);padding:8px 4px">Nenhum item adicionado</p>';
+  document.getElementById('m-total').textContent='R$ 0,00';
+  // Fotos
+  const pg=document.getElementById('m-photo-grid');if(pg)pg.innerHTML='';
+  // Título
+  const t=document.getElementById('nova-os-title');if(t)t.textContent='Nova OS';
+  // Data/hora atual
+  const md=document.getElementById('m-data');
+  if(md){const n=new Date();md.value=n.getFullYear()+'-'+pad(n.getMonth()+1)+'-'+pad(n.getDate())+'T'+pad(n.getHours())+':'+pad(n.getMinutes());}
+  goPage('nova-os');
+  setTimeout(()=>{initSig();if(window.lucide)lucide.createIcons();},150);
 }
 
 // ── Itens ─────────────────────────────────────────────────
@@ -459,13 +404,14 @@ async function salvarOS() {
     }
     APP.os.unshift(saved);
     UI.toast(`OS #${saved.numero} emitida! ✅`,'success');
-    closeModal();
+    goPage('os');
     setTimeout(()=>abrirComp(saved.id),400);
   }catch(e){UI.toast('Erro: '+e.message,'error');if(btn){btn.disabled=false;btn.textContent='✅ EMITIR ORDEM DE SERVIÇO';}}
 }
 
 // ── Ver OS (detalhe) ──────────────────────────────────────
 async function verOS(id) {
+  _verOsId = id;
   const os=APP.os.find(o=>o.id===id)||await API.getOSById(id).catch(()=>null);
   if(!os){UI.toast('OS não encontrada','error');return;}
   let itens=[];try{itens=JSON.parse(os.itens||'[]');}catch{}
@@ -474,6 +420,11 @@ async function verOS(id) {
   const nome=os.clientes?.nome||os.cliente_nome||'–';
   const tel=os.clientes?.telefone||'';
   const st=_normSt(os.status);
+
+  // Atualizar cabeçalho da página
+  const numEl=document.getElementById('ver-os-num');if(numEl)numEl.textContent='OS #'+(os.numero||'–');
+  const stEl=document.getElementById('ver-os-status');if(stEl)stEl.textContent=statusLabel(os.status);
+
   const itensH=itens.map(it=>`
     <div class="it-row">
       <span style="font-size:13px">${_e(it.descricao||it.desc||'')}</span>
@@ -481,51 +432,72 @@ async function verOS(id) {
       <span style="font-family:var(--mono);font-size:11px;color:var(--green)">${fmt((it.quantidade||1)*(it.valor_unit||0))}</span>
       <span></span>
     </div>`).join('');
+
   const statusBtns=['concluido','aguardando','andamento','cancelado','fiado'].map(s=>`
-    <div onclick="alterarStatusOS('${id}','${s}')" style="padding:7px 11px;border-radius:8px;font-size:11px;font-family:var(--mono);cursor:pointer;border:1.5px solid ${st===s?'var(--blue)':'var(--bg-4)'};color:${st===s?'var(--blue)':'var(--text-3)'};background:${st===s?'var(--blue-dim)':'transparent'}">${statusLabel(s)}</div>`).join('');
+    <button onclick="alterarStatusOS('${id}','${s}')" class="btn btn-${st===s?'primary':'ghost'} btn-sm">
+      ${statusLabel(s)}
+    </button>`).join('');
+
   const fotosH=fotos.length?`<div class="card"><div class="card-title"><div class="ct-bar"></div>Fotos (${fotos.length})</div><div class="photo-grid">${fotos.map((f,i)=>`<div class="photo-thumb"><img src="${f}" onclick="verFoto('${id}',${i})"></div>`).join('')}</div></div>`:'';
-  const sigH=os.assinatura?`<div class="card"><div class="card-title"><div class="ct-bar"></div>Assinatura Digital</div><div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center"><img src="${os.assinatura}" style="max-width:100%;max-height:60px"><div style="font-family:var(--mono);font-size:9px;color:var(--text-3);margin-top:4px">${_e(nome)}</div></div></div>`:'';
+  const sigH=os.assinatura?`<div class="card"><div class="card-title"><div class="ct-bar"></div>Assinatura Digital</div><div style="background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;text-align:center"><img src="${os.assinatura}" style="max-width:100%;max-height:60px"><div style="font-size:.72rem;color:var(--text-3);margin-top:4px;font-family:var(--mono)">${_e(nome)}</div></div></div>`:'';
   const histH=hist.length?hist.map(h=>`<div class="hist-item"><div class="hist-dot"></div><div><div class="hist-time">${fDateFull(h.at||h.criado_em)}</div><div class="hist-txt">${_e(h.txt||h.texto||'')}</div></div></div>`).join(''):'<p style="font-size:.8rem;color:var(--text-3)">Sem histórico</p>';
-  openModal(`
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:2px">
-      <div><div style="font-family:var(--mono);font-size:10px;color:var(--text-3);letter-spacing:2px">ORDEM DE SERVIÇO</div><div class="d-os-num">#${os.numero||id.slice(-4)}</div></div>
-      <span class="sbadge sb-${st}" style="margin-top:8px">${statusLabel(os.status)}</span>
+
+  const body=document.getElementById('ver-os-body');
+  if(!body)return;
+  body.innerHTML=`
+    <div class="total-hl">
+      <div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--text-3)">TOTAL</div>
+        <div style="font-size:.82rem;color:var(--text-2)">${payLabel(os.forma_pagamento)}</div>
+      </div>
+      <div class="th-val">${fmt(os.valor_total)}</div>
     </div>
-    <div class="d-os-date">${fDateFull(os.criado_em)} <span class="pay-pill pp-${os.forma_pagamento||''}">${payLabel(os.forma_pagamento)}</span></div>
-    <div class="total-hl"><div><div style="font-family:var(--mono);font-size:10px;color:var(--text-3)">TOTAL</div></div><div class="th-val">${fmt(os.valor_total)}</div></div>
     <div class="card"><div class="card-title"><div class="ct-bar"></div>Cliente</div>
       <div class="ir"><span class="irl">Nome</span><span class="irv">${_e(nome)}</span></div>
       ${tel?`<div class="ir"><span class="irl">Tel</span><span class="irv">${_e(tel)}</span></div>`:''}
+      <div class="ir"><span class="irl">Data</span><span class="irv">${fDateFull(os.criado_em)}</span></div>
     </div>
     ${os.equipamento||os.item?`<div class="card"><div class="card-title"><div class="ct-bar"></div>Equipamento</div>
-      <div class="ir"><span class="irl">Equip.</span><span class="irv">${_e(os.equipamento||os.item||'')}</span></div>
+      ${os.equipamento||os.item?`<div class="ir"><span class="irl">Equip.</span><span class="irv">${_e(os.equipamento||os.item||'')}</span></div>`:''}
       ${os.defeito?`<div class="ir"><span class="irl">Defeito</span><span class="irv">${_e(os.defeito)}</span></div>`:''}
       ${os.diagnostico?`<div class="ir"><span class="irl">Diag.</span><span class="irv">${_e(os.diagnostico)}</span></div>`:''}
     </div>`:''}
     <div class="card"><div class="card-title"><div class="ct-bar"></div>Itens</div>
       ${itensH}
-      ${os.valor_mao_obra>0?`<div class="it-row"><span>Mão de Obra</span><span></span><span style="font-family:var(--mono);font-size:11px;color:var(--green)">${fmt(os.valor_mao_obra)}</span><span></span></div>`:''}
+      ${(os.valor_mao_obra||0)>0?`<div class="it-row"><span>Mão de Obra</span><span></span><span style="font-family:var(--mono);font-size:11px;color:var(--green)">${fmt(os.valor_mao_obra)}</span><span></span></div>`:''}
       <div class="it-total-row"><span class="it-total-label">TOTAL</span><span class="it-total-val">${fmt(os.valor_total)}</span></div>
     </div>
     ${os.observacoes?`<div class="card"><div class="card-title"><div class="ct-bar"></div>Observações</div><p style="font-size:14px;line-height:1.65">${_e(os.observacoes)}</p></div>`:''}
     ${fotosH}${sigH}
     <div class="card"><div class="card-title"><div class="ct-bar"></div>Alterar Status</div>
-      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px">${statusBtns}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">${statusBtns}</div>
     </div>
     <div class="card"><div class="card-title"><div class="ct-bar"></div>Histórico / Notas</div>
       ${histH}
-      <textarea id="nota-txt" placeholder="Adicionar nota..." rows="2" style="margin-top:10px;margin-bottom:8px"></textarea>
-      <button class="btn btn-ghost btn-sm" onclick="addNotaOS('${id}')">📝 Salvar nota</button>
+      <div class="form-group" style="margin-top:12px">
+        <textarea id="nota-txt" class="form-control" placeholder="Adicionar nota..." rows="2"></textarea>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="addNotaOS('${id}')">
+        <i data-lucide="file-plus" style="width:13px;height:13px"></i> Salvar nota
+      </button>
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:8px">
-      <button class="btn btn-primary" style="flex:1" onclick="abrirComp('${id}');closeModal()">🧾 Comprovante</button>
-      <button class="btn btn-green"  style="flex:1" onclick="enviarWA('${id}')">💬 WhatsApp</button>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <button class="btn btn-ghost" onclick="enviarWA('${id}')">
+        <i data-lucide="message-circle" style="width:14px;height:14px"></i> WhatsApp
+      </button>
+      <button class="btn btn-ghost" onclick="gerarPDF('${id}')">
+        <i data-lucide="file-text" style="width:14px;height:14px"></i> PDF
+      </button>
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:8px">
-      <button class="btn btn-ghost" style="flex:1" onclick="gerarPDF('${id}')">📄 PDF</button>
-      <button class="btn btn-danger btn-sm" style="flex:.4" onclick="excluirOS('${id}')">🗑️</button>
-    </div>`);
+    <button class="btn btn-danger w-full" onclick="excluirOS('${id}')">
+      <i data-lucide="trash-2" style="width:14px;height:14px"></i> Excluir OS
+    </button>
+    <div style="height:20px"></div>`;
+
+  goPage('ver-os');
+  if(window.lucide)setTimeout(()=>lucide.createIcons(),50);
 }
+
 
 async function alterarStatusOS(id,novoStatus) {
   try{
@@ -754,23 +726,21 @@ function renderClientes() {
 }
 
 function novoCliente() {
-  openModal(`
-  <h3 style="margin-bottom:14px;font-size:18px;font-weight:700">👤 Novo Cliente</h3>
-  <input type="hidden" id="form-cli-id" value="">
-  <label class="req">Nome</label><input id="form-cli-nome" type="text" placeholder="Nome completo">
-  <label>Telefone</label><input id="form-cli-tel" type="tel" placeholder="(00) 00000-0000">
-  <label>CPF / CNPJ</label><input id="form-cli-doc" type="text" placeholder="000.000.000-00">
-  <button class="btn btn-green btn-lg w-full" onclick="salvarCliente()">✅ Salvar</button>`);
+  document.getElementById('form-cli-id').value='';
+  document.getElementById('form-cli-nome').value='';
+  document.getElementById('form-cli-tel').value='';
+  document.getElementById('form-cli-doc').value='';
+  const t=document.getElementById('form-cli-title');if(t)t.textContent='Novo Cliente';
+  goPage('novo-cliente');
 }
 function editarCliente(id) {
   const c=APP.clientes.find(x=>x.id===id);if(!c)return;
-  openModal(`
-  <h3 style="margin-bottom:14px;font-size:18px;font-weight:700">✏️ Editar Cliente</h3>
-  <input type="hidden" id="form-cli-id" value="${c.id}">
-  <label class="req">Nome</label><input id="form-cli-nome" type="text" value="${_e(c.nome)}">
-  <label>Telefone</label><input id="form-cli-tel" type="tel" value="${_e(c.telefone||'')}">
-  <label>CPF / CNPJ</label><input id="form-cli-doc" type="text" value="${_e(c.cpf||'')}">
-  <button class="btn btn-green btn-lg w-full" onclick="salvarCliente()">✅ Salvar</button>`);
+  document.getElementById('form-cli-id').value=c.id;
+  document.getElementById('form-cli-nome').value=c.nome;
+  document.getElementById('form-cli-tel').value=c.telefone||'';
+  document.getElementById('form-cli-doc').value=c.cpf||'';
+  const t=document.getElementById('form-cli-title');if(t)t.textContent='Editar Cliente';
+  goPage('novo-cliente');
 }
 async function salvarCliente() {
   const nome=_c(gv('form-cli-nome','').trim(),100);if(!nome){UI.toast('Nome obrigatório','warning');return;}
@@ -779,7 +749,7 @@ async function salvarCliente() {
     const saved=await API.saveCliente(STATE.user.id,d);
     if(d.id){const i=APP.clientes.findIndex(x=>x.id===d.id);if(i!==-1)APP.clientes[i]=saved;}
     else APP.clientes.push(saved);
-    UI.toast('Cliente salvo! ✅','success');closeModal();renderClientes();
+    UI.toast('Cliente salvo! ✅','success');goBack();renderClientes();
   }catch(e){UI.toast('Erro: '+e.message,'error');}
 }
 async function excluirCliente(e,id) {
@@ -815,48 +785,36 @@ function renderEstoque() {
 }
 
 function novoProduto() {
-  openModal(`
-  <h3 style="margin-bottom:14px;font-size:18px;font-weight:700">📦 Novo Produto</h3>
-  <input type="hidden" id="form-prd-id" value="">
-  <label class="req">Nome</label><input id="form-prd-nome" type="text" placeholder="Nome do produto">
-  <label>Código / SKU</label><input id="form-prd-cod" type="text" placeholder="SKU-001">
-  <div class="frow">
-    <div><label>Custo R$</label><input id="form-prd-custo" type="number" step="0.01" placeholder="0,00" oninput="updMgPrd()"></div>
-    <div><label>Venda R$</label><input id="form-prd-venda" type="number" step="0.01" placeholder="0,00" oninput="updMgPrd()"></div>
-  </div>
-  <div id="mg-prev" style="font-family:var(--mono);font-size:11px;color:var(--blue);margin-bottom:10px"></div>
-  <div class="frow">
-    <div><label>Quantidade</label><input id="form-prd-qtd" type="number" value="0" min="0"></div>
-    <div><label>Estoque Mín.</label><input id="form-prd-min" type="number" value="0" min="0"></div>
-  </div>
-  <button class="btn btn-green btn-lg w-full" onclick="salvarProduto()">✅ Salvar</button>`);
+  document.getElementById('form-prd-id').value='';
+  ['form-prd-nome','form-prd-cod'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['form-prd-custo','form-prd-venda'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['form-prd-qtd','form-prd-min'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='0';});
+  const t=document.getElementById('form-prd-title');if(t)t.textContent='Novo Produto';
+  const r=document.getElementById('prd-resumo');if(r)r.style.display='none';
+  const mp=document.getElementById('mg-prev');if(mp)mp.textContent='';
+  goPage('novo-produto');
 }
 function editarProduto(id) {
   const p=APP.produtos.find(x=>x.id===id);if(!p)return;
-  openModal(`
-  <h3 style="margin-bottom:14px;font-size:18px;font-weight:700">✏️ ${_e(p.nome)}</h3>
-  <input type="hidden" id="form-prd-id" value="${p.id}">
-  <div class="card">
-    <div class="ir"><span class="irl">Venda</span><span class="irv" style="color:var(--green)">${fmt(p.preco_venda)}</span></div>
-    <div class="ir"><span class="irl">Custo</span><span class="irv">${fmt(p.preco_custo)}</span></div>
-    <div class="ir"><span class="irl">Margem</span><span class="irv" style="color:var(--blue)">${calcMargem(p.preco_custo,p.preco_venda)}%</span></div>
-    <div class="ir"><span class="irl">Estoque</span><span class="irv" style="color:${(p.quantidade||0)<=(p.estoque_min||0)?'var(--red)':'var(--green)'}">${p.quantidade||0}</span></div>
-  </div>
-  <label>Nome</label><input id="form-prd-nome" type="text" value="${_e(p.nome)}">
-  <label>Código</label><input id="form-prd-cod" type="text" value="${_e(p.codigo||'')}">
-  <div class="frow">
-    <div><label>Custo R$</label><input id="form-prd-custo" type="number" value="${p.preco_custo||0}" step="0.01" oninput="updMgPrd()"></div>
-    <div><label>Venda R$</label><input id="form-prd-venda" type="number" value="${p.preco_venda||0}" step="0.01" oninput="updMgPrd()"></div>
-  </div>
-  <div id="mg-prev" style="font-family:var(--mono);font-size:11px;color:var(--blue);margin-bottom:10px"></div>
-  <div class="frow">
-    <div><label>Quantidade</label><input id="form-prd-qtd" type="number" value="${p.quantidade||0}" min="0"></div>
-    <div><label>Estoque Mín.</label><input id="form-prd-min" type="number" value="${p.estoque_min||0}" min="0"></div>
-  </div>
-  <div style="display:flex;gap:8px">
-    <button class="btn btn-green" style="flex:1" onclick="salvarProduto()">✅ Salvar</button>
-    <button class="btn btn-danger btn-sm" style="flex:.4" onclick="excluirProduto('${p.id}')">🗑️</button>
-  </div>`);
+  document.getElementById('form-prd-id').value=p.id;
+  document.getElementById('form-prd-nome').value=p.nome;
+  document.getElementById('form-prd-cod').value=p.codigo||'';
+  document.getElementById('form-prd-custo').value=p.preco_custo||0;
+  document.getElementById('form-prd-venda').value=p.preco_venda||0;
+  document.getElementById('form-prd-qtd').value=p.quantidade||0;
+  document.getElementById('form-prd-min').value=p.estoque_min||0;
+  const t=document.getElementById('form-prd-title');if(t)t.textContent='Editar Produto';
+  // Resumo
+  const r=document.getElementById('prd-resumo');
+  if(r){
+    r.style.display='block';
+    document.getElementById('res-venda').textContent=fmt(p.preco_venda);
+    document.getElementById('res-custo').textContent=fmt(p.preco_custo);
+    document.getElementById('res-mg').textContent=calcMargem(p.preco_custo,p.preco_venda)+'%';
+    const estEl=document.getElementById('res-est');
+    if(estEl){estEl.textContent=p.quantidade||0;estEl.style.color=(p.quantidade||0)<=(p.estoque_min||0)?'var(--red)':'var(--green)';}
+  }
+  goPage('novo-produto');
   setTimeout(updMgPrd,50);
 }
 function updMgPrd(){
@@ -872,7 +830,7 @@ async function salvarProduto(){
     const saved=await API.saveProduto(STATE.user.id,d);
     if(d.id){const i=APP.produtos.findIndex(x=>x.id===d.id);if(i!==-1)APP.produtos[i]=saved;}
     else APP.produtos.push(saved);
-    UI.toast('Produto salvo! ✅','success');closeModal();renderEstoque();
+    UI.toast('Produto salvo! ✅','success');goBack();renderEstoque();
   }catch(e){UI.toast('Erro: '+e.message,'error');}
 }
 async function excluirProduto(id){
@@ -966,38 +924,29 @@ async function renderAgenda() {
 }
 
 function novoEvento() {
-  openModal(`
-  <h3 style="margin-bottom:14px;font-size:18px;font-weight:700">📅 Novo Evento</h3>
-  <input type="hidden" id="form-ev-id" value="">
-  <label class="req">Título</label><input id="form-ev-titulo" type="text" placeholder="Ex: Visita técnica...">
-  <div class="frow">
-    <div><label>Data</label><input id="form-ev-data" type="date" value="${today()}"></div>
-    <div><label>Hora</label><input id="form-ev-hora" type="time"></div>
-  </div>
-  <label>Cliente</label>
-  <select id="form-ev-cli" style="margin-bottom:11px"><option value="">Sem cliente</option>${APP.clientes.map(c=>`<option value="${c.id}">${_e(c.nome)}</option>`).join('')}</select>
-  <label>Cor</label><input type="color" id="form-ev-cor" value="#38BDF8" style="height:44px;cursor:pointer;margin-bottom:11px">
-  <label>Descrição</label><textarea id="form-ev-desc" rows="2" placeholder="Detalhes..."></textarea>
-  <button class="btn btn-green btn-lg w-full" onclick="salvarEvento()">✅ Salvar</button>`);
+  document.getElementById('form-ev-id').value='';
+  document.getElementById('form-ev-titulo').value='';
+  document.getElementById('form-ev-data').value=today();
+  document.getElementById('form-ev-hora').value='';
+  document.getElementById('form-ev-desc').value='';
+  document.getElementById('form-ev-cor').value='#38BDF8';
+  const sel=document.getElementById('form-ev-cli');
+  if(sel){sel.innerHTML='<option value="">Sem cliente</option>'+APP.clientes.map(c=>`<option value="${c.id}">${_e(c.nome)}</option>`).join('');}
+  const t=document.getElementById('form-ev-title');if(t)t.textContent='Novo Evento';
+  goPage('novo-evento');
 }
 function editarEvento(id) {
   const e=APP.agenda.find(x=>x.id===id);if(!e)return;
-  openModal(`
-  <h3 style="margin-bottom:14px;font-size:18px;font-weight:700">✏️ Editar Evento</h3>
-  <input type="hidden" id="form-ev-id" value="${e.id}">
-  <label class="req">Título</label><input id="form-ev-titulo" type="text" value="${_e(e.titulo)}">
-  <div class="frow">
-    <div><label>Data</label><input id="form-ev-data" type="date" value="${e.data_inicio?.slice(0,10)||today()}"></div>
-    <div><label>Hora</label><input id="form-ev-hora" type="time" value="${e.hora||''}"></div>
-  </div>
-  <label>Cliente</label>
-  <select id="form-ev-cli" style="margin-bottom:11px"><option value="">Sem cliente</option>${APP.clientes.map(c=>`<option value="${c.id}" ${e.cliente_id===c.id?'selected':''}>${_e(c.nome)}</option>`).join('')}</select>
-  <label>Cor</label><input type="color" id="form-ev-cor" value="${e.cor||'#38BDF8'}" style="height:44px;cursor:pointer;margin-bottom:11px">
-  <label>Descrição</label><textarea id="form-ev-desc" rows="2">${_e(e.descricao||'')}</textarea>
-  <div style="display:flex;gap:8px">
-    <button class="btn btn-green" style="flex:1" onclick="salvarEvento()">✅ Salvar</button>
-    <button class="btn btn-danger btn-sm" style="flex:.4" onclick="excluirEvento(event,'${e.id}')">🗑️</button>
-  </div>`);
+  document.getElementById('form-ev-id').value=e.id;
+  document.getElementById('form-ev-titulo').value=e.titulo;
+  document.getElementById('form-ev-data').value=e.data_inicio?.slice(0,10)||today();
+  document.getElementById('form-ev-hora').value=e.hora||'';
+  document.getElementById('form-ev-desc').value=e.descricao||'';
+  document.getElementById('form-ev-cor').value=e.cor||'#38BDF8';
+  const sel=document.getElementById('form-ev-cli');
+  if(sel){sel.innerHTML='<option value="">Sem cliente</option>'+APP.clientes.map(c=>`<option value="${c.id}" ${e.cliente_id===c.id?'selected':''}>${_e(c.nome)}</option>`).join('');}
+  const t=document.getElementById('form-ev-title');if(t)t.textContent='Editar Evento';
+  goPage('novo-evento');
 }
 async function salvarEvento(){
   const titulo=_c(gv('form-ev-titulo','').trim(),100);if(!titulo){UI.toast('Título obrigatório','warning');return;}
@@ -1014,7 +963,7 @@ async function salvarEvento(){
     const saved=await API.saveEvento(STATE.user.id,d);
     if(d.id){const i=APP.agenda.findIndex(x=>x.id===d.id);if(i!==-1)APP.agenda[i]=saved;}
     else APP.agenda.push(saved);
-    UI.toast('Evento salvo! ✅','success');closeModal();renderAgenda();
+    UI.toast('Evento salvo! ✅','success');goBack();renderAgenda();
   }catch(e){UI.toast('Erro: '+e.message,'error');}
 }
 async function excluirEvento(e,id){
