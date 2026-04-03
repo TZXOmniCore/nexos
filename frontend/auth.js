@@ -55,6 +55,16 @@ const Auth = {
     finally{if(btn){btn.disabled=false;btn.innerHTML='<i data-lucide="log-in" style="width:15px;height:15px"></i> Entrar';if(window.lucide)lucide.createIcons();}}
   },
 
+  async loginGoogle() {
+    try {
+      const {error} = await window.sb.auth.signInWithOAuth({
+        provider:'google',
+        options:{redirectTo:location.origin+location.pathname}
+      });
+      if(error) UI.toast('Erro ao entrar com Google','error');
+    } catch { UI.toast('Erro ao entrar com Google','error'); }
+  },
+
   async register() {
     const nome  = _s(document.getElementById('reg-nome')?.value||'',100);
     const email = _s(document.getElementById('reg-email')?.value||'',254);
