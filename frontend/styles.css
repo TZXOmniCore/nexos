@@ -1,5 +1,5 @@
 /* ============================================================
-   NexOS v4.0 — styles.css 
+   NexOS v4.0 — styles.css | Design v3.5 + V_TEST components
    ============================================================ */
 
 /* ── RESET ────────────────────────────────────────────────── */
@@ -713,4 +713,48 @@ textarea { resize: vertical; min-height: 70px; }
 @media print {
   #auth-screen, #app-shell .sidebar, #header, #mobile-nav, #toast-container, .btn, nav, #fab { display: none !important; }
   #compView { position: static; overflow: visible; padding: 0; }
+}
+
+/* ── GOOGLE BUTTON ────────────────────────────────────────── */
+.btn-google {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 11px 16px;
+  background: var(--bg-2);
+  border: 1px solid var(--border-md);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: .87rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--fast) var(--ease);
+  margin-bottom: 14px;
+}
+.btn-google:hover {
+  background: var(--bg-3);
+  border-color: var(--border-hi);
+}
+
+/* ── AUTH DIVIDER ─────────────────────────────────────────── */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0 14px;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.auth-divider span {
+  font-size: .75rem;
+  color: var(--text-3);
+  white-space: nowrap;
 }
