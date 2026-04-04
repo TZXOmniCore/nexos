@@ -196,7 +196,9 @@ const API = {
     return data;
   },
   async createOS(uid, d) {
-    const {data,error} = await sb.from('ordens_servico').insert({dono_id:uid,...d}).select().single();
+    // Número aleatório de 5 dígitos único
+    const numero = Math.floor(10000 + Math.random() * 90000);
+    const {data,error} = await sb.from('ordens_servico').insert({dono_id:uid, numero, ...d}).select().single();
     if(error) throw error;
     return data;
   },
