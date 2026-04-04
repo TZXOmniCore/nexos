@@ -67,7 +67,7 @@ function goBack() {
 }
 
 function fabAction() {
-  const a={os:()=>goPage('nova-os'),clientes:()=>goPage('novo-cliente'),estoque:()=>goPage('novo-produto'),agenda:()=>goPage('novo-evento')};
+  const a={os:novaOS, clientes:novoCliente, estoque:novoProduto, agenda:novoEvento};
   if(a[APP._page]) a[APP._page]();
 }
 
@@ -404,7 +404,8 @@ async function salvarOS() {
     }
     APP.os.unshift(saved);
     UI.toast(`OS #${saved.numero} emitida! ✅`,'success');
-    goPage('os');
+    goBack();
+    renderOS();
     setTimeout(()=>abrirComp(saved.id),400);
   }catch(e){UI.toast('Erro: '+e.message,'error');if(btn){btn.disabled=false;btn.textContent='✅ EMITIR ORDEM DE SERVIÇO';}}
 }
