@@ -16,8 +16,11 @@
 <link rel="apple-touch-icon" href="NexOS.png">
 <link rel="manifest" href="manifest.json">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=41">
+<link rel="stylesheet" href="styles.css?v=42">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
 
@@ -789,12 +792,10 @@
 <input type="file" id="fileInOS" accept="image/*" multiple capture="environment" style="display:none" onchange="handlePhotos(event)">
 <div id="toast-container"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="api.js?v=41"></script>
-<script src="auth.js?v=41"></script>
-<script src="app.js?v=41"></script>
+
+<script src="api.js?v=42"></script>
+<script src="auth.js?v=42"></script>
+<script src="app.js?v=42"></script>
 <script>
 function globalSearch(q) {
   if(!q||q.length<2)return;
