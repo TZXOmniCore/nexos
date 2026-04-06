@@ -786,3 +786,316 @@ async function gerarPDF(id) {
     UI.toast('Erro ao gerar PDF: '+e.message,'error');
   }
 }
+
+
+
+// ════════════════════════════════════════════════════════════
+// CLIENTES, ESTOQUE, CAIXA, AGENDA, CONFIG, CARNÊS
+// ════════════════════════════════════════════════════════════
+function renderClientes() {
+  const box = document.getElementById('cli-list'); if(!box) return;
+  const q = gv('cli-search','').toLowerCase();
+  const list = D.clientes.filter(c=>!q||c.nome.toLowerCase().includes(q)||(c.telefone||'').includes(q));
+  if(!list.length){box.innerHTML='<div class="empty"><span class="empty-ico">👥</span><h3>Nenhum cliente</h3><p>Toque em + para adicionar</p></div>';return;}
+  box.innerHTML = list.map(c=>`
+    <div class="card" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:13px 15px" onclick="editarCliente('${c.id}')">
+      <div>
+        <div style="font-size:14px;font-weight:600">${esc(c.nome)}</div>
+        <div style="font-family:monospace;font-size:11px;color:var(--muted);margin-top:3px">${esc(c.telefone||'–')} ${c.cpf_cnpj?'| '+esc(c.cpf_cnpj):''}</div>
+      </div>
+      <button onclick="excluirCliente(event,'${c.id}')" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:18px;padding:4px">🗑️</button>
+    </div>`).join('');
+}
+
+function novoCliente() {
+  openModal(`
+    <h3 style="margin-bottom:14px;font-size:18px;font-weight:700">👤 Novo Cliente</h3>
+    <input type="hidden" id="form-cli-id" value="">
+    <label class="req">Nome</label><input type="text" id="form-cli-nome" placeholder="Nome completo">
+    <label>Telefone</label><input type="tel" id="form-cli-tel" placeholder="(00) 00000-0000">
+    <label>CPF / CNPJ</label><input type="text" id="form-cli-doc" placeholder="000.000.000-00">
+    <button class="btn btn-green" style="margin-top:4px" onclick="salvarCliente()">✅ Salvar</button>
+  `);
+}
+
+function editarCliente(id) {
+  const c = D.clientes.find(x=>x.id===id); if(!c) return;
+  openModal(`
+    <h3 style="margin-bottom:14px;font-size:18px;font-weight:700">✏️ Editar Cliente</h3>
+    <input type="hidden" id="form-cli-id" value="${c.id}">
+    <label class="req">Nome</label><input type="text" id="form-cli-nome" value="${esc(c.nome)}">
+    <label>Telefone</label><input type="tel" id="form-cli-tel" value="${esc(c.telefone||'')}">
+    <label>CPF / CNPJ</label><input type="text" id="form-cli-doc" value="${esc(c.cpf_cnpj||'')}">
+    <button class="btn btn-green" style="margin-top:4px" onclick="salvarCliente()">✅ Salvar</button>
+  `);
+}
+
+async function salvarCliente() {
+  const nome = clean(gv('form-cli-nome','').trim(), 100);
+  if (!nome) { UI.toast('Nome obrigatório','w'); return; }
+  const d = { id:gv('form-cli-id','')||undefined, nome, telefone:clean(gv('form-cli-tel',''),20), cpf_cnpj:clean(gv('form-cli-doc',''),20) };
+  try {
+    const saved = await API.saveCliente(G.uid, d);
+    if (d.id) { const i=D.clientes.findIndex(x=>x.id===d.id); if(i!==-1)D.clientes[i]=saved; }
+    else D.clientes.push(saved);
+    UI.toast('Cliente salvo!','s');
+    closeModal();
+    renderClientes();
+  } catch(e) { UI.toast('Erro: '+e.message,'e'); }
+}
+
+async function excluirCliente(e, id) {
+  e.stopPropagation();
+  if (!confirm('Excluir este cliente?')) return;
+  try {
+    await API.deleteCliente(G.uid, id);
+    D.clientes = D.clientes.filter(c=>c.id!==id);
+    UI.toast('Cliente excluído!','s');
+    renderClientes();
+  } catch(err) { UI.toast('Erro: '+err.message,'e'); }
+}
+
+// ════════════════════════════════════════════════════════
+// ESTOQUE
+// ════════════════════════════════════════════════════════
+function renderEstoque() {
+  const box = document.getElementById('est-list'); if(!box) return;
+  const q = gv('est-search','').toLowerCase();
+  const list = D.produtos.filter(p=>p.ativo!==false&&(!q||p.nome.toLowerCase().includes(q)||(p.codigo||'').toLowerCase().includes(q)));
+  if(!list.length){box.innerHTML='<div class="empty"><span class="empty-ico">📦</span><h3>Nenhum produto</h3><p>Toque em + para adicionar</p></div>';return;}
+  box.innerHTML = list.map(p=>`
+    <div class="prod-item" onclick="editarProduto('${p.id}')">
+      <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+        <div>
+          <div style="font-size:14px;font-weight:600">${esc(p.nome)}</div>
+          <div style="font-family:monospace;font-size:10px;color:var(--muted)">${p.codigo?'#'+esc(p.codigo)+' · ':''}</div>
+        </div>
+        <div style="font-family:monospace;font-size:14px;font-weight:700;color:var(--green)">${fmtBRL(p.preco_venda)}</div>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        <span style="font-family:monospace;font-size:11px;color:${(p.quantidade||0)<=(p.estoque_min||0)?'var(--red)':'var(--green)'}">Est: ${p.quantidade||0} (min:${p.estoque_min||0})</span>
+        ${p.preco_custo>0?`<span style="font-family:monospace;font-size:11px;color:var(--blue)">Mg: ${calcMg(p.preco_custo,p.preco_venda)}%</span>`:''}
+        <span style="font-family:monospace;font-size:11px;color:var(--muted)">Custo: ${fmtBRL(p.preco_custo)}</span>
+      </div>
+    </div>`).join('');
+}
+
+function novoProduto() {
+  openModal(`
+    <h3 style="margin-bottom:14px;font-size:18px;font-weight:700">📦 Novo Produto</h3>
+    <input type="hidden" id="form-prd-id" value="">
+    <label class="req">Nome</label><input type="text" id="form-prd-nome" placeholder="Nome do produto">
+    <label>Código / SKU</label><input type="text" id="form-prd-cod" placeholder="SKU-001">
+    <div class="frow">
+      <div><label>Custo R$</label><input type="number" id="form-prd-custo" step="0.01" oninput="updMg()"></div>
+      <div><label>Venda R$</label><input type="number" id="form-prd-venda" step="0.01" oninput="updMg()"></div>
+    </div>
+    <div id="mg-prev" style="font-family:monospace;font-size:11px;color:var(--blue);margin-bottom:10px"></div>
+    <div class="frow">
+      <div><label>Quantidade</label><input type="number" id="form-prd-qtd" value="0" min="0"></div>
+      <div><label>Estoque Mín.</label><input type="number" id="form-prd-min" value="0" min="0"></div>
+    </div>
+    <button class="btn btn-green" style="margin-top:4px" onclick="salvarProduto()">✅ Salvar</button>
+  `);
+}
+
+function editarProduto(id) {
+  const p = D.produtos.find(x=>x.id===id); if(!p) return;
+  openModal(`
+    <h3 style="margin-bottom:14px;font-size:18px;font-weight:700">✏️ ${esc(p.nome)}</h3>
+    <input type="hidden" id="form-prd-id" value="${p.id}">
+    <div class="card"><div class="card-title"><div class="ct-bar"></div>Resumo</div>
+      <div class="ir"><span class="irl">Venda</span><span class="irv" style="color:var(--green)">${fmtBRL(p.preco_venda)}</span></div>
+      <div class="ir"><span class="irl">Custo</span><span class="irv">${fmtBRL(p.preco_custo)}</span></div>
+      <div class="ir"><span class="irl">Margem</span><span class="irv" style="color:var(--blue)">${calcMg(p.preco_custo,p.preco_venda)}%</span></div>
+      <div class="ir"><span class="irl">Estoque</span><span class="irv" style="color:${(p.quantidade||0)<=(p.estoque_min||0)?'var(--red)':'var(--green)'}">${p.quantidade||0}</span></div>
+    </div>
+    <label>Nome</label><input type="text" id="form-prd-nome" value="${esc(p.nome)}">
+    <label>Código</label><input type="text" id="form-prd-cod" value="${esc(p.codigo||'')}">
+    <div class="frow">
+      <div><label>Custo R$</label><input type="number" id="form-prd-custo" value="${p.preco_custo||0}" step="0.01" oninput="updMg()"></div>
+      <div><label>Venda R$</label><input type="number" id="form-prd-venda" value="${p.preco_venda||0}" step="0.01" oninput="updMg()"></div>
+    </div>
+    <div id="mg-prev" style="font-family:monospace;font-size:11px;color:var(--blue);margin-bottom:10px"></div>
+    <div class="frow">
+      <div><label>Quantidade</label><input type="number" id="form-prd-qtd" value="${p.quantidade||0}" min="0"></div>
+      <div><label>Estoque Mín.</label><input type="number" id="form-prd-min" value="${p.estoque_min||0}" min="0"></div>
+    </div>
+    <div class="brow" style="margin-top:8px">
+      <button class="btn btn-green" onclick="salvarProduto()">✅ Salvar</button>
+      <button class="btn btn-red btn-sm" style="flex:.4" onclick="excluirProduto('${p.id}')">🗑️</button>
+    </div>
+  `);
+  setTimeout(updMg, 50);
+}
+
+function updMg() {
+  const c=parseFloat(gv('form-prd-custo',0)); const v=parseFloat(gv('form-prd-venda',0));
+  const el=document.getElementById('mg-prev');
+  if(el&&c>0&&v>0) el.textContent=`Margem: ${calcMg(c,v)}% | Lucro: ${fmtBRL(v-c)}`;
+  else if(el) el.textContent='';
+}
+
+async function salvarProduto() {
+  const nome = clean(gv('form-prd-nome','').trim(), 100);
+  if(!nome){UI.toast('Nome obrigatório','w');return;}
+  const d = { id:gv('form-prd-id','')||undefined, nome, codigo:clean(gv('form-prd-cod',''),50), preco_custo:gv('form-prd-custo',0), preco_venda:gv('form-prd-venda',0), quantidade:gi('form-prd-qtd',0), estoque_min:gi('form-prd-min',0) };
+  try {
+    const saved = await API.saveProduto(G.uid, d);
+    if(d.id){const i=D.produtos.findIndex(x=>x.id===d.id);if(i!==-1)D.produtos[i]=saved;}
+    else D.produtos.push(saved);
+    UI.toast('Produto salvo!','s'); closeModal(); renderEstoque();
+  } catch(e){UI.toast('Erro: '+e.message,'e');}
+}
+
+async function excluirProduto(id) {
+  if(!confirm('Excluir produto?'))return;
+  try {
+    await API.deleteProduto(G.uid, id);
+    D.produtos = D.produtos.filter(p=>p.id!==id);
+    UI.toast('Produto excluído!','s'); closeModal(); renderEstoque();
+  } catch(e){UI.toast('Erro: '+e.message,'e');}
+}
+
+// ════════════════════════════════════════════════════════
+// CAIXA — direto como V_TEST
+// ════════════════════════════════════════════════════════
+async function renderCaixa() {
+  const dataSel = gv('cx-date', today()) || today();
+  try {
+    const movs = await API.getMovs(G.uid, dataSel, dataSel);
+    const ent  = movs.filter(m=>m.tipo==='entrada').reduce((a,m)=>a+(m.valor||0),0);
+    const said = movs.filter(m=>m.tipo==='saida').reduce((a,m)=>a+(m.valor||0),0);
+    const fiad = movs.filter(m=>m.tipo==='fiado').reduce((a,m)=>a+(m.valor||0),0);
+
+    const cx = document.getElementById('cx-cards');
+    if(cx) cx.innerHTML=`
+      <div class="cx-card c-green"><div class="cx-num">${fmtBRL(ent)}</div><div class="cx-label">Entradas</div></div>
+      <div class="cx-card c-red"><div class="cx-num">${fmtBRL(said)}</div><div class="cx-label">Saídas</div></div>
+      <div class="cx-card c-blue"><div class="cx-num">${fmtBRL(ent-said)}</div><div class="cx-label">Saldo</div></div>
+      <div class="cx-card c-yellow"><div class="cx-num">${fmtBRL(fiad)}</div><div class="cx-label">Fiado</div></div>`;
+
+    // Por pagamento
+    const pp={};
+    movs.filter(m=>m.tipo==='entrada').forEach(m=>{pp[m.forma]=(pp[m.forma]||0)+(m.valor||0);});
+    const pg = document.getElementById('cx-pags');
+    if(pg) pg.innerHTML = Object.keys(pp).length
+      ? Object.entries(pp).map(([k,v])=>`<div class="mov-item"><span class="pay-pill pp-${k}">${pagLabel(k)}</span><span class="mov-val mv-e">${fmtBRL(v)}</span></div>`).join('')
+      : '<div style="font-size:12px;color:var(--muted2);font-family:monospace">Nenhuma entrada</div>';
+
+    // Movimentações
+    const mv = document.getElementById('cx-movs');
+    if(mv) mv.innerHTML = movs.length
+      ? movs.sort((a,b)=>new Date(b.criado_em)-new Date(a.criado_em)).map(m=>`
+        <div class="mov-item">
+          <div>
+            <div class="mov-desc">${esc(m.descricao||'')}</div>
+            <div class="mov-meta">${fTime(m.criado_em)}${m.forma?' – '+pagLabel(m.forma):''}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="mov-val mv-${m.tipo==='saida'?'s':m.tipo==='fiado'?'f':'e'}">${m.tipo==='saida'?'–':'+'}${fmtBRL(m.valor)}</span>
+            <button onclick="excluirMov('${m.id}')" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:14px">🗑️</button>
+          </div>
+        </div>`).join('')
+      : '<div style="font-size:12px;color:var(--muted2);font-family:monospace">Nenhuma movimentação</div>';
+  } catch(e) { console.error(e); }
+}
+
+async function registrarSaida() {
+  const desc = clean(gv('cx-saida-desc','').trim(), 200);
+  const val  = parseFloat(gv('cx-saida-val',''));
+  if(!desc){UI.toast('Descreva a saída','w');return;}
+  if(!val||val<=0){UI.toast('Valor inválido','w');return;}
+  const data = gv('cx-date',today())||today();
+  try {
+    await API.addMov(G.uid,{tipo:'saida',descricao:desc,valor:val,forma:'dinheiro',data});
+    document.getElementById('cx-saida-desc').value='';
+    document.getElementById('cx-saida-val').value='';
+    UI.toast('Saída registrada!','s');
+    renderCaixa();
+  } catch(e){UI.toast('Erro: '+e.message,'e');}
+}
+
+async function excluirMov(id) {
+  if(!confirm('Excluir esta movimentação?'))return;
+  try {
+    await API.deleteMov(G.uid, id);
+    D.movs = D.movs.filter(m=>m.id!==id);
+    UI.toast('Excluído!','s'); renderCaixa();
+  } catch(e){UI.toast('Erro: '+e.message,'e');}
+}
+
+// ════════════════════════════════════════════════════════
+// CONFIGURAÇÕES
+// ════════════════════════════════════════════════════════
+function renderConfig() {
+  const p = G.perfil||{};
+  document.getElementById('cfg-nome').value    = p.empresa_nome||'';
+  document.getElementById('cfg-cnpj').value    = p.cnpj||'';
+  document.getElementById('cfg-tel').value     = p.telefone||'';
+  document.getElementById('cfg-end').value     = p.endereco||'';
+  document.getElementById('cfg-pix').value     = p.pix||'';
+  document.getElementById('cfg-termos').value  = p.termos||'';
+}
+
+async function salvarConfig() {
+  const d = {
+    empresa_nome: clean(gv('cfg-nome',''),100),
+    cnpj:    clean(gv('cfg-cnpj',''),20),
+    telefone:clean(gv('cfg-tel',''),20),
+    endereco:clean(gv('cfg-end',''),200),
+    pix:     clean(gv('cfg-pix',''),100),
+    termos:  clean(gv('cfg-termos',''),800),
+  };
+  if(!d.empresa_nome){UI.toast('Nome da empresa obrigatório','w');return;}
+  try {
+    G.perfil = await API.upsertPerfil(G.uid, d);
+    App._ui();
+    UI.toast('Configurações salvas! ✅','s');
+  } catch(e){UI.toast('Erro: '+e.message,'e');}
+}
+
+// ── Menu usuário ──────────────────────────────────────────
+function toggleUserMenu() {
+  const ex = document.getElementById('user-menu-dd'); if(ex){ex.remove();return;}
+  const p = G.perfil||{};
+  const m = document.createElement('div'); m.id='user-menu-dd';
+  m.style.cssText='position:fixed;bottom:72px;left:10px;right:10px;background:var(--s1);border:1px solid var(--b2);border-radius:16px;padding:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:500';
+  m.innerHTML=`
+    <div style="padding:10px 12px 12px;border-bottom:1px solid var(--b1);margin-bottom:6px">
+      <div style="font-size:.88rem;font-weight:700">${esc(p.empresa_nome||'NexOS')}</div>
+      <div style="font-size:.72rem;color:var(--muted)">Proprietário</div>
+    </div>
+    <div class="dropdown-item" id="_cfg_dd">⚙️ Configurações</div>
+    <div class="dropdown-sep"></div>
+    <div class="dropdown-item danger" id="_out_dd">🚪 Sair</div>`;
+  document.body.appendChild(m);
+  document.getElementById('_cfg_dd')?.addEventListener('click',()=>{goPage('config');m.remove();});
+  document.getElementById('_out_dd')?.addEventListener('click',()=>{m.remove();Auth.logout();});
+  setTimeout(()=>{document.addEventListener('click',function h(e){if(!m.contains(e.target)){m.remove();document.removeEventListener('click',h);}});},50);
+}
+
+window.UI = UI;
+window.App = App;
+async function salvarPIN() {
+  const p1=gv('cfg-pin-new',''), p2=gv('cfg-pin-conf','');
+  if(p1.length!==4||!/^\d{4}$/.test(p1)){UI.toast('PIN deve ter 4 dígitos','warning');return;}
+  if(p1!==p2){UI.toast('PINs não coincidem','warning');return;}
+  const pin_hash=btoa(p1);
+  try{STATE.perfil=await API.upsertPerfil(STATE.user.id,{pin_hash});UI.toast('PIN salvo! ✅','success');document.getElementById('cfg-pin-new').value='';document.getElementById('cfg-pin-conf').value='';}
+  catch(e){UI.toast('Erro: '+e.message,'error');}
+}
+
+function updMgPrd(){
+  const c=parseFloat(gv('form-prd-custo',0)), v2=parseFloat(gv('form-prd-venda',0));
+  const el=document.getElementById('mg-prev');
+  if(el&&c>0&&v2>0) el.textContent='Margem: '+calcMargem(c,v2)+'% | Lucro: '+fmt(v2-c);
+  else if(el) el.textContent='';
+}
+
+// ── Notificações ───────────────────────────────────────────
+async function requestNotifPermission() {
+  if('Notification'in window && Notification.permission==='default') {
+    await Notification.requestPermission().catch(()=>{});
+  }
+}
