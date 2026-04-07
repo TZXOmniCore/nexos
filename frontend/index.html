@@ -8,9 +8,6 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="NexOS">
-<meta http-equiv="X-Content-Type-Options" content="nosniff">
-<meta http-equiv="X-Frame-Options" content="DENY">
-<meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
 <title>NexOS v4.0</title>
 <link rel="icon" type="image/png" href="NexOS.png">
 <link rel="apple-touch-icon" href="NexOS.png">
@@ -810,7 +807,6 @@ document.addEventListener('DOMContentLoaded',()=>{
   const md=document.getElementById('m-data');
   if(md){const n=new Date();md.value=n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0')+'T'+String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');}
   if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
-  requestNotifPermission&&requestNotifPermission();
 });
 </script>
 </body>
