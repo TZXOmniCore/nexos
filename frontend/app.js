@@ -1099,3 +1099,203 @@ async function requestNotifPermission() {
     await Notification.requestPermission().catch(()=>{});
   }
 }
+
+// ════════════════════════════════════════════════════════════
+// AGENDA
+// ════════════════════════════════════════════════════════════
+async function renderAgenda() {
+  const from = gv('ag-date', today()) || today();
+  try {
+    const eventos = await API.getAgenda(STATE.user.id, from + 'T00:00:00', from + 'T23:59:59');
+    const box = document.getElementById('ag-list'); if (!box) return;
+    if (!eventos.length) {
+      box.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Sem compromissos neste dia</div></div>';
+      return;
+    }
+    box.innerHTML = eventos.map(e => `
+      <div class="card" style="cursor:pointer" onclick="editarEvento('${e.id}')">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="font-size:14px;font-weight:600">${_e(e.titulo)}</div>
+            <div style="font-family:var(--mono);font-size:11px;color:var(--text-2)">${e.hora || 'Dia todo'}${e.clientes?.nome ? ' · ' + _e(e.clientes.nome) : ''}</div>
+            ${e.descricao ? `<div style="font-size:12px;color:var(--text-2);margin-top:4px">${_e(e.descricao)}</div>` : ''}
+          </div>
+          <button onclick="excluirEvento(event,'${e.id}')" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:20px;padding:4px 8px;line-height:1">×</button>
+        </div>
+      </div>`).join('');
+  } catch(e) { console.error('renderAgenda:', e); }
+}
+
+function novoEvento() {
+  ['form-ev-titulo','form-ev-hora','form-ev-desc'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('form-ev-id').value = '';
+  document.getElementById('form-ev-data').value = today();
+  document.getElementById('form-ev-cor').value = '#38BDF8';
+  const sel = document.getElementById('form-ev-cli');
+  if (sel) sel.innerHTML = '<option value="">Sem cliente</option>' + APP.clientes.map(c => `<option value="${c.id}">${_e(c.nome)}</option>`).join('');
+  const t = document.getElementById('form-ev-title'); if (t) t.textContent = 'Novo Evento';
+  goPage('novo-evento');
+}
+
+function editarEvento(id) {
+  const e = APP.agenda.find(x => x.id === id); if (!e) return;
+  document.getElementById('form-ev-id').value    = e.id;
+  document.getElementById('form-ev-titulo').value = e.titulo;
+  document.getElementById('form-ev-data').value   = e.data_inicio?.slice(0, 10) || today();
+  document.getElementById('form-ev-hora').value   = e.hora || '';
+  document.getElementById('form-ev-desc').value   = e.descricao || '';
+  document.getElementById('form-ev-cor').value    = e.cor || '#38BDF8';
+  const sel = document.getElementById('form-ev-cli');
+  if (sel) sel.innerHTML = '<option value="">Sem cliente</option>' + APP.clientes.map(c => `<option value="${c.id}" ${e.cliente_id === c.id ? 'selected' : ''}>${_e(c.nome)}</option>`).join('');
+  const t = document.getElementById('form-ev-title'); if (t) t.textContent = 'Editar Evento';
+  goPage('novo-evento');
+}
+
+async function salvarEvento() {
+  const titulo = _c(gv('form-ev-titulo', '').trim(), 100);
+  if (!titulo) { UI.toast('Título obrigatório', 'warning'); return; }
+  const d = {
+    id: gv('form-ev-id', '') || undefined,
+    titulo,
+    hora:        gv('form-ev-hora', '') || null,
+    data_inicio: gv('form-ev-data', today()) + 'T' + (gv('form-ev-hora', '') || '00:00'),
+    cliente_id:  gv('form-ev-cli', '') || null,
+    cor:         gv('form-ev-cor', '#38BDF8'),
+    descricao:   _c(gv('form-ev-desc', ''), 300),
+  };
+  try {
+    const saved = await API.saveEvento(STATE.user.id, d);
+    if (d.id) { const i = APP.agenda.findIndex(x => x.id === d.id); if (i !== -1) APP.agenda[i] = saved; }
+    else APP.agenda.push(saved);
+    UI.toast('Evento salvo! ✅', 'success');
+    goBack();
+    renderAgenda();
+  } catch(e) { UI.toast('Erro: ' + e.message, 'error'); }
+}
+
+async function excluirEvento(e, id) {
+  e.stopPropagation();
+  if (!confirm('Excluir evento?')) return;
+  try {
+    await API.deleteEvento(STATE.user.id, id);
+    APP.agenda = APP.agenda.filter(x => x.id !== id);
+    UI.toast('Evento excluído!', 'success');
+    renderAgenda();
+  } catch(err) { UI.toast('Erro: ' + err.message, 'error'); }
+}
+
+// ════════════════════════════════════════════════════════════
+// CARNÊS
+// ════════════════════════════════════════════════════════════
+async function renderCarnes() {
+  const box = document.getElementById('carne-list'); if (!box) return;
+  try {
+    const parc = await API.getParcelas(STATE.user.id);
+    if (!parc.length) {
+      box.innerHTML = '<div class="empty-state"><div class="empty-icon">📜</div><div class="empty-title">Nenhum carnê ativo</div></div>';
+      return;
+    }
+    box.innerHTML = parc.map(p => {
+      const venc = isVenc(p.vencimento);
+      const os   = p.ordens_servico;
+      const nome = os?.clientes?.nome || os?.cliente_nome || '–';
+      const tel  = os?.clientes?.telefone || '';
+      return `<div class="card" style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:10px">
+          <div>
+            <div style="font-family:var(--mono);font-size:11px;color:var(--blue)">${os ? 'OS #' + os.numero : '–'}</div>
+            <div style="font-size:15px;font-weight:600">${_e(nome)}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--green)">${fmt(p.valor)}</div>
+            <div style="font-size:11px;color:${venc ? 'var(--red)' : 'var(--text-2)'};font-family:var(--mono)">Venc: ${fmtDate(p.vencimento)}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary btn-sm" style="flex:1" onclick="pagarParcelaUI('${p.id}',${p.valor},'${p.ordem_id || ''}')">✅ Marcar Pago</button>
+          ${tel ? `<button class="btn btn-ghost btn-sm" onclick="cobrarWA('${p.id}','${tel}','${nome}','${fmt(p.valor)}','${fmtDate(p.vencimento)}')">💬 Cobrar</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) { console.error('renderCarnes:', e); }
+}
+
+async function pagarParcelaUI(id, valor, ordemId) {
+  if (!confirm('Confirmar pagamento de ' + fmt(valor) + '?')) return;
+  try {
+    await API.pagarParcela(STATE.user.id, id, valor, ordemId || null);
+    UI.toast('Parcela paga! ✅', 'success');
+    renderCarnes();
+  } catch(e) { UI.toast('Erro: ' + e.message, 'error'); }
+}
+
+function cobrarWA(id, tel, nome, valor, venc) {
+  const p   = STATE.perfil || {};
+  const msg = `Olá *${nome}*! 👋\n\nPassando para lembrá-lo(a) do pagamento pendente:\n\n💰 *Valor:* ${valor}\n📅 *Vencimento:* ${venc}${p.pix ? '\n\n🔑 *PIX:* ' + p.pix : ''}\n\n_${p.empresa_nome || 'NexOS'}_`;
+  const num = (tel || '').replace(/\D/g, '');
+  const fone = num.startsWith('55') ? num : '55' + num;
+  window.open('https://wa.me/' + fone + '?text=' + encodeURIComponent(msg), '_blank');
+}
+
+// ── QR Reader ─────────────────────────────────────────────
+let _qrStream = null;
+function openQrReader() {
+  const w = document.getElementById('qrReaderWrap'); if (!w) return;
+  w.classList.add('open');
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+    .then(stream => { _qrStream = stream; document.getElementById('qrVideo').srcObject = stream; _scanQR(); })
+    .catch(() => { UI.toast('Sem acesso à câmera', 'error'); closeQrReader(); });
+}
+function closeQrReader() {
+  if (_qrStream) { _qrStream.getTracks().forEach(t => t.stop()); _qrStream = null; }
+  document.getElementById('qrReaderWrap')?.classList.remove('open');
+}
+function _scanQR() {
+  const video = document.getElementById('qrVideo');
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  function scan() {
+    if (!_qrStream) return;
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+      canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0);
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      if (window.jsQR) {
+        const code = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'dontInvert' });
+        if (code) {
+          closeQrReader();
+          const mo = code.data.match(/OS:#(\d+)/);
+          if (mo) {
+            const num = parseInt(mo[1]);
+            const os = APP.os.find(o => o.numero === num);
+            if (os) { UI.toast('OS #' + num + ' encontrada!', 'success'); verOS(os.id); }
+            else UI.toast('OS #' + num + ' não encontrada', 'warning');
+          } else { UI.toast('QR: ' + code.data.slice(0, 40), 'info'); }
+          return;
+        }
+      }
+    }
+    requestAnimationFrame(scan);
+  }
+  requestAnimationFrame(scan);
+}
+
+// ── Global search ─────────────────────────────────────────
+function globalSearch(q) {
+  if (!q || q.length < 2) return;
+  if (APP._page === 'os' || APP._page === 'dashboard') {
+    const el = document.getElementById('os-search'); if (el) { el.value = q; renderOS(); }
+  } else if (APP._page === 'clientes') {
+    const el = document.getElementById('cli-search'); if (el) { el.value = q; renderClientes(); }
+  } else if (APP._page === 'estoque') {
+    const el = document.getElementById('est-search'); if (el) { el.value = q; renderEstoque(); }
+  }
+}
+
+// ── Preencher cliente na Nova OS ──────────────────────────
+function preencherCliente(id) {
+  const c = APP.clientes.find(x => x.id === id); if (!c) return;
+  const nome = document.getElementById('m-cli-nome'); if (nome) nome.value = c.nome;
+  const tel  = document.getElementById('m-cli-tel');  if (tel)  tel.value  = c.telefone || '';
+  const doc  = document.getElementById('m-cli-doc');  if (doc)  doc.value  = c.cpf || '';
+}
