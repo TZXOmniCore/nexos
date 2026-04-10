@@ -801,47 +801,43 @@ function renderClientes() {
     <div class="card" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:13px 15px" onclick="editarCliente('${c.id}')">
       <div>
         <div style="font-size:14px;font-weight:600">${_e(c.nome)}</div>
-        <div style="font-family:monospace;font-size:11px;color:var(--muted);margin-top:3px">${_e(c.telefone||'–')} ${c.cpf_cnpj?'| '+_e(c.cpf_cnpj):''}</div>
+        <div style="font-family:monospace;font-size:11px;color:var(--text-2);margin-top:3px">${_e(c.telefone||'–')} ${c.cpf_cnpj?'| '+_e(c.cpf_cnpj):''}</div>
       </div>
-      <button onclick="excluirCliente(event,'${c.id}')" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:18px;padding:4px">🗑️</button>
+      <button onclick="excluirCliente(event,'${c.id}')" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:18px;padding:4px">🗑️</button>
     </div>`).join('');
 }
 
 function novoCliente() {
-  openModal(`
-    <h3 style="margin-bottom:14px;font-size:18px;font-weight:700">👤 Novo Cliente</h3>
-    <input type="hidden" id="form-cli-id" value="">
-    <label class="req">Nome</label><input type="text" id="form-cli-nome" placeholder="Nome completo">
-    <label>Telefone</label><input type="tel" id="form-cli-tel" placeholder="(00) 00000-0000">
-    <label>CPF / CNPJ</label><input type="text" id="form-cli-doc" placeholder="000.000.000-00">
-    <button class="btn btn-green" style="margin-top:4px" onclick="salvarCliente()">✅ Salvar</button>
-  `);
+  document.getElementById('form-cli-id').value = '';
+  document.getElementById('form-cli-nome').value = '';
+  document.getElementById('form-cli-tel').value = '';
+  document.getElementById('form-cli-doc').value = '';
+  const t = document.getElementById('form-cli-title'); if(t) t.textContent = 'Novo Cliente';
+  goPage('novo-cliente');
 }
 
 function editarCliente(id) {
   const c = APP.clientes.find(x=>x.id===id); if(!c) return;
-  openModal(`
-    <h3 style="margin-bottom:14px;font-size:18px;font-weight:700">✏️ Editar Cliente</h3>
-    <input type="hidden" id="form-cli-id" value="${c.id}">
-    <label class="req">Nome</label><input type="text" id="form-cli-nome" value="${_e(c.nome)}">
-    <label>Telefone</label><input type="tel" id="form-cli-tel" value="${_e(c.telefone||'')}">
-    <label>CPF / CNPJ</label><input type="text" id="form-cli-doc" value="${_e(c.cpf_cnpj||'')}">
-    <button class="btn btn-green" style="margin-top:4px" onclick="salvarCliente()">✅ Salvar</button>
-  `);
+  document.getElementById('form-cli-id').value   = c.id;
+  document.getElementById('form-cli-nome').value = c.nome;
+  document.getElementById('form-cli-tel').value  = c.telefone||'';
+  document.getElementById('form-cli-doc').value  = c.cpf||c.cpf_cnpj||'';
+  const t = document.getElementById('form-cli-title'); if(t) t.textContent = 'Editar Cliente';
+  goPage('novo-cliente');
 }
 
 async function salvarCliente() {
-  const nome = clean(gv('form-cli-nome','').trim(), 100);
-  if (!nome) { UI.toast('Nome obrigatório','w'); return; }
-  const d = { id:gv('form-cli-id','')||undefined, nome, telefone:clean(gv('form-cli-tel',''),20), cpf_cnpj:clean(gv('form-cli-doc',''),20) };
+  const nome = _c(gv('form-cli-nome','').trim(), 100);
+  if (!nome) { UI.toast('Nome obrigatório','warning'); return; }
+  const d = { id:gv('form-cli-id','')||undefined, nome, telefone:_c(gv('form-cli-tel',''),20), cpf:_c(gv('form-cli-doc',''),20) };
   try {
     const saved = await API.saveCliente(STATE.user.id, d);
     if (d.id) { const i=APP.clientes.findIndex(x=>x.id===d.id); if(i!==-1)APP.clientes[i]=saved; }
     else APP.clientes.push(saved);
-    UI.toast('Cliente salvo!','s');
-    closeModal();
+    UI.toast('Cliente salvo!','success');
+    goBack();
     renderClientes();
-  } catch(e) { UI.toast('Erro: '+e.message,'e'); }
+  } catch(e) { UI.toast('Erro: '+e.message,'error'); }
 }
 
 async function excluirCliente(e, id) {
@@ -850,9 +846,9 @@ async function excluirCliente(e, id) {
   try {
     await API.deleteCliente(STATE.user.id, id);
     APP.clientes = APP.clientes.filter(c=>c.id!==id);
-    UI.toast('Cliente excluído!','s');
+    UI.toast('Cliente excluído!','success');
     renderClientes();
-  } catch(err) { UI.toast('Erro: '+err.message,'e'); }
+  } catch(err) { UI.toast('Erro: '+err.message,'error'); }
 }
 
 // ════════════════════════════════════════════════════════
@@ -868,84 +864,71 @@ function renderEstoque() {
       <div style="display:flex;justify-content:space-between;margin-bottom:5px">
         <div>
           <div style="font-size:14px;font-weight:600">${_e(p.nome)}</div>
-          <div style="font-family:monospace;font-size:10px;color:var(--muted)">${p.codigo?'#'+_e(p.codigo)+' · ':''}</div>
+          <div style="font-family:monospace;font-size:10px;color:var(--text-2)">${p.codigo?'#'+_e(p.codigo)+' · ':''}</div>
         </div>
-        <div style="font-family:monospace;font-size:14px;font-weight:700;color:var(--green)">${fmtBRL(p.preco_venda)}</div>
+        <div style="font-family:monospace;font-size:14px;font-weight:700;color:var(--green)">${fmt(p.preco_venda)}</div>
       </div>
       <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
         <span style="font-family:monospace;font-size:11px;color:${(p.quantidade||0)<=(p.estoque_min||0)?'var(--red)':'var(--green)'}">Est: ${p.quantidade||0} (min:${p.estoque_min||0})</span>
-        ${p.preco_custo>0?`<span style="font-family:monospace;font-size:11px;color:var(--blue)">Mg: ${calcMg(p.preco_custo,p.preco_venda)}%</span>`:''}
-        <span style="font-family:monospace;font-size:11px;color:var(--muted)">Custo: ${fmtBRL(p.preco_custo)}</span>
+        ${p.preco_custo>0?`<span style="font-family:monospace;font-size:11px;color:var(--blue)">Mg: ${calcMargem(p.preco_custo,p.preco_venda)}%</span>`:''}
+        <span style="font-family:monospace;font-size:11px;color:var(--text-2)">Custo: ${fmt(p.preco_custo)}</span>
       </div>
     </div>`).join('');
 }
 
 function novoProduto() {
-  openModal(`
-    <h3 style="margin-bottom:14px;font-size:18px;font-weight:700">📦 Novo Produto</h3>
-    <input type="hidden" id="form-prd-id" value="">
-    <label class="req">Nome</label><input type="text" id="form-prd-nome" placeholder="Nome do produto">
-    <label>Código / SKU</label><input type="text" id="form-prd-cod" placeholder="SKU-001">
-    <div class="frow">
-      <div><label>Custo R$</label><input type="number" id="form-prd-custo" step="0.01" oninput="updMg()"></div>
-      <div><label>Venda R$</label><input type="number" id="form-prd-venda" step="0.01" oninput="updMg()"></div>
-    </div>
-    <div id="mg-prev" style="font-family:monospace;font-size:11px;color:var(--blue);margin-bottom:10px"></div>
-    <div class="frow">
-      <div><label>Quantidade</label><input type="number" id="form-prd-qtd" value="0" min="0"></div>
-      <div><label>Estoque Mín.</label><input type="number" id="form-prd-min" value="0" min="0"></div>
-    </div>
-    <button class="btn btn-green" style="margin-top:4px" onclick="salvarProduto()">✅ Salvar</button>
-  `);
+  document.getElementById('form-prd-id').value    = '';
+  document.getElementById('form-prd-nome').value  = '';
+  document.getElementById('form-prd-cod').value   = '';
+  document.getElementById('form-prd-custo').value = '';
+  document.getElementById('form-prd-venda').value = '';
+  document.getElementById('form-prd-qtd').value   = '0';
+  document.getElementById('form-prd-min').value   = '0';
+  const t = document.getElementById('form-prd-title'); if(t) t.textContent = 'Novo Produto';
+  const r = document.getElementById('prd-resumo'); if(r) r.style.display='none';
+  const mp = document.getElementById('mg-prev'); if(mp) mp.textContent='';
+  goPage('novo-produto');
 }
 
 function editarProduto(id) {
   const p = APP.produtos.find(x=>x.id===id); if(!p) return;
-  openModal(`
-    <h3 style="margin-bottom:14px;font-size:18px;font-weight:700">✏️ ${_e(p.nome)}</h3>
-    <input type="hidden" id="form-prd-id" value="${p.id}">
-    <div class="card"><div class="card-title"><div class="ct-bar"></div>Resumo</div>
-      <div class="ir"><span class="irl">Venda</span><span class="irv" style="color:var(--green)">${fmtBRL(p.preco_venda)}</span></div>
-      <div class="ir"><span class="irl">Custo</span><span class="irv">${fmtBRL(p.preco_custo)}</span></div>
-      <div class="ir"><span class="irl">Margem</span><span class="irv" style="color:var(--blue)">${calcMg(p.preco_custo,p.preco_venda)}%</span></div>
-      <div class="ir"><span class="irl">Estoque</span><span class="irv" style="color:${(p.quantidade||0)<=(p.estoque_min||0)?'var(--red)':'var(--green)'}">${p.quantidade||0}</span></div>
-    </div>
-    <label>Nome</label><input type="text" id="form-prd-nome" value="${_e(p.nome)}">
-    <label>Código</label><input type="text" id="form-prd-cod" value="${_e(p.codigo||'')}">
-    <div class="frow">
-      <div><label>Custo R$</label><input type="number" id="form-prd-custo" value="${p.preco_custo||0}" step="0.01" oninput="updMg()"></div>
-      <div><label>Venda R$</label><input type="number" id="form-prd-venda" value="${p.preco_venda||0}" step="0.01" oninput="updMg()"></div>
-    </div>
-    <div id="mg-prev" style="font-family:monospace;font-size:11px;color:var(--blue);margin-bottom:10px"></div>
-    <div class="frow">
-      <div><label>Quantidade</label><input type="number" id="form-prd-qtd" value="${p.quantidade||0}" min="0"></div>
-      <div><label>Estoque Mín.</label><input type="number" id="form-prd-min" value="${p.estoque_min||0}" min="0"></div>
-    </div>
-    <div class="brow" style="margin-top:8px">
-      <button class="btn btn-green" onclick="salvarProduto()">✅ Salvar</button>
-      <button class="btn btn-red btn-sm" style="flex:.4" onclick="excluirProduto('${p.id}')">🗑️</button>
-    </div>
-  `);
-  setTimeout(updMg, 50);
+  document.getElementById('form-prd-id').value    = p.id;
+  document.getElementById('form-prd-nome').value  = p.nome;
+  document.getElementById('form-prd-cod').value   = p.codigo||'';
+  document.getElementById('form-prd-custo').value = p.preco_custo||0;
+  document.getElementById('form-prd-venda').value = p.preco_venda||0;
+  document.getElementById('form-prd-qtd').value   = p.quantidade||0;
+  document.getElementById('form-prd-min').value   = p.estoque_min||0;
+  const t = document.getElementById('form-prd-title'); if(t) t.textContent = 'Editar Produto';
+  const r = document.getElementById('prd-resumo');
+  if(r){
+    r.style.display='block';
+    document.getElementById('res-venda').textContent = fmt(p.preco_venda);
+    document.getElementById('res-custo').textContent = fmt(p.preco_custo);
+    document.getElementById('res-mg').textContent    = calcMargem(p.preco_custo,p.preco_venda)+'%';
+    const estEl = document.getElementById('res-est');
+    if(estEl){ estEl.textContent=p.quantidade||0; estEl.style.color=(p.quantidade||0)<=(p.estoque_min||0)?'var(--red)':'var(--green)'; }
+  }
+  goPage('novo-produto');
+  setTimeout(updMgPrd,50);
 }
-
 function updMg() {
   const c=parseFloat(gv('form-prd-custo',0)); const v=parseFloat(gv('form-prd-venda',0));
   const el=document.getElementById('mg-prev');
-  if(el&&c>0&&v>0) el.textContent=`Margem: ${calcMg(c,v)}% | Lucro: ${fmtBRL(v-c)}`;
+  if(el&&c>0&&v>0) el.textContent=`Margem: ${calcMargem(c,v)}% | Lucro: ${fmt(v-c)}`;
   else if(el) el.textContent='';
 }
 
 async function salvarProduto() {
-  const nome = clean(gv('form-prd-nome','').trim(), 100);
-  if(!nome){UI.toast('Nome obrigatório','w');return;}
-  const d = { id:gv('form-prd-id','')||undefined, nome, codigo:clean(gv('form-prd-cod',''),50), preco_custo:gv('form-prd-custo',0), preco_venda:gv('form-prd-venda',0), quantidade:gi('form-prd-qtd',0), estoque_min:gi('form-prd-min',0) };
+  const nome = _c(gv('form-prd-nome','').trim(), 100);
+  if(!nome){UI.toast('Nome obrigatório','warning');return;}
+  const d = { id:gv('form-prd-id','')||undefined, nome, codigo:_c(gv('form-prd-cod',''),50), preco_custo:gv('form-prd-custo',0), preco_venda:gv('form-prd-venda',0), quantidade:gi('form-prd-qtd',0), estoque_min:gi('form-prd-min',0) };
   try {
     const saved = await API.saveProduto(STATE.user.id, d);
     if(d.id){const i=APP.produtos.findIndex(x=>x.id===d.id);if(i!==-1)APP.produtos[i]=saved;}
     else APP.produtos.push(saved);
-    UI.toast('Produto salvo!','s'); closeModal(); renderEstoque();
-  } catch(e){UI.toast('Erro: '+e.message,'e');}
+    UI.toast('Produto salvo!','success'); goBack(); renderEstoque();
+  } catch(e){UI.toast('Erro: '+e.message,'error');}
 }
 
 async function excluirProduto(id) {
@@ -953,8 +936,8 @@ async function excluirProduto(id) {
   try {
     await API.deleteProduto(STATE.user.id, id);
     APP.produtos = APP.produtos.filter(p=>p.id!==id);
-    UI.toast('Produto excluído!','s'); closeModal(); renderEstoque();
-  } catch(e){UI.toast('Erro: '+e.message,'e');}
+    UI.toast('Produto excluído!','success'); goBack(); renderEstoque();
+  } catch(e){UI.toast('Erro: '+e.message,'error');}
 }
 
 // ════════════════════════════════════════════════════════
@@ -970,18 +953,18 @@ async function renderCaixa() {
 
     const cx = document.getElementById('cx-cards');
     if(cx) cx.innerHTML=`
-      <div class="cx-card c-green"><div class="cx-num">${fmtBRL(ent)}</div><div class="cx-label">Entradas</div></div>
-      <div class="cx-card c-red"><div class="cx-num">${fmtBRL(said)}</div><div class="cx-label">Saídas</div></div>
-      <div class="cx-card c-blue"><div class="cx-num">${fmtBRL(ent-said)}</div><div class="cx-label">Saldo</div></div>
-      <div class="cx-card c-yellow"><div class="cx-num">${fmtBRL(fiad)}</div><div class="cx-label">Fiado</div></div>`;
+      <div class="cx-card c-green"><div class="cx-num">${fmt(ent)}</div><div class="cx-label">Entradas</div></div>
+      <div class="cx-card c-red"><div class="cx-num">${fmt(said)}</div><div class="cx-label">Saídas</div></div>
+      <div class="cx-card c-blue"><div class="cx-num">${fmt(ent-said)}</div><div class="cx-label">Saldo</div></div>
+      <div class="cx-card c-yellow"><div class="cx-num">${fmt(fiad)}</div><div class="cx-label">Fiado</div></div>`;
 
     // Por pagamento
     const pp={};
     movs.filter(m=>m.tipo==='entrada').forEach(m=>{pp[m.forma]=(pp[m.forma]||0)+(m.valor||0);});
     const pg = document.getElementById('cx-pags');
     if(pg) pg.innerHTML = Object.keys(pp).length
-      ? Object.entries(pp).map(([k,v])=>`<div class="mov-item"><span class="pay-pill pp-${k}">${pagLabel(k)}</span><span class="mov-val mv-e">${fmtBRL(v)}</span></div>`).join('')
-      : '<div style="font-size:12px;color:var(--muted2);font-family:monospace">Nenhuma entrada</div>';
+      ? Object.entries(pp).map(([k,v])=>`<div class="mov-item"><span class="pay-pill pp-${k}">${pagLabel(k)}</span><span class="mov-val mv-e">${fmt(v)}</span></div>`).join('')
+      : '<div style="font-size:12px;color:var(--text-3);font-family:monospace">Nenhuma entrada</div>';
 
     // Movimentações
     const mv = document.getElementById('cx-movs');
@@ -993,27 +976,27 @@ async function renderCaixa() {
             <div class="mov-meta">${fTime(m.criado_em)}${m.forma?' – '+pagLabel(m.forma):''}</div>
           </div>
           <div style="display:flex;align-items:center;gap:8px">
-            <span class="mov-val mv-${m.tipo==='saida'?'s':m.tipo==='fiado'?'f':'e'}">${m.tipo==='saida'?'–':'+'}${fmtBRL(m.valor)}</span>
-            <button onclick="excluirMov('${m.id}')" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:14px">🗑️</button>
+            <span class="mov-val mv-${m.tipo==='saida'?'s':m.tipo==='fiado'?'f':'e'}">${m.tipo==='saida'?'–':'+'}${fmt(m.valor)}</span>
+            <button onclick="excluirMov('${m.id}')" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:14px">🗑️</button>
           </div>
         </div>`).join('')
-      : '<div style="font-size:12px;color:var(--muted2);font-family:monospace">Nenhuma movimentação</div>';
+      : '<div style="font-size:12px;color:var(--text-3);font-family:monospace">Nenhuma movimentação</div>';
   } catch(e) { console.error(e); }
 }
 
 async function registrarSaida() {
-  const desc = clean(gv('cx-saida-desc','').trim(), 200);
+  const desc = _c(gv('cx-saida-desc','').trim(), 200);
   const val  = parseFloat(gv('cx-saida-val',''));
-  if(!desc){UI.toast('Descreva a saída','w');return;}
-  if(!val||val<=0){UI.toast('Valor inválido','w');return;}
+  if(!desc){UI.toast('Descreva a saída','warning');return;}
+  if(!val||val<=0){UI.toast('Valor inválido','warning');return;}
   const data = gv('cx-date',today())||today();
   try {
     await API.addCaixa(STATE.user.id,{tipo:'saida',descricao:desc,valor:val,forma:'dinheiro',data});
     document.getElementById('cx-saida-desc').value='';
     document.getElementById('cx-saida-val').value='';
-    UI.toast('Saída registrada!','s');
+    UI.toast('Saída registrada!','success');
     renderCaixa();
-  } catch(e){UI.toast('Erro: '+e.message,'e');}
+  } catch(e){UI.toast('Erro: '+e.message,'error');}
 }
 
 async function excluirMov(id) {
@@ -1021,8 +1004,8 @@ async function excluirMov(id) {
   try {
     await API.deleteCaixa(STATE.user.id, id);
     APP.movs = APP.movs.filter(m=>m.id!==id);
-    UI.toast('Excluído!','s'); renderCaixa();
-  } catch(e){UI.toast('Erro: '+e.message,'e');}
+    UI.toast('Excluído!','success'); renderCaixa();
+  } catch(e){UI.toast('Erro: '+e.message,'error');}
 }
 
 // ════════════════════════════════════════════════════════
@@ -1040,19 +1023,19 @@ function renderConfig() {
 
 async function salvarConfig() {
   const d = {
-    empresa_nome: clean(gv('cfg-nome',''),100),
-    cnpj:    clean(gv('cfg-cnpj',''),20),
-    telefone:clean(gv('cfg-tel',''),20),
-    endereco:clean(gv('cfg-end',''),200),
-    pix:     clean(gv('cfg-pix',''),100),
-    termos:  clean(gv('cfg-termos',''),800),
+    empresa_nome: _c(gv('cfg-nome',''),100),
+    cnpj:    _c(gv('cfg-cnpj',''),20),
+    telefone:_c(gv('cfg-tel',''),20),
+    endereco:_c(gv('cfg-end',''),200),
+    pix:     _c(gv('cfg-pix',''),100),
+    termos:  _c(gv('cfg-termos',''),800),
   };
-  if(!d.empresa_nome){UI.toast('Nome da empresa obrigatório','w');return;}
+  if(!d.empresa_nome){UI.toast('Nome da empresa obrigatório','warning');return;}
   try {
     STATE.perfil = await API.upsertPerfil(STATE.user.id, d);
     App._ui();
-    UI.toast('Configurações salvas! ✅','s');
-  } catch(e){UI.toast('Erro: '+e.message,'e');}
+    UI.toast('Configurações salvas! ✅','success');
+  } catch(e){UI.toast('Erro: '+e.message,'error');}
 }
 
 // ── Menu usuário ──────────────────────────────────────────
@@ -1064,7 +1047,7 @@ function toggleUserMenu() {
   m.innerHTML=`
     <div style="padding:10px 12px 12px;border-bottom:1px solid var(--b1);margin-bottom:6px">
       <div style="font-size:.88rem;font-weight:700">${_e(p.empresa_nome||'NexOS')}</div>
-      <div style="font-size:.72rem;color:var(--muted)">Proprietário</div>
+      <div style="font-size:.72rem;color:var(--text-2)">Proprietário</div>
     </div>
     <div class="dropdown-item" id="_cfg_dd">⚙️ Configurações</div>
     <div class="dropdown-sep"></div>
