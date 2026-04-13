@@ -516,10 +516,15 @@ async function addNotaOS(id) {
   catch(e){UI.toast('Erro: '+e.message,'error');}
 }
 async function excluirOS(id) {
-  await UI.confirmSecure('Excluir esta OS? Isso também remove os lançamentos do caixa.', async()=>{
-    try{await API.deleteOS(id,STATE.user.id);APP.os=APP.os.filter(o=>o.id!==id);UI.toast('OS excluída!','success');closeModal();renderOS();renderDash();}
-    catch(e){UI.toast('Erro: '+e.message,'error');}
-  });
+  if(!confirm('Excluir esta OS? Esta ação não pode ser desfeita.')) return;
+  try {
+    await API.deleteOS(id, STATE.user.id);
+    APP.os = APP.os.filter(o=>o.id!==id);
+    UI.toast('OS excluída!','success');
+    goBack();
+    renderOS();
+    renderDash();
+  } catch(e) { UI.toast('Erro ao excluir: '+e.message,'error'); }
 }
 function verFoto(osId,idx){const os=APP.os.find(o=>o.id===osId);if(!os)return;let f=[];try{f=JSON.parse(os.fotos||'[]');}catch{}openModal(`<div style="text-align:center"><img src="${f[idx]}" style="max-width:100%;border-radius:12px"><div style="margin-top:10px;font-family:var(--mono);font-size:11px;color:var(--text-2)">Foto ${idx+1}/${f.length}</div></div>`);}
 
@@ -1003,7 +1008,6 @@ async function excluirMov(id) {
   if(!confirm('Excluir esta movimentação?'))return;
   try {
     await API.deleteCaixa(STATE.user.id, id);
-    APP.movs = APP.movs.filter(m=>m.id!==id);
     UI.toast('Excluído!','success'); renderCaixa();
   } catch(e){UI.toast('Erro: '+e.message,'error');}
 }
