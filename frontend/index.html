@@ -13,7 +13,7 @@
 <link rel="apple-touch-icon" href="NexOS.png">
 <link rel="manifest" href="manifest.json">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=43">
+<link rel="stylesheet" href="styles.css?v=44">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -152,6 +152,12 @@
   <!-- Main -->
   <div id="main-wrap">
     <header id="header">
+      <!-- Logo clicável (mobile) -->
+      <div id="header-logo" onclick="goPage('dashboard')" style="display:none;align-items:center;gap:8px;cursor:pointer;-webkit-tap-highlight-color:transparent">
+        <img src="NexOS.png" alt="N" style="width:28px;height:28px;border-radius:7px;flex-shrink:0" onerror="this.style.display='none'">
+        <span style="font-size:1rem;font-weight:800;letter-spacing:-.04em;background:var(--grad-logo);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">NexOS</span>
+      </div>
+      <!-- Título desktop -->
       <div id="header-title">Dashboard</div>
       <div class="header-search">
         <i data-lucide="search" class="header-search-icon" style="width:14px;height:14px"></i>
@@ -848,9 +854,9 @@
 <div id="toast-container"></div>
 
 
-<script src="api.js?v=43"></script>
-<script src="auth.js?v=43"></script>
-<script src="app.js?v=43"></script>
+<script src="api.js?v=44"></script>
+<script src="auth.js?v=44"></script>
+<script src="app.js?v=44"></script>
 <script>
 function globalSearch(q) {
   if(!q||q.length<2)return;
