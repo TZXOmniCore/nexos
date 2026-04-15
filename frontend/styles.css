@@ -758,3 +758,224 @@ textarea { resize: vertical; min-height: 70px; }
   color: var(--text-3);
   white-space: nowrap;
 }
+
+/* ══════════════════════════════════════════════════════════
+   NexOS v4.3 — Melhorias Mobile Premium
+   ══════════════════════════════════════════════════════════ */
+
+/* ── Autocomplete dropdown ────────────────────────────────── */
+#m-cli-dropdown { border-radius: var(--radius-md); }
+#m-cli-dropdown > div:last-child { border-bottom: none; }
+#m-cli-dropdown > div { transition: background var(--fast); }
+
+/* ── Chip aguardando pagamento ────────────────────────────── */
+.pchip.p-aguardando { border-color: var(--yellow); color: var(--yellow); background: var(--yellow-dim); }
+
+/* ── Assinatura fullscreen ────────────────────────────────── */
+#sig-fullscreen {
+  flex-direction: column;
+}
+#sigCanvasFS {
+  display: block;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,.3);
+}
+
+/* ── Botão salvar fixo na Nova OS ─────────────────────────── */
+#page-nova-os [style*="position:sticky"] {
+  z-index: 50;
+}
+
+/* ── Ver cliente — OS list no perfil ─────────────────────── */
+#vcli-body .os-item { margin-bottom: 8px; }
+
+/* ══════════════════════════════════════════════════════════
+   MOBILE PREMIUM — visual de app nativo
+   ══════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  /* Safe area para iPhone */
+  #page-content { 
+    padding: 16px 14px 100px; 
+    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  }
+  
+  /* Nav com safe area */
+  #mobile-nav {
+    height: calc(62px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Cards mais compactos e com toque responsivo */
+  .card {
+    border-radius: var(--radius-md);
+    padding: 14px;
+    margin-bottom: 10px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .card:active { transform: scale(.99); transition: transform .1s; }
+
+  /* KPIs 2x2 */
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .kpi-value { font-size: 1.25rem; }
+  .kpi-card { padding: 14px; }
+
+  /* Botões maiores para toque */
+  .btn { min-height: 44px; }
+  .btn-sm { min-height: 36px; }
+  .btn-lg { min-height: 52px; font-size: .95rem; }
+
+  /* Inputs maiores */
+  .form-control { 
+    padding: 12px 14px; 
+    font-size: .95rem;
+    -webkit-appearance: none;
+  }
+  select.form-control { font-size: .95rem; }
+
+  /* OS cards no mobile */
+  .os-item { 
+    border-radius: var(--radius-md);
+    margin-bottom: 8px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .os-item:active { transform: scale(.99); }
+
+  /* Page header mais compacto */
+  .page-header { margin-bottom: 14px; }
+  .page-title  { font-size: 1.2rem; }
+
+  /* FAB maior e com sombra mais pronunciada */
+  #fab {
+    width: 58px; height: 58px;
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 6px 24px rgba(52,211,153,.5);
+  }
+
+  /* Comprovante no mobile */
+  #compView { padding: 0; }
+  #compView > div:first-child {
+    position: sticky; top: 0;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    z-index: 10;
+    padding: 12px 14px;
+    gap: 6px;
+  }
+  .comp-paper { border-radius: 0; }
+
+  /* Chip de pagamento */
+  .pay-chips { gap: 6px; }
+  .pchip { 
+    padding: 8px 11px; 
+    font-size: 11px; 
+    border-radius: 16px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Header mais fino no mobile */
+  #header {
+    height: 54px;
+    padding: 0 12px;
+  }
+
+  /* Sidebar user menu bottom */
+  #user-menu-dd {
+    bottom: calc(72px + env(safe-area-inset-bottom,0px));
+    left: 8px; right: 8px;
+    position: fixed !important;
+  }
+
+  /* Scroll smooth */
+  #page-content { 
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+
+  /* Botão de nova OS sticky */
+  #page-nova-os [style*="position:sticky"] {
+    margin: 0 -14px;
+    padding: 12px 14px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Nav labels menores */
+  .mobile-nav-label { font-size: .58rem; }
+  .mobile-nav-item { padding: 6px 10px; }
+
+  /* Filter chips scroll horizontal sem scrollbar */
+  .filter-chips {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .filter-chips::-webkit-scrollbar { display: none; }
+
+  /* it-head e it-row menores no mobile */
+  .it-head { font-size: 9px; }
+  .it-row  { font-size: 12px; }
+
+  /* Pay chips wrap melhor */
+  .pay-chips { 
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 7px;
+  }
+  .pchip { text-align: center; justify-content: center; }
+
+  /* Detalhe OS no mobile */
+  .total-hl { padding: 11px 12px; }
+  .th-val { font-size: 1.5rem; }
+  
+  /* Modal/comprovante mais alto */
+  .msheet { max-height: 96vh; border-radius: 20px 20px 0 0; }
+  
+  /* Input de busca full */
+  .search-box { width: 100%; }
+}
+
+/* Telas muito pequenas (iPhone SE) */
+@media (max-width: 380px) {
+  .kpi-value { font-size: 1.1rem; }
+  .kpi-card  { padding: 12px; }
+  .pay-chips { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Dark mode nativo */
+@media (prefers-color-scheme: dark) {
+  /* já estamos em dark — sem mudanças */
+}
+
+/* Animação de entrada de página */
+.page.active {
+  animation: pageIn .22s cubic-bezier(.2,.8,.3,1) both;
+}
+@keyframes pageIn {
+  from { opacity:0; transform:translateY(10px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+
+/* Touch feedback nos nav items */
+.mobile-nav-item:active { 
+  transform: scale(.92);
+  transition: transform .08s;
+}
+
+/* Gradient suave no topo das páginas */
+#page-content::before {
+  content: '';
+  position: fixed;
+  top: 54px; left: 0; right: 0;
+  height: 40px;
+  background: linear-gradient(to bottom, var(--bg-1) 0%, transparent 100%);
+  pointer-events: none;
+  z-index: 5;
+  display: none;
+}
+@media (max-width:768px) { #page-content::before { display:block; } }
