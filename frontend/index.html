@@ -13,11 +13,13 @@
 <link rel="apple-touch-icon" href="NexOS.png">
 <link rel="manifest" href="manifest.json">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=42">
+<link rel="stylesheet" href="styles.css?v=43">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
 
@@ -132,9 +134,6 @@
         <i data-lucide="calendar" class="nav-icon"></i> Agenda
       </div>
       <div class="nav-section-label">Financeiro</div>
-      <div class="nav-item" data-page="carnes" onclick="goPage('carnes')">
-        <i data-lucide="book-open" class="nav-icon"></i> Carnês
-      </div>
       <div class="nav-item" data-page="config" onclick="goPage('config')">
         <i data-lucide="settings" class="nav-icon"></i> Configurações
       </div>
@@ -256,11 +255,11 @@
         </div>
         <div class="card">
           <div class="card-title"><div class="ct-bar"></div>Cliente</div>
-          <div class="form-group">
-            <label class="form-label">Selecionar cadastrado</label>
-            <select id="m-cli-id" class="form-control" onchange="preencherCliente(this.value)">
-              <option value="">– Sem cadastro –</option>
-            </select>
+          <div class="form-group" style="position:relative">
+            <label class="form-label">Buscar cliente cadastrado</label>
+            <input type="text" id="m-cli-search" class="form-control" placeholder="Digite o nome para buscar..." autocomplete="off" oninput="filtrarClienteOS(this.value)" onfocus="filtrarClienteOS(this.value)">
+            <div id="m-cli-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg-1);border:1px solid var(--border-md);border-radius:var(--radius-md);max-height:200px;overflow-y:auto;z-index:200;box-shadow:var(--shadow-lg)"></div>
+            <input type="hidden" id="m-cli-id">
           </div>
           <div class="form-group">
             <label class="form-label">Nome <span style="color:var(--red)">*</span></label>
@@ -322,9 +321,13 @@
         </div>
         <div class="card">
           <div class="card-title"><div class="ct-bar"></div>Fotos</div>
-          <div class="photo-zone" onclick="document.getElementById('fileInOS').click()">
-            <i data-lucide="camera" style="width:28px;height:28px;opacity:.4"></i>
-            <span style="font-size:12px;color:var(--text-3);margin-top:6px">Toque para adicionar fotos</span>
+          <div style="display:flex;gap:8px;margin-bottom:10px">
+            <button class="btn btn-ghost btn-sm" style="flex:1" onclick="document.getElementById('fileInOS').click()">
+              <i data-lucide="camera" style="width:14px;height:14px"></i> Câmera / Foto
+            </button>
+            <button class="btn btn-ghost btn-sm" style="flex:1" onclick="document.getElementById('fileInOSGallery').click()">
+              <i data-lucide="image" style="width:14px;height:14px"></i> Arquivo / Galeria
+            </button>
           </div>
           <div class="photo-grid" id="m-photo-grid"></div>
         </div>
@@ -337,6 +340,7 @@
             <div class="pchip" onclick="setPay('debito',this)">💳 Débito</div>
             <div class="pchip" onclick="setPay('fiado',this)">📝 Fiado</div>
             <div class="pchip" onclick="setPay('carne',this)">📜 Carnê</div>
+            <div class="pchip" onclick="setPay('aguardando',this)">⏳ Aguardando</div>
           </div>
           <div id="carneConfig" style="display:none">
             <div style="background:var(--purple-dim);border:1px solid rgba(167,139,250,.2);border-radius:var(--radius-sm);padding:14px;margin-bottom:12px">
@@ -404,13 +408,19 @@
         </div>
         <div class="card">
           <div class="card-title"><div class="ct-bar"></div>Assinatura Digital</div>
-          <canvas id="sigCanvas"></canvas>
-          <div style="font-size:.74rem;color:var(--text-3);text-align:center;margin:8px 0">Assine com o dedo para confirmar o serviço</div>
-          <button class="btn btn-ghost btn-sm" onclick="clearSig()">
-            <i data-lucide="trash-2" style="width:13px;height:13px"></i> Limpar
+          <button class="btn btn-ghost w-full" onclick="abrirAssinatura()" style="margin-bottom:8px">
+            <i data-lucide="pen-line" style="width:14px;height:14px"></i>
+            <span id="sig-status-label">Toque para assinar</span>
+          </button>
+          <canvas id="sigCanvas" style="display:none"></canvas>
+        </div>
+        <!-- Botão Salvar fixo no final da página -->
+        <div style="position:sticky;bottom:0;left:0;right:0;background:var(--bg);border-top:1px solid var(--border);padding:12px 0;margin:0 -20px;padding-left:20px;padding-right:20px">
+          <button class="btn btn-primary btn-lg w-full" onclick="salvarOS()">
+            <i data-lucide="check-circle" style="width:16px;height:16px"></i> EMITIR ORDEM DE SERVIÇO
           </button>
         </div>
-        <div style="height:20px"></div>
+        <div style="height:80px"></div>
       </div>
 
       <!-- ══ VER OS (PÁGINA) ════════════════════════════ -->
@@ -451,6 +461,30 @@
         <div id="cli-list"></div>
       </div>
 
+      <!-- ══ VER CLIENTE (PÁGINA) ══════════════════════ -->
+      <div class="page" id="page-ver-cliente">
+        <div class="page-header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <button class="btn btn-ghost btn-icon" onclick="goBack()">
+              <i data-lucide="arrow-left" style="width:18px;height:18px"></i>
+            </button>
+            <div>
+              <div class="page-title" id="vcli-nome">Cliente</div>
+              <div class="page-subtitle" id="vcli-tel">–</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-ghost btn-sm" onclick="editarClienteAtual()">
+              <i data-lucide="edit-2" style="width:13px;height:13px"></i>
+            </button>
+            <button class="btn btn-primary btn-sm" onclick="novaOSparaCliente()">
+              <i data-lucide="plus" style="width:13px;height:13px"></i> Nova OS
+            </button>
+          </div>
+        </div>
+        <div id="vcli-body"></div>
+      </div>
+
       <!-- ══ NOVO/EDITAR CLIENTE (PÁGINA) ══════════════ -->
       <div class="page" id="page-novo-cliente">
         <div class="page-header">
@@ -470,13 +504,23 @@
             <label class="form-label">Nome <span style="color:var(--red)">*</span></label>
             <input type="text" id="form-cli-nome" class="form-control" placeholder="Nome completo">
           </div>
-          <div class="form-group">
-            <label class="form-label">Telefone / WhatsApp</label>
-            <input type="tel" id="form-cli-tel" class="form-control" placeholder="(00) 00000-0000">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Telefone / WhatsApp</label>
+              <input type="tel" id="form-cli-tel" class="form-control" placeholder="(00) 00000-0000">
+            </div>
+            <div class="form-group">
+              <label class="form-label">CPF / CNPJ</label>
+              <input type="text" id="form-cli-doc" class="form-control" placeholder="000.000.000-00">
+            </div>
           </div>
           <div class="form-group">
-            <label class="form-label">CPF / CNPJ</label>
-            <input type="text" id="form-cli-doc" class="form-control" placeholder="000.000.000-00">
+            <label class="form-label">E-mail</label>
+            <input type="email" id="form-cli-email" class="form-control" placeholder="cliente@email.com">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Endereço</label>
+            <input type="text" id="form-cli-end" class="form-control" placeholder="Rua, número, bairro, cidade">
           </div>
         </div>
       </div>
@@ -721,6 +765,16 @@
         <button class="btn btn-ghost btn-sm w-full" style="margin-top:10px" onclick="Auth.logout()">
           <i data-lucide="log-out" style="width:13px;height:13px"></i> Sair da conta
         </button>
+        <div class="card" style="margin-top:16px">
+          <div class="card-title"><div class="ct-bar"></div>Dados e Privacidade</div>
+          <button class="btn btn-secondary w-full" style="margin-bottom:10px" onclick="exportarDados()">
+            <i data-lucide="download" style="width:14px;height:14px"></i> Exportar Meus Dados (JSON)
+          </button>
+          <button class="btn btn-danger w-full" onclick="excluirContaPermanente()">
+            <i data-lucide="trash-2" style="width:14px;height:14px"></i> Excluir Conta Permanentemente
+          </button>
+          <p style="font-size:.72rem;color:var(--text-3);margin-top:8px;line-height:1.5">A exclusão é irreversível. Todos os dados serão apagados permanentemente após confirmação com sua senha.</p>
+        </div>
       </div>
 
     </main>
@@ -775,6 +829,9 @@
     <button class="btn btn-green btn-sm" onclick="enviarWA(_compId)" style="width:auto">
       <i data-lucide="message-circle" style="width:13px;height:13px"></i> WhatsApp
     </button>
+    <button class="btn btn-secondary btn-sm" onclick="salvarComoImagem()" style="width:auto">
+      <i data-lucide="image" style="width:13px;height:13px"></i> Salvar Imagem
+    </button>
   </div>
   <div id="compContent" style="padding:14px"></div>
 </div>
@@ -787,12 +844,13 @@
 </div>
 
 <input type="file" id="fileInOS" accept="image/*" multiple capture="environment" style="display:none" onchange="handlePhotos(event)">
+<input type="file" id="fileInOSGallery" accept="image/*,application/pdf" multiple style="display:none" onchange="handlePhotos(event)">
 <div id="toast-container"></div>
 
 
-<script src="api.js?v=42"></script>
-<script src="auth.js?v=42"></script>
-<script src="app.js?v=42"></script>
+<script src="api.js?v=43"></script>
+<script src="auth.js?v=43"></script>
+<script src="app.js?v=43"></script>
 <script>
 function globalSearch(q) {
   if(!q||q.length<2)return;
