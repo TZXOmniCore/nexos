@@ -979,3 +979,58 @@ textarea { resize: vertical; min-height: 70px; }
   display: none;
 }
 @media (max-width:768px) { #page-content::before { display:block; } }
+
+/* ── Header mobile: mostrar logo, esconder título ──────────── */
+@media (max-width: 768px) {
+  #header-logo  { display: flex !important; }
+  #header-title { display: none; }
+
+  /* OS card — sem corte lateral */
+  .os-item {
+    transform: none !important;
+    margin-left: 0;
+    margin-right: 0;
+    overflow: hidden;
+    box-sizing: border-box;
+    width: 100%;
+  }
+  .os-item:hover { transform: none; }
+  .os-item:active { opacity: .85; }
+
+  /* osi-meta — não vazar */
+  .osi-meta {
+    flex-wrap: nowrap;
+    overflow: hidden;
+  }
+  .osi-meta > span:last-child {
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  /* osi-desc — não vazar */
+  .osi-desc {
+    max-width: 100%;
+  }
+
+  /* page-content sem overflow horizontal */
+  #page-content {
+    overflow-x: hidden;
+    width: 100%;
+  }
+  
+  /* Garantir que todos os cards não vazem */
+  .card, .os-item, .prod-item {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Page header não vazar */
+  .page-header {
+    flex-wrap: nowrap;
+  }
+  .page-header .page-title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
