@@ -36,6 +36,7 @@ const PAY_CONFIG = {
   fiado:        { label:'Fiado'          },
   carne:        { label:'Carnê'          },
   transferencia:{ label:'Transferência'  },
+  aguardando:   { label:'Aguardando Pag.' },
 };
 function statusLabel(s) { return STATUS_CONFIG[s]?.label || s || '—'; }
 function statusColor(s) { return STATUS_CONFIG[s]?.color || 'var(--text-2)'; }
@@ -147,7 +148,7 @@ const API = {
     return data||[];
   },
   async saveCliente(uid, d) {
-    const p = {dono_id:uid,nome:d.nome,telefone:d.telefone||null,cpf:d.cpf||null};
+    const p = {dono_id:uid,nome:d.nome,telefone:d.telefone||null,cpf:d.cpf||null,email:d.email||null,endereco:d.endereco||null};
     if(d.id) {
       const {data,error} = await sb.from('clientes').update(p).eq('id',d.id).eq('dono_id',uid).select().single();
       if(error) throw error; return data;
