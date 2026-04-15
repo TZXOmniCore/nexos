@@ -1,3 +1,87 @@
+// ── Ver cliente ────────────────────────────────────────────
+let _verCliId = null;
+async function verCliente(id) {
+  _verCliId = id;
+  const c = APP.clientes.find(x=>x.id===id); if(!c) return;
+  // Título
+  const n = document.getElementById('vcli-nome'); if(n) n.textContent = c.nome;
+  const t = document.getElementById('vcli-tel');  if(t) t.textContent = c.telefone||c.email||'';
+  // OS do cliente
+  const osCliente = APP.os.filter(o=>o.cliente_id===id||o.cliente_nome===c.nome);
+  const totalGasto = osCliente.reduce((a,o)=>a+(+o.valor_total||0),0);
+  const osPagas   = osCliente.filter(o=>['concluido','retirada'].includes(o.status));
+  const osAbertas = osCliente.filter(o=>['aguardando','andamento'].includes(o.status));
+  const osFiado   = osCliente.filter(o=>o.status==='fiado');
+  const totalDevendo = osFiado.reduce((a,o)=>a+(+o.valor_total||0),0);
+
+  const body = document.getElementById('vcli-body'); if(!body) return;
+  body.innerHTML = `
+    <!-- Resumo financeiro -->
+    <div class="cx-grid" style="margin-bottom:12px">
+      <div class="cx-card c-blue"><div class="cx-num">${fmt(totalGasto)}</div><div class="cx-label">Total Gasto</div></div>
+      <div class="cx-card ${totalDevendo>0?'c-red':'c-green'}"><div class="cx-num">${totalDevendo>0?fmt(totalDevendo):'✓'}</div><div class="cx-label">${totalDevendo>0?'Devendo':'Tudo Pago'}</div></div>
+      <div class="cx-card c-yellow"><div class="cx-num">${osAbertas.length}</div><div class="cx-label">OS Abertas</div></div>
+      <div class="cx-card c-green"><div class="cx-num">${osPagas.length}</div><div class="cx-label">OS Pagas</div></div>
+    </div>
+    <!-- Dados -->
+    <div class="card">
+      <div class="card-title"><div class="ct-bar"></div>Dados</div>
+      ${c.telefone?`<div class="ir"><span class="irl">WhatsApp</span><span class="irv"><a href="https://wa.me/55${(c.telefone||'').replace(/\D/g,'')}" target="_blank" style="color:var(--green)">${_e(c.telefone)}</a></span></div>`:''}
+      ${c.email?`<div class="ir"><span class="irl">E-mail</span><span class="irv">${_e(c.email)}</span></div>`:''}
+      ${c.cpf?`<div class="ir"><span class="irl">CPF/CNPJ</span><span class="irv">${_e(c.cpf)}</span></div>`:''}
+      ${c.endereco?`<div class="ir"><span class="irl">Endereço</span><span class="irv">${_e(c.endereco)}</span></div>`:''}
+    </div>
+    <!-- Alerta fiado -->
+    ${totalDevendo>0?`<div style="background:var(--red-dim);border:1px solid rgba(248,113,113,.25);border-radius:var(--radius-md);padding:12px;margin-bottom:12px;display:flex;align-items:center;gap:10px">
+      <i data-lucide="alert-triangle" style="width:18px;height:18px;color:var(--red);flex-shrink:0"></i>
+      <div><div style="font-weight:600;color:var(--red)">Débito pendente: ${fmt(totalDevendo)}</div>
+      <div style="font-size:.78rem;color:var(--text-2)">${osFiado.length} OS em fiado</div></div>
+      ${c.telefone?`<button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="cobrarClienteWA('${id}')"><i data-lucide="message-circle" style="width:13px;height:13px"></i> Cobrar</button>`:''}
+    </div>`:''}
+    <!-- OS do cliente -->
+    <div class="card">
+      <div class="card-title"><div class="ct-bar"></div>Histórico de OS (${osCliente.length})</div>
+      ${osCliente.length?osCliente.map(o=>`
+        <div class="os-item s-${_normSt(o.status)}" onclick="verOS('${o.id}')" style="margin-bottom:8px">
+          <div class="osi-top">
+            <div class="osi-num">OS #${o.numero||'?'}</div>
+            <span class="sbadge sb-${_normSt(o.status)}">${statusLabel(o.status)}</span>
+          </div>
+          <div class="osi-desc">${_e(o.equipamento||o.item||'–')}</div>
+          <div class="osi-meta">
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-3)">${fmtDate(o.criado_em)}</span>
+            <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--green);margin-left:auto">${fmt(o.valor_total)}</span>
+          </div>
+        </div>`).join(''):'<p style="font-size:.82rem;color:var(--text-3)">Nenhuma OS ainda</p>'}
+    </div>`;
+  goPage('ver-cliente');
+  if(window.lucide) lucide.createIcons();
+}
+
+function editarClienteAtual() {
+  if(_verCliId) editarCliente(_verCliId);
+}
+function novaOSparaCliente() {
+  const c = APP.clientes.find(x=>x.id===_verCliId); if(!c) return;
+  novaOS();
+  setTimeout(()=>{
+    const sn = document.getElementById('m-cli-search'); if(sn) sn.value=c.nome;
+    const si = document.getElementById('m-cli-id');     if(si) si.value=c.id;
+    const nn = document.getElementById('m-cli-nome');   if(nn) nn.value=c.nome;
+    const nt = document.getElementById('m-cli-tel');    if(nt) nt.value=c.telefone||'';
+    const nd = document.getElementById('m-cli-doc');    if(nd) nd.value=c.cpf||'';
+  }, 200);
+}
+function cobrarClienteWA(id) {
+  const c = APP.clientes.find(x=>x.id===id); if(!c||!c.telefone) return;
+  const osFiado = APP.os.filter(o=>(o.cliente_id===id||o.cliente_nome===c.nome)&&o.status==='fiado');
+  const total = osFiado.reduce((a,o)=>a+(+o.valor_total||0),0);
+  const p = STATE.perfil||{};
+  const listaOS = osFiado.map(o=>'• OS #'+o.numero+' — '+(o.equipamento||o.item||'Serviço')+' — '+fmt(o.valor_total)).join('\n');
+  const msg = 'Olá *'+c.nome+'*! 👋\n\nPassando para lembrá-lo(a) do(s) serviço(s) em aberto:\n\n💰 *Total em aberto: '+fmt(total)+'*\n\n'+listaOS+(p.pix?'\n\n🔑 *PIX:* '+p.pix:'')+'\n\n_'+(p.empresa_nome||'NexOS')+'_';
+  const num = (c.telefone||'').replace(/\D/g,'');
+  window.open('https://wa.me/'+(num.startsWith('55')?num:'55'+num)+'?text='+encodeURIComponent(msg),'_blank');
+}
 /* ============================================================
    NexOS v4.0 — app.js | Nav v3.5 + Forms V_TEST
    ============================================================ */
@@ -22,12 +106,12 @@ const PAGE_TITLES = {
   dashboard:'Dashboard', os:'Ordens de Serviço', clientes:'Clientes',
   estoque:'Estoque', caixa:'Caixa', agenda:'Agenda', config:'Configurações',
   carnes:'Carnês',
-  'nova-os':'Nova OS', 'ver-os':'OS', 'novo-cliente':'Novo Cliente',
+  'nova-os':'Nova OS', 'ver-os':'OS', 'novo-cliente':'Novo Cliente', 'ver-cliente':'Cliente',
   'novo-produto':'Novo Produto', 'novo-evento':'Novo Evento',
 };
 
 // Páginas secundárias (não aparecem no nav)
-const SECONDARY_PAGES = ['nova-os','ver-os','novo-cliente','novo-produto','novo-evento'];
+const SECONDARY_PAGES = ['nova-os','ver-os','novo-cliente','ver-cliente','novo-produto','novo-evento'];
 
 let _prevPage = 'dashboard';
 let _verOsId  = null;
@@ -99,6 +183,8 @@ const App = {
     this._agendaAlert();
     // Verificar carnês vencidos
     this._carnesAlert();
+    // Verificar OS em fiado com confirmação
+    setTimeout(verificarOSVencidas, 5000);
     const last = localStorage.getItem('nexos_v4_page')||'dashboard';
     // Não restaurar páginas de formulário
     goPage(SECONDARY_PAGES.includes(last)?'dashboard':last);
@@ -225,11 +311,10 @@ function setOsFilter(f,el) {
 // ── Nova OS — navega para página nova-os ─────────────────────
 function novaOS() {
   _newItens=[]; _newFotos=[]; _curPay='';
-  // Preencher select de clientes na página
-  const sel=document.getElementById('m-cli-id');
-  if(sel){
-    sel.innerHTML='<option value="">– Sem cadastro –</option>'+APP.clientes.map(c=>`<option value="${c.id}">${_e(c.nome)}</option>`).join('');
-  }
+  // Limpar busca de cliente
+  const ms=document.getElementById('m-cli-search');if(ms)ms.value='';
+  const dd=document.getElementById('m-cli-dropdown');if(dd)dd.style.display='none';
+  const mi=document.getElementById('m-cli-id');if(mi)mi.value='';
   // Limpar campos
   ['m-cli-nome','m-cli-tel','m-cli-doc','m-equip','m-defeito','m-diag','m-obs','m-pago','m-troco'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   ['m-mao-obra'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='0';});
@@ -800,16 +885,33 @@ async function gerarPDF(id) {
 function renderClientes() {
   const box = document.getElementById('cli-list'); if(!box) return;
   const q = gv('cli-search','').toLowerCase();
-  const list = APP.clientes.filter(c=>!q||c.nome.toLowerCase().includes(q)||(c.telefone||'').includes(q));
-  if(!list.length){box.innerHTML='<div class="empty"><span class="empty-ico">👥</span><h3>Nenhum cliente</h3><p>Toque em + para adicionar</p></div>';return;}
+  const list = APP.clientes.filter(c=>!q||c.nome.toLowerCase().includes(q)||(c.telefone||'').includes(q)||(c.email||'').toLowerCase().includes(q));
+  if(!list.length){
+    box.innerHTML='<div class="empty-state"><div class="empty-icon">👥</div><div class="empty-title">'+(q?'Nenhum cliente encontrado':'Nenhum cliente ainda')+'</div></div>';
+    return;
+  }
   box.innerHTML = list.map(c=>`
-    <div class="card" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:13px 15px" onclick="editarCliente('${c.id}')">
-      <div>
-        <div style="font-size:14px;font-weight:600">${_e(c.nome)}</div>
-        <div style="font-family:monospace;font-size:11px;color:var(--text-2);margin-top:3px">${_e(c.telefone||'–')} ${c.cpf_cnpj?'| '+_e(c.cpf_cnpj):''}</div>
+    <div class="card" style="cursor:pointer;padding:13px 15px" onclick="verCliente('${c.id}')">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:600;margin-bottom:3px">${_e(c.nome)}</div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--text-2)">
+            ${c.telefone?'📱 '+_e(c.telefone):''}
+            ${c.email?' · '+_e(c.email):''}
+          </div>
+          ${c.endereco?`<div style="font-size:11px;color:var(--text-3);margin-top:2px">📍 ${_e(c.endereco)}</div>`:''}
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:10px">
+          <button onclick="event.stopPropagation();editarCliente('${c.id}')" style="background:none;border:none;color:var(--text-3);cursor:pointer;padding:6px">
+            <i data-lucide="edit-2" style="width:15px;height:15px"></i>
+          </button>
+          <button onclick="excluirCliente(event,'${c.id}')" style="background:none;border:none;color:var(--text-3);cursor:pointer;padding:6px">
+            <i data-lucide="trash-2" style="width:15px;height:15px"></i>
+          </button>
+        </div>
       </div>
-      <button onclick="excluirCliente(event,'${c.id}')" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:18px;padding:4px">🗑️</button>
     </div>`).join('');
+  if(window.lucide) lucide.createIcons();
 }
 
 function novoCliente() {
@@ -817,16 +919,20 @@ function novoCliente() {
   document.getElementById('form-cli-nome').value = '';
   document.getElementById('form-cli-tel').value = '';
   document.getElementById('form-cli-doc').value = '';
+  const em2 = document.getElementById('form-cli-email'); if(em2) em2.value='';
+  const en2 = document.getElementById('form-cli-end');   if(en2) en2.value='';
   const t = document.getElementById('form-cli-title'); if(t) t.textContent = 'Novo Cliente';
   goPage('novo-cliente');
 }
 
 function editarCliente(id) {
   const c = APP.clientes.find(x=>x.id===id); if(!c) return;
-  document.getElementById('form-cli-id').value   = c.id;
-  document.getElementById('form-cli-nome').value = c.nome;
-  document.getElementById('form-cli-tel').value  = c.telefone||'';
-  document.getElementById('form-cli-doc').value  = c.cpf||c.cpf_cnpj||'';
+  document.getElementById('form-cli-id').value    = c.id;
+  document.getElementById('form-cli-nome').value  = c.nome;
+  document.getElementById('form-cli-tel').value   = c.telefone||'';
+  document.getElementById('form-cli-doc').value   = c.cpf||'';
+  const em = document.getElementById('form-cli-email'); if(em) em.value = c.email||'';
+  const en = document.getElementById('form-cli-end');   if(en) en.value = c.endereco||'';
   const t = document.getElementById('form-cli-title'); if(t) t.textContent = 'Editar Cliente';
   goPage('novo-cliente');
 }
@@ -834,7 +940,7 @@ function editarCliente(id) {
 async function salvarCliente() {
   const nome = _c(gv('form-cli-nome','').trim(), 100);
   if (!nome) { UI.toast('Nome obrigatório','warning'); return; }
-  const d = { id:gv('form-cli-id','')||undefined, nome, telefone:_c(gv('form-cli-tel',''),20), cpf:_c(gv('form-cli-doc',''),20) };
+  const d = { id:gv('form-cli-id','')||undefined, nome, telefone:_c(gv('form-cli-tel',''),20), cpf:_c(gv('form-cli-doc',''),20), email:_c(gv('form-cli-email',''),100), endereco:_c(gv('form-cli-end',''),200) };
   try {
     const saved = await API.saveCliente(STATE.user.id, d);
     if (d.id) { const i=APP.clientes.findIndex(x=>x.id===d.id); if(i!==-1)APP.clientes[i]=saved; }
@@ -1286,3 +1392,177 @@ function preencherCliente(id) {
   const tel  = document.getElementById('m-cli-tel');  if (tel)  tel.value  = c.telefone || '';
   const doc  = document.getElementById('m-cli-doc');  if (doc)  doc.value  = c.cpf || '';
 }
+
+// ── Autocomplete de clientes na Nova OS ────────────────────
+function filtrarClienteOS(q) {
+  const dd = document.getElementById('m-cli-dropdown'); if(!dd) return;
+  const val = (q||'').toLowerCase().trim();
+  if(!val) { dd.style.display='none'; return; }
+  const matches = APP.clientes.filter(c=>
+    c.nome.toLowerCase().includes(val)||
+    (c.telefone||'').includes(val)
+  ).slice(0,8);
+  if(!matches.length) { dd.style.display='none'; return; }
+  dd.innerHTML = matches.map(c=>`
+    <div onclick="selecionarClienteOS('${c.id}')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:.1s" onmouseover="this.style.background='var(--bg-2)'" onmouseout="this.style.background=''">
+      <div style="font-size:.87rem;font-weight:600">${_e(c.nome)}</div>
+      <div style="font-size:.75rem;color:var(--text-2);font-family:var(--mono)">${c.telefone||c.email||''}</div>
+    </div>`).join('');
+  dd.style.display='block';
+}
+function selecionarClienteOS(id) {
+  const c = APP.clientes.find(x=>x.id===id); if(!c) return;
+  const dd = document.getElementById('m-cli-dropdown'); if(dd) dd.style.display='none';
+  const ms = document.getElementById('m-cli-search');   if(ms) ms.value=c.nome;
+  const mi = document.getElementById('m-cli-id');       if(mi) mi.value=c.id;
+  const mn = document.getElementById('m-cli-nome');     if(mn) mn.value=c.nome;
+  const mt = document.getElementById('m-cli-tel');      if(mt) mt.value=c.telefone||'';
+  const md = document.getElementById('m-cli-doc');      if(md) md.value=c.cpf||'';
+}
+// Fechar dropdown ao clicar fora
+document.addEventListener('click', e=>{
+  const dd=document.getElementById('m-cli-dropdown');
+  const ms=document.getElementById('m-cli-search');
+  if(dd&&ms&&!dd.contains(e.target)&&e.target!==ms) dd.style.display='none';
+});
+
+// ── Assinatura fullscreen ───────────────────────────────────
+let _sigFSDrawing=false, _sigFSLX=0, _sigFSLY=0;
+function abrirAssinatura() {
+  const el = document.getElementById('sig-fullscreen');
+  if(!el) return;
+  el.style.display='flex';
+  setTimeout(()=>{
+    const cv = document.getElementById('sigCanvasFS');
+    if(!cv) return;
+    const pr = window.devicePixelRatio||1;
+    const rect = cv.getBoundingClientRect();
+    cv.width  = rect.width  * pr;
+    cv.height = rect.height * pr;
+    const ctx = cv.getContext('2d');
+    ctx.scale(pr,pr);
+    ctx.strokeStyle='#1a1a2e'; ctx.lineWidth=2.5; ctx.lineCap='round'; ctx.lineJoin='round';
+    function getP(e){const r=cv.getBoundingClientRect();if(e.touches)return{x:e.touches[0].clientX-r.left,y:e.touches[0].clientY-r.top};return{x:e.clientX-r.left,y:e.clientY-r.top};}
+    cv.onmousedown  = e=>{_sigFSDrawing=true;const p=getP(e);_sigFSLX=p.x;_sigFSLY=p.y;};
+    cv.onmousemove  = e=>{if(!_sigFSDrawing)return;const p=getP(e);ctx.beginPath();ctx.moveTo(_sigFSLX,_sigFSLY);ctx.lineTo(p.x,p.y);ctx.stroke();_sigFSLX=p.x;_sigFSLY=p.y;};
+    cv.onmouseup    = ()=>_sigFSDrawing=false;
+    cv.ontouchstart = e=>{e.preventDefault();_sigFSDrawing=true;const p=getP(e);_sigFSLX=p.x;_sigFSLY=p.y;};
+    cv.ontouchmove  = e=>{e.preventDefault();if(!_sigFSDrawing)return;const p=getP(e);ctx.beginPath();ctx.moveTo(_sigFSLX,_sigFSLY);ctx.lineTo(p.x,p.y);ctx.stroke();_sigFSLX=p.x;_sigFSLY=p.y;};
+    cv.ontouchend   = ()=>_sigFSDrawing=false;
+  }, 100);
+  if(window.lucide) lucide.createIcons();
+}
+function limparSigFS() {
+  const cv=document.getElementById('sigCanvasFS');
+  if(cv) cv.getContext('2d').clearRect(0,0,cv.width,cv.height);
+}
+function fecharAssinatura() {
+  const el=document.getElementById('sig-fullscreen');
+  if(el) el.style.display='none';
+}
+function confirmarAssinatura() {
+  const cv=document.getElementById('sigCanvasFS');
+  if(!cv||isEmptySig(cv)){UI.toast('Assine antes de confirmar','warning');return;}
+  // Copiar para canvas oculto da OS
+  const cvHidden=document.getElementById('sigCanvas');
+  if(cvHidden){
+    const pr=window.devicePixelRatio||1;
+    cvHidden.width=cv.width; cvHidden.height=cv.height;
+    cvHidden.getContext('2d').drawImage(cv,0,0);
+  }
+  // Atualizar label
+  const lbl=document.getElementById('sig-status-label');
+  if(lbl) lbl.textContent='✅ Assinatura registrada';
+  fecharAssinatura();
+  UI.toast('Assinatura confirmada!','success');
+}
+
+// ── Salvar comprovante como imagem ─────────────────────────
+async function salvarComoImagem() {
+  const el = document.getElementById('compPaper');
+  if(!el){UI.toast('Comprovante não encontrado','error');return;}
+  if(!window.html2canvas){UI.toast('Biblioteca não carregou','error');return;}
+  UI.toast('Gerando imagem...','info');
+  try {
+    const canvas = await html2canvas(el, {scale:2, backgroundColor:'#ffffff', useCORS:true, logging:false});
+    const link = document.createElement('a');
+    const os = APP.os.find(o=>o.id===_compId);
+    link.download = 'OS_'+(os?.numero||'comprovante')+'.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    UI.toast('Imagem salva! ✅','success');
+  } catch(e) { UI.toast('Erro ao gerar imagem','error'); console.error(e); }
+}
+
+// ── Exportar dados do usuário ───────────────────────────────
+async function exportarDados() {
+  UI.toast('Exportando dados...','info');
+  try {
+    const [os, clientes, produtos, caixa, agenda] = await Promise.all([
+      API.getOS(STATE.user.id, 9999),
+      API.getClientes(STATE.user.id),
+      API.getProdutos(STATE.user.id),
+      API.getCaixa(STATE.user.id, '2000-01-01', '2099-12-31'),
+      API.getAgenda(STATE.user.id, '2000-01-01', '2099-12-31'),
+    ]);
+    const dados = {
+      exportado_em: new Date().toISOString(),
+      usuario: STATE.user?.email,
+      empresa: STATE.perfil?.empresa_nome,
+      os, clientes, produtos, caixa, agenda,
+    };
+    const blob = new Blob([JSON.stringify(dados, null, 2)], {type:'application/json'});
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'nexos_backup_'+new Date().toISOString().slice(0,10)+'.json';
+    link.click();
+    UI.toast('Dados exportados! ✅','success');
+  } catch(e) { UI.toast('Erro ao exportar: '+e.message,'error'); }
+}
+
+// ── Excluir conta permanentemente ─────────────────────────
+async function excluirContaPermanente() {
+  if(!confirm('ATENÇÃO! Excluir sua conta apagará TODOS os dados permanentemente.\n\nEsta ação NÃO pode ser desfeita.\n\nDeseja continuar?')) return;
+  const pw = prompt('Digite sua senha de acesso para confirmar:');
+  if(!pw) return;
+  try {
+    const {error} = await window.sb.auth.signInWithPassword({email:STATE.user.email, password:pw});
+    if(error){ UI.toast('Senha incorreta','error'); return; }
+    // Excluir todos os dados
+    const uid = STATE.user.id;
+    await Promise.all([
+      window.sb.from('ordens_servico').delete().eq('dono_id',uid),
+      window.sb.from('clientes').delete().eq('dono_id',uid),
+      window.sb.from('produtos').delete().eq('dono_id',uid),
+      window.sb.from('caixa').delete().eq('dono_id',uid),
+      window.sb.from('agenda').delete().eq('dono_id',uid),
+      window.sb.from('parcelas').delete().eq('dono_id',uid),
+      window.sb.from('perfil').delete().eq('user_id',uid),
+    ]);
+    await window.sb.auth.signOut();
+    UI.toast('Conta excluída permanentemente.','info');
+    setTimeout(()=>location.reload(), 2000);
+  } catch(e) { UI.toast('Erro: '+e.message,'error'); }
+}
+
+// ── Notificação automática OS não paga com confirmação ────
+async function verificarOSVencidas() {
+  const osFiado = APP.os.filter(o=>o.status==='fiado');
+  if(!osFiado.length) return;
+  const conf = confirm(`⚠️ ${osFiado.length} OS em fiado detectada(s).
+
+Deseja enviar cobrança via WhatsApp para os clientes?`);
+  if(!conf) return;
+  for(const os of osFiado) {
+    const tel = os.clientes?.telefone||'';
+    if(!tel) continue;
+    const nome = os.clientes?.nome||os.cliente_nome||'Cliente';
+    const pix2 = STATE.perfil?.pix?'\n\n🔑 *PIX:* '+STATE.perfil.pix:'';
+    const msg='Olá *'+nome+'*! 👋\n\nPassando para lembrá-lo(a) da OS em aberto:\n\n📋 *OS #'+os.numero+'*\n🔧 '+(os.equipamento||os.item||'Serviço')+'\n💰 *Valor: '+fmt(os.valor_total)+'*'+pix2+'\n\n_'+(STATE.perfil?.empresa_nome||'NexOS')+'_';
+    const num = tel.replace(/\D/g,'');
+    window.open('https://wa.me/'+(num.startsWith('55')?num:'55'+num)+'?text='+encodeURIComponent(msg),'_blank');
+    await new Promise(r=>setTimeout(r,1500));
+  }
+}
+
+// ── setPay — adicionar aguardando ──────────────────────────
