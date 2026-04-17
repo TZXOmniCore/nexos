@@ -1,5 +1,5 @@
 /* ============================================================
-   NexOS v4.0 — styles.css | Design v3.5 + V_TEST components
+   NexOS v4.0 — styles.css 
    ============================================================ */
 
 /* ── RESET ────────────────────────────────────────────────── */
@@ -95,7 +95,7 @@ img { max-width: 100%; display: block; }
 ::-webkit-scrollbar-thumb:hover { background: var(--blue-dark); }
 
 /* ── LAYOUT ───────────────────────────────────────────────── */
-#app-shell { display: flex; min-height: 100vh; position: relative; z-index: 1; }
+#app-shell { display: flex; min-height: 100vh; position: relative; z-index: 1; overflow-x: hidden; }
 
 /* ── SIDEBAR ──────────────────────────────────────────────── */
 #sidebar {
@@ -211,7 +211,7 @@ img { max-width: 100%; display: block; }
 .sidebar-user-role { font-size: .7rem; color: var(--text-3); }
 
 /* ── MAIN ─────────────────────────────────────────────────── */
-#main-wrap { flex: 1; margin-left: var(--sidebar-w); display: flex; flex-direction: column; min-height: 100vh; }
+#main-wrap { flex: 1; margin-left: var(--sidebar-w); display: flex; flex-direction: column; min-height: 100vh; overflow-x: hidden; min-width: 0; }
 
 /* ── HEADER ───────────────────────────────────────────────── */
 #header {
@@ -477,7 +477,7 @@ textarea { resize: vertical; min-height: 70px; }
 .comp-terms { font-size: 10px; color: #999; line-height: 1.6; margin-top: 8px; }
 
 /* ── V_TEST: OS ITEMS ─────────────────────────────────────── */
-.os-item { background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px; margin-bottom: 9px; cursor: pointer; transition: .14s; position: relative; overflow: hidden; }
+.os-item { background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px; margin-bottom: 9px; cursor: pointer; transition: .14s; position: relative; overflow: hidden; box-sizing: border-box; width: 100%; }
 .os-item:hover { background: var(--bg-2); transform: translateX(2px); }
 .os-item::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; border-radius: 3px 0 0 3px; }
 .s-paga::before     { background: var(--green); }
@@ -696,8 +696,8 @@ textarea { resize: vertical; min-height: 70px; }
 
 @media (max-width: 768px) {
   #sidebar { display: none; }
-  #main-wrap { margin-left: 0; }
-  #page-content { padding: 14px 12px 80px; }
+  #main-wrap { margin-left: 0; overflow-x: hidden; }
+  #page-content { padding: 14px 12px 100px; overflow-x: hidden; width: 100%; max-width: 100vw; }
   #header { padding: 0 14px; }
   .header-search { display: none; }
   #mobile-nav { display: flex; }
@@ -1034,3 +1034,5 @@ textarea { resize: vertical; min-height: 70px; }
     text-overflow: ellipsis;
   }
 }
+
+#os-list, #cli-list, #est-list, #ag-list, #carne-list, #dash-os-list { width: 100%; box-sizing: border-box; overflow-x: hidden; }
