@@ -1,87 +1,3 @@
-// ── Ver cliente ────────────────────────────────────────────
-let _verCliId = null;
-async function verCliente(id) {
-  _verCliId = id;
-  const c = APP.clientes.find(x=>x.id===id); if(!c) return;
-  // Título
-  const n = document.getElementById('vcli-nome'); if(n) n.textContent = c.nome;
-  const t = document.getElementById('vcli-tel');  if(t) t.textContent = c.telefone||c.email||'';
-  // OS do cliente
-  const osCliente = APP.os.filter(o=>o.cliente_id===id||o.cliente_nome===c.nome);
-  const totalGasto = osCliente.reduce((a,o)=>a+(+o.valor_total||0),0);
-  const osPagas   = osCliente.filter(o=>['concluido','retirada'].includes(o.status));
-  const osAbertas = osCliente.filter(o=>['aguardando','andamento'].includes(o.status));
-  const osFiado   = osCliente.filter(o=>o.status==='fiado');
-  const totalDevendo = osFiado.reduce((a,o)=>a+(+o.valor_total||0),0);
-
-  const body = document.getElementById('vcli-body'); if(!body) return;
-  body.innerHTML = `
-    <!-- Resumo financeiro -->
-    <div class="cx-grid" style="margin-bottom:12px">
-      <div class="cx-card c-blue"><div class="cx-num">${fmt(totalGasto)}</div><div class="cx-label">Total Gasto</div></div>
-      <div class="cx-card ${totalDevendo>0?'c-red':'c-green'}"><div class="cx-num">${totalDevendo>0?fmt(totalDevendo):'✓'}</div><div class="cx-label">${totalDevendo>0?'Devendo':'Tudo Pago'}</div></div>
-      <div class="cx-card c-yellow"><div class="cx-num">${osAbertas.length}</div><div class="cx-label">OS Abertas</div></div>
-      <div class="cx-card c-green"><div class="cx-num">${osPagas.length}</div><div class="cx-label">OS Pagas</div></div>
-    </div>
-    <!-- Dados -->
-    <div class="card">
-      <div class="card-title"><div class="ct-bar"></div>Dados</div>
-      ${c.telefone?`<div class="ir"><span class="irl">WhatsApp</span><span class="irv"><a href="https://wa.me/55${(c.telefone||'').replace(/\D/g,'')}" target="_blank" style="color:var(--green)">${_e(c.telefone)}</a></span></div>`:''}
-      ${c.email?`<div class="ir"><span class="irl">E-mail</span><span class="irv">${_e(c.email)}</span></div>`:''}
-      ${c.cpf?`<div class="ir"><span class="irl">CPF/CNPJ</span><span class="irv">${_e(c.cpf)}</span></div>`:''}
-      ${c.endereco?`<div class="ir"><span class="irl">Endereço</span><span class="irv">${_e(c.endereco)}</span></div>`:''}
-    </div>
-    <!-- Alerta fiado -->
-    ${totalDevendo>0?`<div style="background:var(--red-dim);border:1px solid rgba(248,113,113,.25);border-radius:var(--radius-md);padding:12px;margin-bottom:12px;display:flex;align-items:center;gap:10px">
-      <i data-lucide="alert-triangle" style="width:18px;height:18px;color:var(--red);flex-shrink:0"></i>
-      <div><div style="font-weight:600;color:var(--red)">Débito pendente: ${fmt(totalDevendo)}</div>
-      <div style="font-size:.78rem;color:var(--text-2)">${osFiado.length} OS em fiado</div></div>
-      ${c.telefone?`<button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="cobrarClienteWA('${id}')"><i data-lucide="message-circle" style="width:13px;height:13px"></i> Cobrar</button>`:''}
-    </div>`:''}
-    <!-- OS do cliente -->
-    <div class="card">
-      <div class="card-title"><div class="ct-bar"></div>Histórico de OS (${osCliente.length})</div>
-      ${osCliente.length?osCliente.map(o=>`
-        <div class="os-item s-${_normSt(o.status)}" onclick="verOS('${o.id}')" style="margin-bottom:8px">
-          <div class="osi-top">
-            <div class="osi-num">OS #${o.numero||'?'}</div>
-            <span class="sbadge sb-${_normSt(o.status)}">${statusLabel(o.status)}</span>
-          </div>
-          <div class="osi-desc">${_e(o.equipamento||o.item||'–')}</div>
-          <div class="osi-meta">
-            <span style="font-family:var(--mono);font-size:11px;color:var(--text-3)">${fmtDate(o.criado_em)}</span>
-            <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--green);margin-left:auto">${fmt(o.valor_total)}</span>
-          </div>
-        </div>`).join(''):'<p style="font-size:.82rem;color:var(--text-3)">Nenhuma OS ainda</p>'}
-    </div>`;
-  goPage('ver-cliente');
-  if(window.lucide) lucide.createIcons();
-}
-
-function editarClienteAtual() {
-  if(_verCliId) editarCliente(_verCliId);
-}
-function novaOSparaCliente() {
-  const c = APP.clientes.find(x=>x.id===_verCliId); if(!c) return;
-  novaOS();
-  setTimeout(()=>{
-    const sn = document.getElementById('m-cli-search'); if(sn) sn.value=c.nome;
-    const si = document.getElementById('m-cli-id');     if(si) si.value=c.id;
-    const nn = document.getElementById('m-cli-nome');   if(nn) nn.value=c.nome;
-    const nt = document.getElementById('m-cli-tel');    if(nt) nt.value=c.telefone||'';
-    const nd = document.getElementById('m-cli-doc');    if(nd) nd.value=c.cpf||'';
-  }, 200);
-}
-function cobrarClienteWA(id) {
-  const c = APP.clientes.find(x=>x.id===id); if(!c||!c.telefone) return;
-  const osFiado = APP.os.filter(o=>(o.cliente_id===id||o.cliente_nome===c.nome)&&o.status==='fiado');
-  const total = osFiado.reduce((a,o)=>a+(+o.valor_total||0),0);
-  const p = STATE.perfil||{};
-  const listaOS = osFiado.map(o=>'• OS #'+o.numero+' — '+(o.equipamento||o.item||'Serviço')+' — '+fmt(o.valor_total)).join('\n');
-  const msg = 'Olá *'+c.nome+'*! 👋\n\nPassando para lembrá-lo(a) do(s) serviço(s) em aberto:\n\n💰 *Total em aberto: '+fmt(total)+'*\n\n'+listaOS+(p.pix?'\n\n🔑 *PIX:* '+p.pix:'')+'\n\n_'+(p.empresa_nome||'NexOS')+'_';
-  const num = (c.telefone||'').replace(/\D/g,'');
-  window.open('https://wa.me/'+(num.startsWith('55')?num:'55'+num)+'?text='+encodeURIComponent(msg),'_blank');
-}
 /* ============================================================
    NexOS v4.0 — app.js | Nav v3.5 + Forms V_TEST
    ============================================================ */
@@ -1563,6 +1479,91 @@ Deseja enviar cobrança via WhatsApp para os clientes?`);
     window.open('https://wa.me/'+(num.startsWith('55')?num:'55'+num)+'?text='+encodeURIComponent(msg),'_blank');
     await new Promise(r=>setTimeout(r,1500));
   }
+}
+
+// ── Ver cliente ────────────────────────────────────────────
+let _verCliId = null;
+async function verCliente(id) {
+  _verCliId = id;
+  const c = APP.clientes.find(x=>x.id===id); if(!c) return;
+  // Título
+  const n = document.getElementById('vcli-nome'); if(n) n.textContent = c.nome;
+  const t = document.getElementById('vcli-tel');  if(t) t.textContent = c.telefone||c.email||'';
+  // OS do cliente
+  const osCliente = APP.os.filter(o=>o.cliente_id===id||o.cliente_nome===c.nome);
+  const totalGasto = osCliente.reduce((a,o)=>a+(+o.valor_total||0),0);
+  const osPagas   = osCliente.filter(o=>['concluido','retirada'].includes(o.status));
+  const osAbertas = osCliente.filter(o=>['aguardando','andamento'].includes(o.status));
+  const osFiado   = osCliente.filter(o=>o.status==='fiado');
+  const totalDevendo = osFiado.reduce((a,o)=>a+(+o.valor_total||0),0);
+
+  const body = document.getElementById('vcli-body'); if(!body) return;
+  body.innerHTML = `
+    <!-- Resumo financeiro -->
+    <div class="cx-grid" style="margin-bottom:12px">
+      <div class="cx-card c-blue"><div class="cx-num">${fmt(totalGasto)}</div><div class="cx-label">Total Gasto</div></div>
+      <div class="cx-card ${totalDevendo>0?'c-red':'c-green'}"><div class="cx-num">${totalDevendo>0?fmt(totalDevendo):'✓'}</div><div class="cx-label">${totalDevendo>0?'Devendo':'Tudo Pago'}</div></div>
+      <div class="cx-card c-yellow"><div class="cx-num">${osAbertas.length}</div><div class="cx-label">OS Abertas</div></div>
+      <div class="cx-card c-green"><div class="cx-num">${osPagas.length}</div><div class="cx-label">OS Pagas</div></div>
+    </div>
+    <!-- Dados -->
+    <div class="card">
+      <div class="card-title"><div class="ct-bar"></div>Dados</div>
+      ${c.telefone?`<div class="ir"><span class="irl">WhatsApp</span><span class="irv"><a href="https://wa.me/55${(c.telefone||'').replace(/\D/g,'')}" target="_blank" style="color:var(--green)">${_e(c.telefone)}</a></span></div>`:''}
+      ${c.email?`<div class="ir"><span class="irl">E-mail</span><span class="irv">${_e(c.email)}</span></div>`:''}
+      ${c.cpf?`<div class="ir"><span class="irl">CPF/CNPJ</span><span class="irv">${_e(c.cpf)}</span></div>`:''}
+      ${c.endereco?`<div class="ir"><span class="irl">Endereço</span><span class="irv">${_e(c.endereco)}</span></div>`:''}
+    </div>
+    <!-- Alerta fiado -->
+    ${totalDevendo>0?`<div style="background:var(--red-dim);border:1px solid rgba(248,113,113,.25);border-radius:var(--radius-md);padding:12px;margin-bottom:12px;display:flex;align-items:center;gap:10px">
+      <i data-lucide="alert-triangle" style="width:18px;height:18px;color:var(--red);flex-shrink:0"></i>
+      <div><div style="font-weight:600;color:var(--red)">Débito pendente: ${fmt(totalDevendo)}</div>
+      <div style="font-size:.78rem;color:var(--text-2)">${osFiado.length} OS em fiado</div></div>
+      ${c.telefone?`<button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="cobrarClienteWA('${id}')"><i data-lucide="message-circle" style="width:13px;height:13px"></i> Cobrar</button>`:''}
+    </div>`:''}
+    <!-- OS do cliente -->
+    <div class="card">
+      <div class="card-title"><div class="ct-bar"></div>Histórico de OS (${osCliente.length})</div>
+      ${osCliente.length?osCliente.map(o=>`
+        <div class="os-item s-${_normSt(o.status)}" onclick="verOS('${o.id}')" style="margin-bottom:8px">
+          <div class="osi-top">
+            <div class="osi-num">OS #${o.numero||'?'}</div>
+            <span class="sbadge sb-${_normSt(o.status)}">${statusLabel(o.status)}</span>
+          </div>
+          <div class="osi-desc">${_e(o.equipamento||o.item||'–')}</div>
+          <div class="osi-meta">
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text-3)">${fmtDate(o.criado_em)}</span>
+            <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--green);margin-left:auto">${fmt(o.valor_total)}</span>
+          </div>
+        </div>`).join(''):'<p style="font-size:.82rem;color:var(--text-3)">Nenhuma OS ainda</p>'}
+    </div>`;
+  goPage('ver-cliente');
+  if(window.lucide) lucide.createIcons();
+}
+
+function editarClienteAtual() {
+  if(_verCliId) editarCliente(_verCliId);
+}
+function novaOSparaCliente() {
+  const c = APP.clientes.find(x=>x.id===_verCliId); if(!c) return;
+  novaOS();
+  setTimeout(()=>{
+    const sn = document.getElementById('m-cli-search'); if(sn) sn.value=c.nome;
+    const si = document.getElementById('m-cli-id');     if(si) si.value=c.id;
+    const nn = document.getElementById('m-cli-nome');   if(nn) nn.value=c.nome;
+    const nt = document.getElementById('m-cli-tel');    if(nt) nt.value=c.telefone||'';
+    const nd = document.getElementById('m-cli-doc');    if(nd) nd.value=c.cpf||'';
+  }, 200);
+}
+function cobrarClienteWA(id) {
+  const c = APP.clientes.find(x=>x.id===id); if(!c||!c.telefone) return;
+  const osFiado = APP.os.filter(o=>(o.cliente_id===id||o.cliente_nome===c.nome)&&o.status==='fiado');
+  const total = osFiado.reduce((a,o)=>a+(+o.valor_total||0),0);
+  const p = STATE.perfil||{};
+  const listaOS = osFiado.map(o=>'• OS #'+o.numero+' — '+(o.equipamento||o.item||'Serviço')+' — '+fmt(o.valor_total)).join('\n');
+  const msg = 'Olá *'+c.nome+'*! 👋\n\nPassando para lembrá-lo(a) do(s) serviço(s) em aberto:\n\n💰 *Total em aberto: '+fmt(total)+'*\n\n'+listaOS+(p.pix?'\n\n🔑 *PIX:* '+p.pix:'')+'\n\n_'+(p.empresa_nome||'NexOS')+'_';
+  const num = (c.telefone||'').replace(/\D/g,'');
+  window.open('https://wa.me/'+(num.startsWith('55')?num:'55'+num)+'?text='+encodeURIComponent(msg),'_blank');
 }
 
 // ── setPay — adicionar aguardando ──────────────────────────
