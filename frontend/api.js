@@ -181,8 +181,8 @@ const API = {
     const {error} = await sb.from('produtos').update({quantidade:qtd}).eq('id',id);
     if(error) throw error;
   },
-  async deleteProduto(uid,id) {
-    const {error} = await sb.from('produtos').update({ativo:false}).eq('id',id).eq('dono_id',uid);
+  async updateEstoque(uid,id,qtd) {
+    const {error} = await sb.from('produtos').update({quantidade:qtd}).eq('id',id).eq('dono_id',uid);
     if(error) throw error;
   },
 
@@ -192,10 +192,10 @@ const API = {
     if(error) throw error;
     return data||[];
   },
-  async getOSById(id) {
-    const {data,error} = await sb.from('ordens_servico').select('*,clientes(nome,telefone,cpf)').eq('id',id).single();
-    if(error) throw error;
-    return data;
+   async getOSById(id, uid) {
+    let q = sb.from('ordens_servico').select('*,clientes(nome,telefone,cpf)').eq('id',id);
+    if (uid) q = q.eq('dono_id', uid);
+    const {data,error} = await q.single();
   },
   async createOS(uid, d) {
     // Número aleatório de 5 dígitos único
@@ -211,13 +211,13 @@ const API = {
   },
   async deleteOS(id,uid) {
     await sb.from('caixa').delete().eq('ordem_id',id).eq('dono_id',uid);
-    await sb.from('parcelas').delete().eq('ordem_id',id);
+   await sb.from('parcelas').delete().eq('ordem_id',id).eq('dono_id',uid);
     const {error} = await sb.from('ordens_servico').delete().eq('id',id).eq('dono_id',uid);
     if(error) throw error;
   },
   async addHistorico(osId, texto) {
     const uid = STATE.user?.id;
-    const os = await API.getOSById(osId);
+    const os = await API.getOSById(osId, uid);
     let hist = [];
     try { hist = JSON.parse(os.historico||'[]'); } catch {}
     hist.push({at:nowISO(), txt:texto, por:STATE.perfil?.empresa_nome||'Sistema'});
@@ -274,7 +274,7 @@ const API = {
     return data||[];
   },
   async pagarParcela(uid,id,valor,ordemId) {
-    const {error} = await sb.from('parcelas').update({pago:true,pago_em:today()}).eq('id',id);
+    const {error} = await sb.from('parcelas').update({pago:true,pago_em:today()}).eq('id',id).eq('dono_id',uid);
     if(error) throw error;
     const p = await sb.from('parcelas').select('numero,total').eq('id',id).single();
     await API.addCaixa(uid,{tipo:'entrada',descricao:`Parcela ${p.data?.numero||'?'}/${p.data?.total||'?'}`,valor,forma:'carne',ordem_id:ordemId});
