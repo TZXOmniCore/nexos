@@ -341,8 +341,36 @@ function initSig() {
 function clearSig(){const cv=document.getElementById('sigCanvas');if(cv)cv.getContext('2d').clearRect(0,0,cv.width,cv.height);}
 
 // ── Fotos ─────────────────────────────────────────────────
-function handlePhotos(e){Array.from(e.target.files).forEach(f=>{const r=new FileReader();r.onload=ev=>{_newFotos.push(ev.target.result);renderPhotoGrid();};r.readAsDataURL(f);});e.target.value='';}
-function renderPhotoGrid(){const g=document.getElementById('m-photo-grid');if(!g)return;g.innerHTML=_newFotos.map((f,i)=>`<div class="photo-thumb"><img src="${f}"><button class="rx" onclick="_newFotos.splice(${i},1);renderPhotoGrid()">✕</button></div>`).join('');}
+const MAX_PHOTOS_PER_OS = 9;
+const MAX_PHOTO_SIZE_BYTES = 500_000;
+const ALLOWED_PHOTO_TYPES = new Set(['image/png','image/jpeg','image/webp']);
+
+function _isSafePhotoDataUrl(url){
+  return typeof url==='string' && /^data:image\/(png|jpeg|webp);base64,[a-z0-9+/=\s]+$/i.test(url);
+}
+
+function handlePhotos(e){
+  const files = Array.from(e.target.files||[]);
+  for (const f of files) {
+    if (_newFotos.length >= MAX_PHOTOS_PER_OS) { UI.toast('Limite de 9 fotos por OS','warning'); break; }
+    if (!ALLOWED_PHOTO_TYPES.has(f.type)) { UI.toast('Formato inválido. Use PNG, JPG ou WEBP','warning'); continue; }
+    if (f.size > MAX_PHOTO_SIZE_BYTES) { UI.toast('Foto acima de 500KB','warning'); continue; }
+    const r=new FileReader();
+    r.onload=ev=>{
+      const data = String(ev.target?.result||'');
+      if (!_isSafePhotoDataUrl(data)) { UI.toast('Foto rejeitada por segurança','error'); return; }
+      _newFotos.push(data);
+      renderPhotoGrid();
+    };
+    r.readAsDataURL(f);
+  }
+  e.target.value='';
+}
+function renderPhotoGrid(){
+  const g=document.getElementById('m-photo-grid');
+  if(!g)return;
+  g.innerHTML=_newFotos.map((f,i)=>`<div class="photo-thumb"><img src="${_isSafePhotoDataUrl(f)?f:''}" alt="Foto da OS ${i+1}"><button class="rx" onclick="_newFotos.splice(${i},1);renderPhotoGrid()">✕</button></div>`).join('');
+}
 
 // ── Salvar OS ─────────────────────────────────────────────
 async function salvarOS() {
