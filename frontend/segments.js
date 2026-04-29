@@ -43,7 +43,7 @@ const SEGMENTS = {
     const seg = this.current;
     // Atualiza ícones do nav
     Object.entries(seg.nav_icons).forEach(([page, icon]) => {
-      const el = document.querySelector(`[data-nav="${page}"] .nav-icon`);
+      const el = document.querySelector(`[data-page="${this._mapPageKey(page)}"] .nav-icon`);
       if (el) el.innerHTML = this._icon(icon);
     });
     // Atualiza cores de destaque se o segmento tiver cor própria
@@ -54,6 +54,17 @@ const SEGMENTS = {
 
   _icon(name) {
     return `<i data-lucide="${name}" style="width:16px;height:16px;stroke-width:2"></i>`;
+  },
+
+    _mapPageKey(page) {
+    const map = {
+      clients: 'clientes',
+      stock: 'estoque',
+      cash: 'caixa',
+      schedule: 'agenda',
+      settings: 'config',
+    };
+    return map[page] || page;
   },
 
   // ══════════════════════════════════════════════════════════
