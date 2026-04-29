@@ -53,6 +53,7 @@ function genHash(seed) {
   return Math.abs(h).toString(16).toUpperCase().padStart(6,'0') + '-' + ts;
 }
 function isEmptySig(cv) {
+  if (!cv || cv.width === 0 || cv.height === 0) return true;
   const d = cv.getContext('2d').getImageData(0,0,cv.width,cv.height).data;
   for (let i=3;i<d.length;i+=4) if(d[i]>0) return false;
   return true;
