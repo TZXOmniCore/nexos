@@ -418,7 +418,7 @@ async function salvarOS() {
     const saved=await API.createOS(STATE.user.id,payload);
     // Baixar estoque
     for(const it of _newItens){
-      if(it.produto_id){const p=APP.produtos.find(x=>x.id===it.produto_id);if(p&&(p.quantidade||0)>=it.qty){const nq=(p.quantidade||0)-it.qty;await API.updateEstoque(it.produto_id,nq);p.quantidade=nq;}}
+      if(it.produto_id){const p=APP.produtos.find(x=>x.id===it.produto_id);if(p&&(p.quantidade||0)>=it.qty){const nq=(p.quantidade||0)-it.qty;await API.updateEstoque(STATE.user.id,it.produto_id,nq);p.quantidade=nq;}}    
     }
     // Caixa
     const dia=today();
