@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NexOS — Planos</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0b0e;
+    --surface: #13151a;
+    --surface2: #1c1f27;
+    --border: #2a2d38;
+    --accent: #6c63ff;
+    --accent2: #00d4aa;
+    --text: #e8eaf0;
+    --muted: #7b8098;
+    --danger: #ff4d6d;
+    --gold: #f5c842;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 40px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .logo {
+    font-size: 22px;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .back-btn {
+    color: var(--muted);
+    font-size: 14px;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: color .2s;
+  }
+  .back-btn:hover { color: var(--text); }
+
+  /* ── Hero ── */
+  .hero {
+    text-align: center;
+    padding: 72px 40px 48px;
+  }
+  .hero-badge {
+    display: inline-block;
+    padding: 6px 16px;
+    border-radius: 40px;
+    background: rgba(108,99,255,.12);
+    border: 1px solid rgba(108,99,255,.3);
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+  .hero h1 {
+    font-size: clamp(30px, 4vw, 48px);
+    font-weight: 800;
+    line-height: 1.15;
+    margin-bottom: 16px;
+  }
+  .hero h1 span {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .hero p {
+    color: var(--muted);
+    font-size: 16px;
+    max-width: 480px;
+    margin: 0 auto 32px;
+    line-height: 1.6;
+  }
+
+  /* ── Billing toggle ── */
+  .billing-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 56px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--muted);
+  }
+  .toggle-switch {
+    position: relative;
+    width: 48px;
+    height: 26px;
+    cursor: pointer;
+  }
+  .toggle-switch input { display: none; }
+  .toggle-track {
+    position: absolute;
+    inset: 0;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 13px;
+    transition: background .2s;
+  }
+  .toggle-track::after {
+    content: '';
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 18px; height: 18px;
+    background: var(--muted);
+    border-radius: 50%;
+    transition: all .2s;
+  }
+  .toggle-switch input:checked + .toggle-track { background: var(--accent); border-color: var(--accent); }
+  .toggle-switch input:checked + .toggle-track::after { transform: translateX(22px); background: #fff; }
+  .toggle-label.active { color: var(--text); }
+  .discount-badge {
+    background: rgba(0,212,170,.12);
+    border: 1px solid rgba(0,212,170,.25);
+    color: var(--accent2);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+
+  /* ── Plans Grid ── */
+  .plans-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 24px;
+    max-width: 1060px;
+    margin: 0 auto;
+    padding: 0 40px 80px;
+  }
+
+  .plan-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 36px 32px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    transition: border-color .25s, transform .25s;
+  }
+  .plan-card:hover { transform: translateY(-4px); }
+  .plan-card.featured {
+    border-color: var(--accent);
+    background: linear-gradient(160deg, #16172a 0%, var(--surface) 100%);
+  }
+  .plan-card.featured:hover { border-color: var(--accent2); }
+
+  .plan-badge {
+    position: absolute;
+    top: -13px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 4px 16px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+
+  .plan-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    margin-bottom: 20px;
+  }
+  .plan-icon.basic { background: rgba(123,128,152,.1); }
+  .plan-icon.pro   { background: rgba(108,99,255,.12); }
+  .plan-icon.premium { background: rgba(245,200,66,.1); }
+
+  .plan-name { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+  .plan-tagline { color: var(--muted); font-size: 13px; margin-bottom: 28px; line-height: 1.5; }
+
+  .plan-price {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    margin-bottom: 6px;
+  }
+  .price-currency { font-size: 18px; font-weight: 600; color: var(--muted); }
+  .price-amount {
+    font-size: 48px;
+    font-weight: 800;
+    line-height: 1;
+  }
+  .price-period { font-size: 14px; color: var(--muted); }
+  .price-annual { font-size: 12px; color: var(--muted); margin-bottom: 28px; min-height: 18px; }
+  .price-annual.saving { color: var(--accent2); }
+
+  .plan-divider { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+
+  .features-list { list-style: none; flex: 1; margin-bottom: 32px; }
+  .features-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 14px;
+    color: #c0c4d4;
+    padding: 6px 0;
+  }
+  .features-list li .icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+  .features-list li.disabled { color: var(--muted); }
+
+  .plan-cta {
+    display: block;
+    width: 100%;
+    padding: 14px 24px;
+    border-radius: 12px;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .2s;
+    text-align: center;
+    border: none;
+    text-decoration: none;
+  }
+  .plan-cta.outline {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  .plan-cta.outline:hover { border-color: var(--accent); color: var(--accent); }
+  .plan-cta.primary {
+    background: linear-gradient(135deg, var(--accent), #8b5cf6);
+    color: #fff;
+  }
+  .plan-cta.primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
+  .plan-cta.gold {
+    background: linear-gradient(135deg, #f5c842, #f59e0b);
+    color: #0a0b0e;
+  }
+  .plan-cta.gold:hover { filter: brightness(1.05); transform: translateY(-1px); }
+
+  /* ── Current plan indicator ── */
+  .current-plan-bar {
+    display: none;
+    background: rgba(0,212,170,.1);
+    border: 1px solid rgba(0,212,170,.25);
+    border-radius: 10px;
+    padding: 10px 16px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent2);
+    margin-bottom: 12px;
+  }
+
+  /* ── FAQ / Extras ── */
+  .extras { max-width: 760px; margin: 0 auto; padding: 0 40px 80px; }
+  .extras h2 {
+    font-size: 24px;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .faq-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  .faq-question {
+    width: 100%;
+    background: none;
+    border: none;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: left;
+    padding: 18px 20px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  .faq-question:hover { color: var(--accent); }
+  .faq-chevron { font-size: 12px; transition: transform .2s; color: var(--muted); }
+  .faq-answer {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height .3s ease;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .faq-answer-inner { padding: 0 20px 18px; }
+  .faq-item.open .faq-chevron { transform: rotate(180deg); }
+  .faq-item.open .faq-answer { max-height: 200px; }
+
+  @media (max-width: 640px) {
+    header { padding: 16px 20px; }
+    .hero { padding: 48px 20px 32px; }
+    .plans-grid { padding: 0 20px 60px; }
+    .extras { padding: 0 20px 60px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">NexOS</div>
+  <a class="back-btn" href="javascript:history.back()">← Voltar</a>
+</header>
+
+<div class="hero">
+  <div class="hero-badge">Planos e Preços</div>
+  <h1>Simples, transparente,<br><span>sem surpresas</span></h1>
+  <p>Comece gratuitamente ou escolha o plano ideal para o porte do seu negócio.</p>
+
+  <div class="billing-toggle">
+    <span class="toggle-label active" id="label-monthly">Mensal</span>
+    <label class="toggle-switch">
+      <input type="checkbox" id="billing-toggle" onchange="toggleBilling()">
+      <div class="toggle-track"></div>
+    </label>
+    <span class="toggle-label" id="label-annual">Anual</span>
+    <span class="discount-badge">−20%</span>
+  </div>
+</div>
+
+<div class="plans-grid">
+
+  <!-- BÁSICO -->
+  <div class="plan-card">
+    <div class="plan-icon basic">📦</div>
+    <div class="plan-name">Básico</div>
+    <div class="plan-tagline">Para quem está começando e precisa do essencial.</div>
+    <div class="plan-price">
+      <span class="price-currency">R$</span>
+      <span class="price-amount" id="price-basic">49</span>
+      <span class="price-period">/mês</span>
+    </div>
+    <div class="price-annual" id="saving-basic"></div>
+    <hr class="plan-divider">
+    <ul class="features-list">
+      <li><span class="icon">✅</span> Até 100 ordens de serviço/mês</li>
+      <li><span class="icon">✅</span> Até 50 clientes cadastrados</li>
+      <li><span class="icon">✅</span> Controle de produtos e estoque</li>
+      <li><span class="icon">✅</span> 1 usuário</li>
+      <li><span class="icon">✅</span> Dashboard básico</li>
+      <li class="disabled"><span class="icon">🚫</span> Relatórios avançados</li>
+      <li class="disabled"><span class="icon">🚫</span> Múltiplos usuários</li>
+      <li class="disabled"><span class="icon">🚫</span> Suporte prioritário</li>
+    </ul>
+    <button class="plan-cta outline" onclick="selectPlan('basico')">Começar grátis por 7 dias</button>
+  </div>
+
+  <!-- PROFISSIONAL (destaque) -->
+  <div class="plan-card featured">
+    <div class="plan-badge">🔥 Mais popular</div>
+    <div class="plan-icon pro">⚡</div>
+    <div class="plan-name">Profissional</div>
+    <div class="plan-tagline">O plano completo para empresas em crescimento.</div>
+    <div class="plan-price">
+      <span class="price-currency">R$</span>
+      <span class="price-amount" id="price-pro">129</span>
+      <span class="price-period">/mês</span>
+    </div>
+    <div class="price-annual" id="saving-pro"></div>
+    <hr class="plan-divider">
+    <ul class="features-list">
+      <li><span class="icon">✅</span> Ordens de serviço ilimitadas</li>
+      <li><span class="icon">✅</span> Clientes ilimitados</li>
+      <li><span class="icon">✅</span> Controle completo de estoque</li>
+      <li><span class="icon">✅</span> Até 5 usuários</li>
+      <li><span class="icon">✅</span> Relatórios avançados e exportação</li>
+      <li><span class="icon">✅</span> Gestão financeira e fluxo de caixa</li>
+      <li><span class="icon">✅</span> Suporte por e-mail em até 24h</li>
+      <li class="disabled"><span class="icon">🚫</span> Suporte prioritário 24/7</li>
+    </ul>
+    <button class="plan-cta primary" onclick="selectPlan('pro')">Começar grátis por 7 dias</button>
+  </div>
+
+  <!-- PREMIUM -->
+  <div class="plan-card">
+    <div class="plan-icon premium">👑</div>
+    <div class="plan-name">Premium</div>
+    <div class="plan-tagline">Para empresas que exigem o máximo em recursos e suporte.</div>
+    <div class="plan-price">
+      <span class="price-currency">R$</span>
+      <span class="price-amount" id="price-premium">299</span>
+      <span class="price-period">/mês</span>
+    </div>
+    <div class="price-annual" id="saving-premium"></div>
+    <hr class="plan-divider">
+    <ul class="features-list">
+      <li><span class="icon">✅</span> Tudo do Profissional</li>
+      <li><span class="icon">✅</span> Usuários ilimitados</li>
+      <li><span class="icon">✅</span> Multiempresa (multi-tenant)</li>
+      <li><span class="icon">✅</span> API de integração</li>
+      <li><span class="icon">✅</span> White-label (logo próprio)</li>
+      <li><span class="icon">✅</span> Suporte prioritário 24/7 via WhatsApp</li>
+      <li><span class="icon">✅</span> SLA garantido</li>
+      <li><span class="icon">✅</span> Onboarding personalizado</li>
+    </ul>
+    <button class="plan-cta gold" onclick="selectPlan('premium')">Falar com vendas</button>
+  </div>
+
+</div>
+
+<!-- FAQ -->
+<div class="extras">
+  <h2>Dúvidas frequentes</h2>
+
+  <div class="faq-item">
+    <button class="faq-question" onclick="toggleFaq(this)">
+      Preciso de cartão de crédito para o teste gratuito? <span class="faq-chevron">▼</span>
+    </button>
+    <div class="faq-answer"><div class="faq-answer-inner">Não. Você pode testar por 7 dias sem fornecer dados de pagamento. Ao fim do período, solicitaremos as informações para continuar.</div></div>
+  </div>
+
+  <div class="faq-item">
+    <button class="faq-question" onclick="toggleFaq(this)">
+      Posso mudar de plano depois? <span class="faq-chevron">▼</span>
+    </button>
+    <div class="faq-answer"><div class="faq-answer-inner">Sim. Upgrade é imediato e o valor é calculado proporcionalmente. Downgrade entra em vigor no próximo ciclo de cobrança.</div></div>
+  </div>
+
+  <div class="faq-item">
+    <button class="faq-question" onclick="toggleFaq(this)">
+      O que acontece com meus dados se eu cancelar? <span class="faq-chevron">▼</span>
+    </button>
+    <div class="faq-answer"><div class="faq-answer-inner">Seus dados ficam disponíveis por 30 dias após o cancelamento para exportação. Após esse prazo, são excluídos permanentemente conforme nossa Política de Privacidade.</div></div>
+  </div>
+
+  <div class="faq-item">
+    <button class="faq-question" onclick="toggleFaq(this)">
+      Emitem nota fiscal? <span class="faq-chevron">▼</span>
+    </button>
+    <div class="faq-answer"><div class="faq-answer-inner">Sim. Emitimos nota fiscal de serviço (NFS-e) para todos os planos pagos, enviada mensalmente por e-mail.</div></div>
+  </div>
+
+  <div class="faq-item">
+    <button class="faq-question" onclick="toggleFaq(this)">
+      Como funciona o suporte? <span class="faq-chevron">▼</span>
+    </button>
+    <div class="faq-answer"><div class="faq-answer-inner">Básico: documentação e e-mail (até 48h). Profissional: e-mail (até 24h). Premium: WhatsApp prioritário 24/7 com SLA garantido.</div></div>
+  </div>
+</div>
+
+<script>
+  // ── Preços base (mensais) ──
+  const PRICES = {
+    basico:   { monthly: 49,  annual: 39 },
+    pro:      { monthly: 129, annual: 103 },
+    premium:  { monthly: 299, annual: 239 }
+  };
+
+  let isAnnual = false;
+
+  function toggleBilling() {
+    isAnnual = document.getElementById('billing-toggle').checked;
+    document.getElementById('label-monthly').classList.toggle('active', !isAnnual);
+    document.getElementById('label-annual').classList.toggle('active', isAnnual);
+    updatePrices();
+  }
+
+  function updatePrices() {
+    const mode = isAnnual ? 'annual' : 'monthly';
+    for (const [key, val] of Object.entries(PRICES)) {
+      document.getElementById(`price-${key}`).textContent = val[mode];
+      const savingEl = document.getElementById(`saving-${key}`);
+      if (isAnnual) {
+        const saved = (val.monthly - val.annual) * 12;
+        savingEl.textContent = `Economia de R$ ${saved}/ano`;
+        savingEl.className = 'price-annual saving';
+      } else {
+        savingEl.textContent = '';
+        savingEl.className = 'price-annual';
+      }
+    }
+  }
+
+  function selectPlan(plan) {
+    const billing = isAnnual ? 'annual' : 'monthly';
+    // Dispara evento para o NexOS principal interceptar
+    window.dispatchEvent(new CustomEvent('nexos:select-plan', { detail: { plan, billing } }));
+    // Fallback: redireciona para checkout (ajuste a URL conforme gateway escolhido)
+    console.log('[NexOS] Plano selecionado:', plan, billing);
+    alert(`Plano ${plan} (${billing}) selecionado!\nIntegre aqui com o gateway de pagamento.`);
+  }
+
+  function toggleFaq(btn) {
+    const item = btn.closest('.faq-item');
+    item.classList.toggle('open');
+  }
+
+  updatePrices();
+</script>
+</body>
+</html>
