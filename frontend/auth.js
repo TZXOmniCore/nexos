@@ -104,7 +104,7 @@ const Auth = {
     UI.toast('Até logo! 👋','success');
   },
 
-  async loadUser(user) {
+  
     if(!user?.id){_showAuth();return;}
     STATE.user=user;
     try {
@@ -115,6 +115,8 @@ const Auth = {
         });
       }
       Auth._ui();
+      window.SUPABASE_CLIENT = window.sb;
+      if(window.NexOSPlans) await NexOSPlans.init(user.id);
       _showApp();
       if(window.App) App.init();
     } catch(e) {
