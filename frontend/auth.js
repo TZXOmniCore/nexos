@@ -104,7 +104,7 @@ const Auth = {
     UI.toast('Até logo! 👋','success');
   },
 
-  
+  async loadUser(user) {
     if(!user?.id){_showAuth();return;}
     STATE.user=user;
     try {
@@ -125,7 +125,6 @@ const Auth = {
       _showAuth();
     }
   },
-
   _ui() {
     const p = STATE.perfil||{};
     const nome = p.empresa_nome||STATE.user?.email||'NexOS';
