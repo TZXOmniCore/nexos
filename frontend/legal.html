@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NexOS — Documentos Legais</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0b0e;
+    --surface: #13151a;
+    --surface2: #1c1f27;
+    --border: #2a2d38;
+    --accent: #6c63ff;
+    --accent2: #00d4aa;
+    --text: #e8eaf0;
+    --muted: #7b8098;
+    --danger: #ff4d6d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    font-size: 15px;
+  }
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 40px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  header .logo {
+    font-size: 22px;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  header span { color: var(--muted); font-size: 13px; }
+  .tabs {
+    display: flex;
+    gap: 4px;
+    padding: 24px 40px 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .tab-btn {
+    padding: 10px 20px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all .2s;
+  }
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .tab-btn:hover:not(.active) { color: var(--text); }
+  .content { max-width: 820px; margin: 0 auto; padding: 48px 40px; }
+  .doc-panel { display: none; }
+  .doc-panel.active { display: block; }
+  .doc-header { margin-bottom: 40px; padding-bottom: 24px; border-bottom: 1px solid var(--border); }
+  .doc-header h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+  .doc-header .meta { color: var(--muted); font-size: 13px; }
+  .doc-header .meta span { margin-right: 20px; }
+  h2 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--accent2);
+    margin: 36px 0 12px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    font-size: 12px;
+  }
+  h3 { font-size: 15px; font-weight: 600; margin: 20px 0 8px; color: var(--text); }
+  p { color: #c0c4d4; margin-bottom: 12px; }
+  ul, ol { padding-left: 20px; color: #c0c4d4; }
+  li { margin-bottom: 6px; }
+  .highlight-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 20px 0;
+    color: #c0c4d4;
+    font-size: 14px;
+  }
+  .warning-box {
+    background: rgba(255,77,109,.07);
+    border: 1px solid rgba(255,77,109,.25);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 20px 0;
+    color: #ffb3c1;
+    font-size: 14px;
+  }
+  .contact-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin: 24px 0;
+  }
+  .contact-card .label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 4px; }
+  .contact-card .value { font-weight: 600; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  th {
+    text-align: left;
+    padding: 10px 14px;
+    background: var(--surface);
+    color: var(--muted);
+    font-weight: 500;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+  }
+  td {
+    padding: 10px 14px;
+    border-top: 1px solid var(--border);
+    color: #c0c4d4;
+  }
+  tr:hover td { background: var(--surface); }
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .badge-green { background: rgba(0,212,170,.12); color: var(--accent2); }
+  .badge-red { background: rgba(255,77,109,.12); color: var(--danger); }
+  .badge-blue { background: rgba(108,99,255,.12); color: var(--accent); }
+  footer {
+    text-align: center;
+    padding: 40px;
+    color: var(--muted);
+    font-size: 13px;
+    border-top: 1px solid var(--border);
+    margin-top: 60px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">NexOS</div>
+  <span>/ Documentos Legais</span>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="showTab('termos')">Termos de Uso</button>
+  <button class="tab-btn" onclick="showTab('privacidade')">Política de Privacidade</button>
+  <button class="tab-btn" onclick="showTab('cancelamento')">Cancelamento & Reembolso</button>
+</div>
+
+<div class="content">
+
+  <!-- ===================== TERMOS DE USO ===================== -->
+  <div id="termos" class="doc-panel active">
+    <div class="doc-header">
+      <h1>Termos de Uso</h1>
+      <div class="meta">
+        <span>Versão 1.0</span>
+        <span>Vigência: a partir da data de contratação</span>
+      </div>
+    </div>
+
+    <h2>1. Aceitação</h2>
+    <p>Ao criar uma conta ou utilizar qualquer funcionalidade do NexOS, o Usuário declara ter lido, compreendido e concordado integralmente com estes Termos de Uso. Caso não concorde, não utilize o serviço.</p>
+
+    <h2>2. Definições</h2>
+    <ul>
+      <li><strong>NexOS:</strong> plataforma SaaS de gestão empresarial desenvolvida e operada pelo Titular.</li>
+      <li><strong>Titular:</strong> pessoa física ou jurídica proprietária e responsável pelo NexOS.</li>
+      <li><strong>Usuário / Tenant:</strong> empresa ou pessoa que contrata e utiliza o NexOS.</li>
+      <li><strong>Plano:</strong> modalidade de acesso contratada, com funcionalidades e limites definidos.</li>
+    </ul>
+
+    <h2>3. Objeto do Serviço</h2>
+    <p>O NexOS é um sistema de gestão empresarial (ERP) disponibilizado como Software como Serviço (SaaS), acessível via navegador web. O Titular concede ao Usuário uma licença não exclusiva, intransferível e revogável para uso das funcionalidades do plano contratado.</p>
+
+    <h2>4. Cadastro e Conta</h2>
+    <ul>
+      <li>O Usuário deve fornecer informações verdadeiras e atualizadas.</li>
+      <li>Cada Tenant possui acesso isolado (multi-tenant) aos seus dados.</li>
+      <li>O Usuário é responsável pela confidencialidade de suas credenciais.</li>
+      <li>O Titular pode suspender contas com suspeita de uso indevido.</li>
+    </ul>
+
+    <h2>5. Planos e Pagamento</h2>
+    <p>O acesso ao NexOS é condicionado ao pagamento da assinatura do plano escolhido. Os planos, preços e limites estão descritos na página de planos. O Titular pode alterar preços com aviso prévio de 30 dias.</p>
+
+    <div class="highlight-box">
+      A assinatura é renovada automaticamente no período contratado. O cancelamento antes do vencimento não gera reembolso proporcional, exceto nos casos previstos na Política de Cancelamento.
+    </div>
+
+    <h2>6. Uso Permitido</h2>
+    <p>O Usuário pode utilizar o NexOS para gestão legítima de seu negócio. É expressamente proibido:</p>
+    <ul>
+      <li>Revender, sublicenciar ou compartilhar credenciais de acesso;</li>
+      <li>Tentar acessar dados de outros Tenants;</li>
+      <li>Realizar engenharia reversa ou extrair o código-fonte;</li>
+      <li>Utilizar o sistema para atividades ilícitas;</li>
+      <li>Sobrecarregar intencionalmente a infraestrutura (ataques DDoS, scraping massivo).</li>
+    </ul>
+
+    <h2>7. Dados e Propriedade</h2>
+    <p>Os dados inseridos pelo Usuário pertencem ao próprio Usuário. O Titular não reivindica propriedade sobre esses dados e não os comercializa a terceiros. O Titular pode acessar dados exclusivamente para fins de suporte técnico, com consentimento do Usuário, ou por obrigação legal.</p>
+
+    <h2>8. Disponibilidade (SLA)</h2>
+    <p>O Titular empreenderá esforços razoáveis para manter o NexOS disponível. Não há garantia de disponibilidade de 100%. Manutenções programadas serão comunicadas com antecedência de 24h. Interrupções por caso fortuito ou força maior não geram direito a indenização.</p>
+
+    <h2>9. Limitação de Responsabilidade</h2>
+    <p>O Titular não se responsabiliza por danos indiretos, lucros cessantes ou perda de dados causados por uso indevido do sistema, falhas de terceiros (hosting, gateway de pagamento) ou eventos fora de seu controle.</p>
+
+    <h2>10. Alterações nos Termos</h2>
+    <p>O Titular pode modificar estes Termos a qualquer momento. Alterações materiais serão comunicadas por e-mail ou notificação no sistema com 15 dias de antecedência. O uso continuado após o prazo implica aceitação.</p>
+
+    <h2>11. Foro e Legislação</h2>
+    <p>Estes Termos são regidos pela legislação brasileira. Fica eleito o foro da comarca da sede do Titular para dirimir quaisquer controvérsias, com renúncia a qualquer outro.</p>
+
+    <div class="contact-card">
+      <div class="label">Contato do Titular</div>
+      <div class="value">contato@nexos.app</div>
+    </div>
+  </div>
+
+  <!-- ===================== PRIVACIDADE ===================== -->
+  <div id="privacidade" class="doc-panel">
+    <div class="doc-header">
+      <h1>Política de Privacidade</h1>
+      <div class="meta">
+        <span>Versão 1.0</span>
+        <span>Conforme LGPD — Lei 13.709/2018</span>
+      </div>
+    </div>
+
+    <div class="highlight-box">
+      Esta política descreve como o NexOS coleta, usa, armazena e protege os dados pessoais dos Usuários, em conformidade com a Lei Geral de Proteção de Dados (LGPD — Lei nº 13.709/2018).
+    </div>
+
+    <h2>1. Controlador dos Dados</h2>
+    <div class="contact-card">
+      <div class="label">Controlador (Titular do NexOS)</div>
+      <div class="value" style="margin-bottom:8px">[Nome / Razão Social do Titular]</div>
+      <div class="label">CNPJ / CPF</div>
+      <div class="value" style="margin-bottom:8px">[CNPJ ou CPF]</div>
+      <div class="label">E-mail do Encarregado (DPO)</div>
+      <div class="value">privacidade@nexos.app</div>
+    </div>
+
+    <h2>2. Dados Coletados</h2>
+    <table>
+      <thead>
+        <tr><th>Dado</th><th>Finalidade</th><th>Base Legal (LGPD)</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Nome e e-mail</td><td>Identificação e comunicação</td><td>Execução de contrato (Art. 7º, V)</td></tr>
+        <tr><td>CNPJ / CPF</td><td>Emissão de nota fiscal</td><td>Cumprimento de obrigação legal (Art. 7º, II)</td></tr>
+        <tr><td>Dados de uso</td><td>Melhoria do produto e suporte</td><td>Legítimo interesse (Art. 7º, IX)</td></tr>
+        <tr><td>Dados de pagamento</td><td>Cobrança e recorrência</td><td>Execução de contrato (Art. 7º, V)</td></tr>
+        <tr><td>Logs de acesso</td><td>Segurança e auditoria</td><td>Cumprimento legal — Marco Civil (Art. 7º, II)</td></tr>
+        <tr><td>Dados de clientes do Tenant</td><td>Funcionalidade do sistema ERP</td><td>Legítimo interesse / contrato (Art. 7º, V e IX)</td></tr>
+      </tbody>
+    </table>
+
+    <h2>3. Compartilhamento de Dados</h2>
+    <p>Os dados podem ser compartilhados com:</p>
+    <ul>
+      <li><strong>Supabase (BaaS):</strong> armazenamento e autenticação, servidores em nuvem com criptografia em repouso;</li>
+      <li><strong>Gateway de pagamento contratado:</strong> dados necessários para processamento de cobranças;</li>
+      <li><strong>Autoridades públicas:</strong> quando exigido por lei ou decisão judicial;</li>
+    </ul>
+    <p>Não vendemos, alugamos ou compartilhamos dados pessoais com fins publicitários.</p>
+
+    <h2>4. Retenção de Dados</h2>
+    <table>
+      <thead><tr><th>Tipo</th><th>Retenção</th></tr></thead>
+      <tbody>
+        <tr><td>Dados da conta ativa</td><td>Durante toda a vigência da assinatura</td></tr>
+        <tr><td>Dados após cancelamento</td><td>30 dias (backup), depois excluídos</td></tr>
+        <tr><td>Logs de acesso</td><td>6 meses (obrigação legal — Marco Civil)</td></tr>
+        <tr><td>Dados fiscais</td><td>5 anos (obrigação tributária)</td></tr>
+      </tbody>
+    </table>
+
+    <h2>5. Direitos do Titular dos Dados (LGPD Art. 18)</h2>
+    <p>O Usuário pode, a qualquer momento, exercer os seguintes direitos:</p>
+    <ul>
+      <li>Confirmação de existência de tratamento;</li>
+      <li>Acesso aos dados;</li>
+      <li>Correção de dados incompletos, inexatos ou desatualizados;</li>
+      <li>Anonimização, bloqueio ou eliminação de dados desnecessários;</li>
+      <li>Portabilidade dos dados para outro fornecedor;</li>
+      <li>Eliminação dos dados tratados com base no consentimento;</li>
+      <li>Revogação do consentimento.</li>
+    </ul>
+    <p>Solicitações devem ser enviadas para: <strong>privacidade@nexos.app</strong>. Prazo de resposta: 15 dias úteis.</p>
+
+    <h2>6. Segurança</h2>
+    <ul>
+      <li>Autenticação com PKCE (OAuth 2.0);</li>
+      <li>Dados em trânsito protegidos por TLS 1.2+;</li>
+      <li>Dados em repouso criptografados pelo Supabase;</li>
+      <li>Row-Level Security (RLS) com isolamento total por Tenant;</li>
+      <li>Rate limiting e proteção contra força bruta.</li>
+    </ul>
+
+    <h2>7. Cookies e Armazenamento Local</h2>
+    <p>O NexOS utiliza localStorage e sessionStorage para manter sessão autenticada e preferências do Usuário. Não utilizamos cookies de rastreamento ou publicidade.</p>
+
+    <h2>8. Incidentes de Segurança</h2>
+    <p>Em caso de violação de dados que resulte em risco ao Usuário, o Titular notificará a ANPD e os titulares afetados em até 72 horas após o conhecimento do incidente.</p>
+
+    <h2>9. Alterações nesta Política</h2>
+    <p>Esta Política pode ser atualizada. Alterações serão comunicadas por e-mail ou notificação no sistema. Recomendamos revisão periódica.</p>
+  </div>
+
+  <!-- ===================== CANCELAMENTO ===================== -->
+  <div id="cancelamento" class="doc-panel">
+    <div class="doc-header">
+      <h1>Política de Cancelamento e Reembolso</h1>
+      <div class="meta">
+        <span>Versão 1.0</span>
+        <span>Conforme CDC — Lei 8.078/1990</span>
+      </div>
+    </div>
+
+    <h2>1. Cancelamento pelo Usuário</h2>
+    <p>O Usuário pode cancelar sua assinatura a qualquer momento diretamente no painel do NexOS (Configurações → Assinatura → Cancelar) ou via e-mail para <strong>suporte@nexos.app</strong>.</p>
+
+    <h3>Efeitos do cancelamento:</h3>
+    <ul>
+      <li>O acesso permanece ativo até o fim do período já pago;</li>
+      <li>Não haverá cobrança na renovação seguinte;</li>
+      <li>Os dados ficam disponíveis para exportação por 30 dias;</li>
+      <li>Após 30 dias do cancelamento, os dados são permanentemente excluídos.</li>
+    </ul>
+
+    <div class="warning-box">
+      <strong>⚠ Atenção:</strong> Após 30 dias do cancelamento, os dados não poderão ser recuperados. Faça a exportação antes.
+    </div>
+
+    <h2>2. Direito de Arrependimento (CDC)</h2>
+    <p>Para contratações realizadas exclusivamente por meio eletrônico, o Usuário tem direito de arrependimento em até <strong>7 dias corridos</strong> a contar da contratação, conforme Art. 49 do Código de Defesa do Consumidor, com reembolso integral do valor pago.</p>
+
+    <div class="highlight-box">
+      Para exercer o direito de arrependimento, envie e-mail para <strong>suporte@nexos.app</strong> com o assunto "CANCELAMENTO CDC" dentro do prazo de 7 dias.
+    </div>
+
+    <h2>3. Reembolso</h2>
+    <table>
+      <thead><tr><th>Situação</th><th>Reembolso</th><th>Prazo</th></tr></thead>
+      <tbody>
+        <tr><td>Arrependimento em 7 dias</td><td><span class="badge badge-green">Integral</span></td><td>Até 10 dias úteis</td></tr>
+        <tr><td>Cancelamento após 7 dias</td><td><span class="badge badge-red">Não há</span></td><td>—</td></tr>
+        <tr><td>Falha técnica grave comprovada (&gt;72h fora do ar)</td><td><span class="badge badge-blue">Proporcional</span></td><td>Até 10 dias úteis</td></tr>
+        <tr><td>Cobrança indevida</td><td><span class="badge badge-green">Integral</span></td><td>Até 5 dias úteis</td></tr>
+      </tbody>
+    </table>
+
+    <p>Reembolsos são processados pelo mesmo meio de pagamento original. O prazo pode variar conforme o gateway e a operadora do cartão.</p>
+
+    <h2>4. Inadimplência e Suspensão</h2>
+    <ul>
+      <li><strong>Dia 1 após vencimento:</strong> notificação por e-mail;</li>
+      <li><strong>Dia 3:</strong> segunda tentativa de cobrança automática;</li>
+      <li><strong>Dia 7:</strong> acesso suspenso (dados preservados);</li>
+      <li><strong>Dia 30:</strong> conta cancelada e dados excluídos.</li>
+    </ul>
+    <p>A regularização do pagamento dentro do prazo restabelece o acesso imediatamente.</p>
+
+    <h2>5. Cancelamento pelo Titular</h2>
+    <p>O Titular pode cancelar contas que violem os Termos de Uso, sem reembolso. Em caso de encerramento do serviço, o Titular avisará com 60 dias de antecedência e reembolsará o período não utilizado.</p>
+
+    <h2>6. Contato</h2>
+    <div class="contact-card">
+      <div class="label">Suporte e Cancelamentos</div>
+      <div class="value">suporte@nexos.app</div>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  NexOS &mdash; Documentos gerados para uso interno. Recomenda-se validação por advogado antes da publicação oficial.
+</footer>
+
+<script>
+  function showTab(id) {
+    document.querySelectorAll('.doc-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    event.target.classList.add('active');
+  }
+</script>
+</body>
+</html>
