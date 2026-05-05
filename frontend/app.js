@@ -315,6 +315,8 @@ function calcTrocoOS() {
   const total=_newItens.reduce((a,i)=>a+i.qty*i.preco,0)+gn('m-mao-obra',0);
   const tr=document.getElementById('m-troco');if(tr)tr.value=Math.max(0,paid-total).toFixed(2);
 }
+function getPointerPos(cv, e){const r=cv.getBoundingClientRect();if(e.touches)return{x:e.touches[0].clientX-r.left,y:e.touches[0].clientY-r.top};return{x:e.clientX-r.left,y:e.clientY-r.top};}
+
 function calcCarne() {
   const total=_newItens.reduce((a,i)=>a+i.qty*i.preco,0)+gn('m-mao-obra',0);
   const n=gi('carneN',3)||3,dia=gi('carneDia',10)||10,ent=gn('carneEnt',0);
@@ -330,7 +332,7 @@ function initSig() {
   cv.width=cv.offsetWidth*pr; cv.height=cv.offsetHeight*pr;
   const ctx=cv.getContext('2d');
   ctx.scale(pr,pr); ctx.strokeStyle='#38BDF8'; ctx.lineWidth=2; ctx.lineCap='round'; ctx.lineJoin='round';
-  function getP(e){const r=cv.getBoundingClientRect();if(e.touches)return{x:e.touches[0].clientX-r.left,y:e.touches[0].clientY-r.top};return{x:e.clientX-r.left,y:e.clientY-r.top};}
+  function getP(e){return getPointerPos(cv,e);}
   cv.addEventListener('mousedown',  e=>{_sigDraw=true;const p=getP(e);_sigLX=p.x;_sigLY=p.y;});
   cv.addEventListener('mousemove',  e=>{if(!_sigDraw)return;const p=getP(e);ctx.beginPath();ctx.moveTo(_sigLX,_sigLY);ctx.lineTo(p.x,p.y);ctx.stroke();_sigLX=p.x;_sigLY=p.y;});
   cv.addEventListener('mouseup',    ()=>_sigDraw=false);
@@ -1386,7 +1388,7 @@ function abrirAssinatura() {
     const ctx = cv.getContext('2d');
     ctx.scale(pr,pr);
     ctx.strokeStyle='#1a1a2e'; ctx.lineWidth=2.5; ctx.lineCap='round'; ctx.lineJoin='round';
-    function getP(e){const r=cv.getBoundingClientRect();if(e.touches)return{x:e.touches[0].clientX-r.left,y:e.touches[0].clientY-r.top};return{x:e.clientX-r.left,y:e.clientY-r.top};}
+    function getP(e){return getPointerPos(cv,e);}
     cv.onmousedown  = e=>{_sigFSDrawing=true;const p=getP(e);_sigFSLX=p.x;_sigFSLY=p.y;};
     cv.onmousemove  = e=>{if(!_sigFSDrawing)return;const p=getP(e);ctx.beginPath();ctx.moveTo(_sigFSLX,_sigFSLY);ctx.lineTo(p.x,p.y);ctx.stroke();_sigFSLX=p.x;_sigFSLY=p.y;};
     cv.onmouseup    = ()=>_sigFSDrawing=false;
