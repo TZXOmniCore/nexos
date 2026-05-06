@@ -15,9 +15,9 @@ const GATEWAY_CONFIG = {
   // Chave pública (segura para o frontend)
   publicKey: 'SUA_PUBLIC_KEY_AQUI',
 
-  // Endpoint de backend (Supabase Edge Function ou seu servidor)
-  // Este backend guarda a chave secreta e cria cobranças no gateway
-  backendUrl: '/api/payments',
+  // Endpoint da Supabase Edge Function que faz a ponte com o Asaas.
+  // Troque <project-ref> pelo seu Project Reference ID (Supabase Dashboard → Settings → General).
+  backendUrl: 'https://<project-ref>.supabase.co/functions/v1/payments',
 
   // Planos (IDs criados no painel do gateway escolhido)
   planIds: {
@@ -227,9 +227,19 @@ const PROVIDERS = {
 
 async function _post(path, body) {
   const url = GATEWAY_CONFIG.backendUrl + path;
+
+  // Envia o JWT do usuário autenticado para a Edge Function validar
+  const session = window.SUPABASE_CLIENT
+    ? (await window.SUPABASE_CLIENT.auth.getSession())?.data?.session
+    : null;
+  const token = session?.access_token ?? '';
+
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
     body: JSON.stringify(body),
   });
 
