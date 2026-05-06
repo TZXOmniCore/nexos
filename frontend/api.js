@@ -177,10 +177,6 @@ const API = {
     const {data,error} = await sb.from('produtos').insert(p).select().single();
     if(error) throw error; return data;
   },
-  async updateEstoque(id,qtd) {
-    const {error} = await sb.from('produtos').update({quantidade:qtd}).eq('id',id);
-    if(error) throw error;
-  },
   async updateEstoque(uid,id,qtd) {
     const {error} = await sb.from('produtos').update({quantidade:qtd}).eq('id',id).eq('dono_id',uid);
     if(error) throw error;
@@ -192,10 +188,12 @@ const API = {
     if(error) throw error;
     return data||[];
   },
-   async getOSById(id, uid) {
+  async getOSById(id, uid) {
     let q = sb.from('ordens_servico').select('*,clientes(nome,telefone,cpf)').eq('id',id);
     if (uid) q = q.eq('dono_id', uid);
     const {data,error} = await q.single();
+    if(error) throw error;
+    return data;
   },
   async createOS(uid, d) {
     // Número aleatório de 5 dígitos único
