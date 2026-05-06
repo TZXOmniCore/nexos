@@ -1,5 +1,5 @@
 /* ============================================================
-   NexOS v4.0 — app.js | Nav v3.5 + Forms V_TEST
+   NexOS v4.0 — app.js 
    ============================================================ */
 'use strict';
 
@@ -1118,7 +1118,7 @@ async function salvarPIN() {
   const p1=gv('cfg-pin-new',''), p2=gv('cfg-pin-conf','');
   if(p1.length!==4||!/^\d{4}$/.test(p1)){UI.toast('PIN deve ter 4 dígitos','warning');return;}
   if(p1!==p2){UI.toast('PINs não coincidem','warning');return;}
-  const pin_hash=btoa(p1);
+  const pin_hash=await _pinHash(p1);
   try{STATE.perfil=await API.upsertPerfil(STATE.user.id,{pin_hash});UI.toast('PIN salvo! ✅','success');document.getElementById('cfg-pin-new').value='';document.getElementById('cfg-pin-conf').value='';}
   catch(e){UI.toast('Erro: '+e.message,'error');}
 }
