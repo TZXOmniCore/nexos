@@ -874,7 +874,30 @@ document.addEventListener('DOMContentLoaded',()=>{
   // data/hora para nova OS
   const md=document.getElementById('m-data');
   if(md){const n=new Date();md.value=n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0')+'T'+String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');}
-  if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+  // ── Service Worker: registro com auto-update ──────────────
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      // Verifica update a cada 60 segundos enquanto a aba está aberta
+      setInterval(() => reg.update(), 60_000);
+
+      // Quando novo SW está esperando → recarrega silenciosamente
+      reg.addEventListener('updatefound', () => {
+        const sw = reg.installing;
+        if (!sw) return;
+        sw.addEventListener('statechange', () => {
+          if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+            sw.postMessage('SKIP_WAITING');
+          }
+        });
+      });
+    }).catch(() => {});
+
+    // Recarrega quando o SW novo assumir o controle
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!refreshing) { refreshing = true; location.reload(); }
+    });
+  }
 });
 </script>
 </body>
