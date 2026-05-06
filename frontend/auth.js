@@ -1,5 +1,5 @@
 /* ============================================================
-   NexOS v4.0 — auth.js | Login v3.5 + PIN seguro
+   NexOS v4.0 — auth.js | Login + PIN seguro
    ============================================================ */
 'use strict';
 
@@ -135,11 +135,33 @@ const Auth = {
   },
 };
 
-// ── PIN: verificar PIN de 4 dígitos ───────────────────────
+// ── PIN: hash seguro via WebCrypto (SHA-256 + salt = user_id) ─
+async function _pinHash(pin) {
+  const uid  = STATE.user?.id || '';
+  const data = new TextEncoder().encode(uid + ':' + pin);
+  const buf  = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
 async function verifyPIN(pin) {
-  // PIN é guardado no perfil como hash base64 simples
-  const hash = btoa(pin);
-  return STATE.perfil?.pin_hash === hash;
+  const stored = STATE.perfil?.pin_hash;
+  if (!stored) return false;
+
+  // Hash novo (SHA-256 hex = 64 chars)
+  const newHash = await _pinHash(pin);
+  if (stored === newHash) return true;
+
+  // Migração: hash antigo era btoa simples (< 20 chars, contém "=")
+  if (stored.length < 20 && stored === btoa(pin)) {
+    // Re-salvar silenciosamente no formato seguro
+    try {
+      const updated = await API.upsertPerfil(STATE.user.id, { pin_hash: newHash });
+      if (updated) STATE.perfil = updated;
+    } catch {}
+    return true;
+  }
+
+  return false;
 }
 
 async function showPINModal(onSuccess) {
