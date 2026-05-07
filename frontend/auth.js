@@ -1,5 +1,5 @@
 /* ============================================================
-   NexOS v4.0 — auth.js | Login + PIN seguro
+   NexOS v4.0 — auth.js | Login v3.5 + PIN seguro
    ============================================================ */
 'use strict';
 
@@ -66,12 +66,14 @@ const Auth = {
   },
 
   async register() {
-    const nome  = _s(document.getElementById('reg-nome')?.value||'',100);
-    const email = _s(document.getElementById('reg-email')?.value||'',254);
-    const pass  = (document.getElementById('reg-pass')?.value||'').slice(0,128);
+    const nome    = _s(document.getElementById('reg-nome')?.value||'',100);
+    const email   = _s(document.getElementById('reg-email')?.value||'',254);
+    const pass    = (document.getElementById('reg-pass')?.value||'').slice(0,128);
+    const consent = document.getElementById('reg-consent')?.checked;
     if(!nome||!email||!pass){UI.toast('Preencha todos os campos','warning');return;}
     if(!_email(email)){UI.toast('E-mail inválido','warning');return;}
     if(pass.length<8){UI.toast('Senha mínimo 8 caracteres','warning');return;}
+    if(!consent){UI.toast('Aceite os Termos de Uso e a Política de Privacidade para continuar','warning');return;}
     if(RL.locked('reg')){UI.toast('Muitas tentativas. Aguarde.','error');return;}
     const btn = document.getElementById('btn-reg');
     if(btn){btn.disabled=true;btn.textContent='Criando...';}
