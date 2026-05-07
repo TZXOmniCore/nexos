@@ -98,6 +98,17 @@
         <label class="form-label">Senha</label>
         <input type="password" id="reg-pass" class="form-control" placeholder="Mínimo 8 caracteres" autocomplete="new-password">
       </div>
+      <div class="form-group" style="margin-bottom:16px">
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:var(--text-2);line-height:1.5">
+          <input type="checkbox" id="reg-consent" style="margin-top:3px;flex-shrink:0;accent-color:var(--accent)">
+          <span>Li e aceito os
+            <a href="legal.html" target="_blank" style="color:var(--accent);text-decoration:none">Termos de Uso</a>
+            e a
+            <a href="legal.html#privacidade" target="_blank" style="color:var(--accent);text-decoration:none">Política de Privacidade</a>,
+            incluindo o tratamento dos meus dados conforme a LGPD.
+          </span>
+        </label>
+      </div>
       <button id="btn-reg" class="btn btn-primary btn-lg w-full" onclick="Auth.register()" style="margin-bottom:12px">Criar conta</button>
       <div class="auth-link">Já tem conta? <span onclick="showLoginView()">Entrar</span></div>
     </div>
