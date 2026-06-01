@@ -1144,6 +1144,7 @@ async function renderAgenda() {
   const from = gv('ag-date', today()) || today();
   try {
     const eventos = await API.getAgenda(STATE.user.id, from + 'T00:00:00', from + 'T23:59:59');
+    APP.agenda = eventos;
     const box = document.getElementById('ag-list'); if (!box) return;
     if (!eventos.length) {
       box.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Sem compromissos neste dia</div></div>';
@@ -1166,7 +1167,7 @@ async function renderAgenda() {
 function novoEvento() {
   ['form-ev-titulo','form-ev-hora','form-ev-desc'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('form-ev-id').value = '';
-  document.getElementById('form-ev-data').value = today();
+  document.getElementById('form-ev-data').value = gv('ag-date', today()) || today();
   document.getElementById('form-ev-cor').value = '#38BDF8';
   const sel = document.getElementById('form-ev-cli');
   if (sel) sel.innerHTML = '<option value="">Sem cliente</option>' + APP.clientes.map(c => `<option value="${c.id}">${_e(c.nome)}</option>`).join('');
@@ -1190,24 +1191,37 @@ function editarEvento(id) {
 
 async function salvarEvento() {
   const titulo = _c(gv('form-ev-titulo', '').trim(), 100);
+  const data = gv('form-ev-data', today()) || today();
+  const hora = gv('form-ev-hora', '') || '';
   if (!titulo) { UI.toast('Título obrigatório', 'warning'); return; }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) { UI.toast('Data inválida', 'warning'); return; }
+
+  const btn = document.querySelector('#page-novo-evento .btn-primary');
+  if (btn) btn.disabled = true;
+
   const d = {
     id: gv('form-ev-id', '') || undefined,
     titulo,
-    hora:        gv('form-ev-hora', '') || null,
-    data_inicio: gv('form-ev-data', today()) + 'T' + (gv('form-ev-hora', '') || '00:00'),
+    hora:        hora || null,
+    data_inicio: data + 'T' + (hora || '00:00'),
     cliente_id:  gv('form-ev-cli', '') || null,
     cor:         gv('form-ev-cor', '#38BDF8'),
     descricao:   _c(gv('form-ev-desc', ''), 300),
   };
   try {
     const saved = await API.saveEvento(STATE.user.id, d);
+    const agDate = document.getElementById('ag-date');
+    if (agDate) agDate.value = data;
     if (d.id) { const i = APP.agenda.findIndex(x => x.id === d.id); if (i !== -1) APP.agenda[i] = saved; }
     else APP.agenda.push(saved);
     UI.toast('Evento salvo! ✅', 'success');
     goBack();
-    renderAgenda();
-  } catch(e) { UI.toast('Erro: ' + e.message, 'error'); }
+    await renderAgenda();
+  } catch(e) {
+    UI.toast('Erro: ' + (e.message || 'não foi possível salvar o evento'), 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 async function excluirEvento(e, id) {
