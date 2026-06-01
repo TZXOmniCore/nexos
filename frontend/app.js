@@ -444,90 +444,49 @@ async function verOS(id) {
   _verOsId = id;
   const os=APP.os.find(o=>o.id===id)||await API.getOSById(id).catch(()=>null);
   if(!os){UI.toast('OS não encontrada','error');return;}
-  let itens=[];try{itens=JSON.parse(os.itens||'[]');}catch{}
-  let fotos=[];try{fotos=JSON.parse(os.fotos||'[]');}catch{}
   let hist=[];try{hist=JSON.parse(os.historico||'[]');}catch{}
-  const nome=os.clientes?.nome||os.cliente_nome||'–';
-  const tel=os.clientes?.telefone||'';
   const st=_normSt(os.status);
 
-  // Atualizar cabeçalho da página
   const numEl=document.getElementById('ver-os-num');if(numEl)numEl.textContent='OS #'+(os.numero||'–');
   const stEl=document.getElementById('ver-os-status');if(stEl)stEl.textContent=statusLabel(os.status);
-
-  const itensH=itens.map(it=>`
-    <div class="it-row">
-      <span style="font-size:13px">${_e(it.descricao||it.desc||'')}</span>
-      <span style="font-family:var(--mono);font-size:11px;color:var(--text-2)">x${it.quantidade||1}</span>
-      <span style="font-family:var(--mono);font-size:11px;color:var(--green)">${fmt((it.quantidade||1)*(it.valor_unit||0))}</span>
-      <span></span>
-    </div>`).join('');
 
   const statusBtns=['concluido','aguardando','andamento','cancelado','fiado'].map(s=>`
     <button onclick="alterarStatusOS('${id}','${s}')" class="btn btn-${st===s?'primary':'ghost'} btn-sm">
       ${statusLabel(s)}
     </button>`).join('');
-
-  const fotosH=fotos.length?`<div class="card"><div class="card-title"><div class="ct-bar"></div>Fotos (${fotos.length})</div><div class="photo-grid">${fotos.map((f,i)=>`<div class="photo-thumb"><img src="${f}" onclick="verFoto('${id}',${i})"></div>`).join('')}</div></div>`:'';
-  const sigH=os.assinatura?`<div class="card"><div class="card-title"><div class="ct-bar"></div>Assinatura Digital</div><div style="background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;text-align:center"><img src="${os.assinatura}" style="max-width:100%;max-height:60px"><div style="font-size:.72rem;color:var(--text-3);margin-top:4px;font-family:var(--mono)">${_e(nome)}</div></div></div>`:'';
   const histH=hist.length?hist.map(h=>`<div class="hist-item"><div class="hist-dot"></div><div><div class="hist-time">${fDateFull(h.at||h.criado_em)}</div><div class="hist-txt">${_e(h.txt||h.texto||'')}</div></div></div>`).join(''):'<p style="font-size:.8rem;color:var(--text-3)">Sem histórico</p>';
 
   const body=document.getElementById('ver-os-body');
   if(!body)return;
   body.innerHTML=`
-    <div class="total-hl">
-      <div>
-        <div style="font-family:var(--mono);font-size:10px;color:var(--text-3)">TOTAL</div>
-        <div style="font-size:.82rem;color:var(--text-2)">${payLabel(os.forma_pagamento)}</div>
+    <div class="os-document-shell">
+      ${renderOSTemplate(os,{documentId:'osViewPaper',qrId:'osViewQr'})}
+    </div>
+    <div class="os-actions-panel no-print">
+      <div class="card"><div class="card-title"><div class="ct-bar"></div>Ações da OS</div>
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:10px">
+          <button class="btn btn-green" onclick="enviarWA('${id}')"><i data-lucide="message-circle" style="width:14px;height:14px"></i> WhatsApp</button>
+          <button class="btn btn-primary" onclick="gerarPDF('${id}')"><i data-lucide="file-text" style="width:14px;height:14px"></i> PDF</button>
+          <button class="btn btn-secondary" onclick="imprimirOS('${id}')"><i data-lucide="printer" style="width:14px;height:14px"></i> Imprimir</button>
+          <button class="btn btn-ghost" onclick="compartilharOS('${id}')"><i data-lucide="share-2" style="width:14px;height:14px"></i> Compartilhar</button>
+        </div>
+        <button class="btn btn-danger w-full" onclick="excluirOS('${id}')"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Excluir OS</button>
       </div>
-      <div class="th-val">${fmt(os.valor_total)}</div>
-    </div>
-    <div class="card"><div class="card-title"><div class="ct-bar"></div>Cliente</div>
-      <div class="ir"><span class="irl">Nome</span><span class="irv">${_e(nome)}</span></div>
-      ${tel?`<div class="ir"><span class="irl">Tel</span><span class="irv">${_e(tel)}</span></div>`:''}
-      <div class="ir"><span class="irl">Data</span><span class="irv">${fDateFull(os.criado_em)}</span></div>
-    </div>
-    ${os.equipamento||os.item?`<div class="card"><div class="card-title"><div class="ct-bar"></div>Equipamento</div>
-      ${os.equipamento||os.item?`<div class="ir"><span class="irl">Equip.</span><span class="irv">${_e(os.equipamento||os.item||'')}</span></div>`:''}
-      ${os.defeito?`<div class="ir"><span class="irl">Defeito</span><span class="irv">${_e(os.defeito)}</span></div>`:''}
-      ${os.diagnostico?`<div class="ir"><span class="irl">Diag.</span><span class="irv">${_e(os.diagnostico)}</span></div>`:''}
-    </div>`:''}
-    <div class="card"><div class="card-title"><div class="ct-bar"></div>Itens</div>
-      ${itensH}
-      ${(os.valor_mao_obra||0)>0?`<div class="it-row"><span>Mão de Obra</span><span></span><span style="font-family:var(--mono);font-size:11px;color:var(--green)">${fmt(os.valor_mao_obra)}</span><span></span></div>`:''}
-      <div class="it-total-row"><span class="it-total-label">TOTAL</span><span class="it-total-val">${fmt(os.valor_total)}</span></div>
-    </div>
-    ${os.observacoes?`<div class="card"><div class="card-title"><div class="ct-bar"></div>Observações</div><p style="font-size:14px;line-height:1.65">${_e(os.observacoes)}</p></div>`:''}
-    ${fotosH}${sigH}
-    <div class="card"><div class="card-title"><div class="ct-bar"></div>Alterar Status</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">${statusBtns}</div>
-    </div>
-    <div class="card"><div class="card-title"><div class="ct-bar"></div>Histórico / Notas</div>
-      ${histH}
-      <div class="form-group" style="margin-top:12px">
-        <textarea id="nota-txt" class="form-control" placeholder="Adicionar nota..." rows="2"></textarea>
+      <div class="card"><div class="card-title"><div class="ct-bar"></div>Alterar Status</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">${statusBtns}</div>
       </div>
-      <button class="btn btn-ghost btn-sm" onclick="addNotaOS('${id}')">
-        <i data-lucide="file-plus" style="width:13px;height:13px"></i> Salvar nota
-      </button>
+      <div class="card"><div class="card-title"><div class="ct-bar"></div>Histórico / Notas</div>
+        ${histH}
+        <div class="form-group" style="margin-top:12px"><textarea id="nota-txt" class="form-control" placeholder="Adicionar nota..." rows="2"></textarea></div>
+        <button class="btn btn-ghost btn-sm" onclick="addNotaOS('${id}')"><i data-lucide="file-plus" style="width:13px;height:13px"></i> Salvar nota</button>
+      </div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-      <button class="btn btn-ghost" onclick="enviarWA('${id}')">
-        <i data-lucide="message-circle" style="width:14px;height:14px"></i> WhatsApp
-      </button>
-      <button class="btn btn-ghost" onclick="gerarPDF('${id}')">
-        <i data-lucide="file-text" style="width:14px;height:14px"></i> PDF
-      </button>
-    </div>
-    <button class="btn btn-danger w-full" onclick="excluirOS('${id}')">
-      <i data-lucide="trash-2" style="width:14px;height:14px"></i> Excluir OS
-    </button>
     <div style="height:20px"></div>`;
+  hydrateOSDocument(body);
 
   goPage('ver-os');
   if(window.lucide)setTimeout(()=>lucide.createIcons(),50);
 }
-
 
 async function alterarStatusOS(id,novoStatus) {
   try{
@@ -557,270 +516,184 @@ async function excluirOS(id) {
 }
 function verFoto(osId,idx){const os=APP.os.find(o=>o.id===osId);if(!os)return;let f=[];try{f=JSON.parse(os.fotos||'[]');}catch{}openModal(`<div style="text-align:center"><img src="${f[idx]}" style="max-width:100%;border-radius:12px"><div style="margin-top:10px;font-family:var(--mono);font-size:11px;color:var(--text-2)">Foto ${idx+1}/${f.length}</div></div>`);}
 
-// ── Comprovante (V_TEST style) ────────────────────────────
+// ── Template oficial único da Ordem de Serviço ─────────────
 let _compId=null;
-function abrirComp(id) {
-  _compId=id;
-  const os=APP.os.find(o=>o.id===id);if(!os)return;
+
+function parseOSJson(value, fallback=[]){try{return JSON.parse(value||'[]')||fallback;}catch{return fallback;}}
+function osFileName(os,ext='pdf'){
+  const nome=(os?.clientes?.nome||os?.cliente_nome||'cliente').replace(/[^a-z0-9_-]+/gi,'_').replace(/^_+|_+$/g,'')||'cliente';
+  return `OS_${os?.numero||'sem_numero'}_${nome}.${ext}`;
+}
+function getOSHash(os){return os.hash_doc||genHash((os.id||'')+(os.valor_total||0));}
+function getOSPayload(os){
   const p=STATE.perfil||{};
-  let itens=[];try{itens=JSON.parse(os.itens||'[]');}catch{}
-  let fotos=[];try{fotos=JSON.parse(os.fotos||'[]');}catch{}
+  const itens=parseOSJson(os.itens,[]);
+  const fotos=parseOSJson(os.fotos,[]);
   const nome=os.clientes?.nome||os.cliente_nome||'–';
-  const tel=os.clientes?.telefone||'';
-  const st=_normSt(os.status);
-  const hash=os.hash_doc||genHash(id+(os.valor_total||0));
-  const qrId='qr'+Date.now();
-  const itensH=itens.map(it=>`<div class="comp-item-r"><span>${_e(it.descricao||it.desc||'')} (x${it.quantidade||1})</span><span><b>${fmt((it.quantidade||1)*(it.valor_unit||0))}</b></span></div>`).join('');
-  const fotosH=fotos.length?`<div class="comp-sec">Fotos</div><div class="comp-photos">${fotos.slice(0,6).map(f=>`<img src="${f}">`).join('')}</div>`:'';
-  document.getElementById('compContent').innerHTML=`
-  <div class="comp-paper" id="compPaper">
-    <div class="comp-header">
-      <div class="comp-store">${_e(p.empresa_nome||'NexOS')}</div>
-      ${p.cnpj?`<div class="comp-sub">CNPJ: ${_e(p.cnpj)}</div>`:''}
-      ${p.endereco?`<div class="comp-sub">${_e(p.endereco)}</div>`:''}
-      ${p.telefone?`<div class="comp-sub">${_e(p.telefone)}</div>`:''}
-    </div>
-    <div style="text-align:center;margin-bottom:10px">
-      <div style="font-size:10px;color:#888;font-weight:700;letter-spacing:2px;text-transform:uppercase">ORDEM DE SERVIÇO</div>
-      <div class="comp-os-num">#${os.numero||'–'}</div>
-      <div class="comp-date">${fDateFull(os.criado_em)}</div>
-      <div style="margin-top:6px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
-        <span style="background:${statusBgColor(st)};color:#fff;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700;text-transform:uppercase">${statusLabel(os.status)}</span>
-        <span style="background:#eee;color:#555;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700">${payLabel(os.forma_pagamento)}</span>
+  const tel=os.clientes?.telefone||os.cliente_telefone||'';
+  return {p,itens,fotos,nome,tel,st:_normSt(os.status),hash:getOSHash(os)};
+}
+function renderOSInfo(label,value){
+  if(value===undefined||value===null||value==='')return '';
+  return `<div class="os-doc-info"><span>${_e(label)}</span><strong>${_e(value)}</strong></div>`;
+}
+function renderOSTemplate(os,opts={}){
+  const {p,itens,fotos,nome,tel,st,hash}=getOSPayload(os);
+  const documentId=opts.documentId||'compPaper';
+  const qrId=opts.qrId||`osQr${Date.now()}`;
+  const itemRows=itens.length?itens.map((it,i)=>{
+    const qtd=+(it.quantidade||1);
+    const unit=+(it.valor_unit||it.valor||0);
+    return `<div class="os-doc-item">
+      <div><span class="os-doc-item-index">${String(i+1).padStart(2,'0')}</span><strong>${_e(it.descricao||it.desc||'Item')}</strong></div>
+      <span>${qtd}x</span><span>${fmt(unit)}</span><strong>${fmt(qtd*unit)}</strong>
+    </div>`;
+  }).join(''):'<div class="os-doc-empty">Nenhum item informado.</div>';
+  const photos=fotos.length?`<section class="os-doc-section os-doc-break-inside"><div class="os-doc-section-title">Fotos anexadas</div><div class="os-doc-photos">${fotos.slice(0,6).map((f,i)=>`<figure><img src="${f}" crossorigin="anonymous" alt="Foto ${i+1}"><figcaption>Foto ${i+1}</figcaption></figure>`).join('')}</div></section>`:'';
+  const assinatura=os.assinatura?`<section class="os-doc-section os-doc-break-inside"><div class="os-doc-section-title">Assinatura digital</div><div class="os-doc-sign"><img src="${os.assinatura}" crossorigin="anonymous" alt="Assinatura"><span>${_e(nome)} · ${fDateFull(os.criado_em)}</span></div></section>`:'';
+  const termos=p.termos?`<section class="os-doc-section"><div class="os-doc-section-title">Termos e condições</div><p class="os-doc-text">${_e(p.termos)}</p></section>`:'';
+  const troco=(+os.valor_pago||0)>(+os.valor_total||0)?(+os.valor_pago||0)-(+os.valor_total||0):0;
+  return `<article class="os-doc" id="${documentId}" data-os-template="official" data-os-number="${_e(os.numero||'')}">
+    <header class="os-doc-hero">
+      <div>
+        <div class="os-doc-kicker">Ordem de Serviço</div>
+        <h1>${_e(p.empresa_nome||'NexOS')}</h1>
+        <div class="os-doc-company">
+          ${p.cnpj?`<span>CNPJ ${_e(p.cnpj)}</span>`:''}
+          ${p.endereco?`<span>${_e(p.endereco)}</span>`:''}
+          ${p.telefone?`<span>${_e(p.telefone)}</span>`:''}
+        </div>
       </div>
-    </div>
-    <div class="comp-sec">Cliente</div>
-    <div class="comp-row"><span>Nome</span><span><b>${_e(nome)}</b></span></div>
-    ${tel?`<div class="comp-row"><span>Tel</span><span>${_e(tel)}</span></div>`:''}
-    ${os.equipamento||os.item?`<div class="comp-sec">Equipamento</div><div class="comp-row"><span>Equip.</span><span>${_e(os.equipamento||os.item||'')}</span></div>${os.defeito?`<div class="comp-row"><span>Defeito</span><span>${_e(os.defeito)}</span></div>`:''}`:''}
-    <div class="comp-sec">Itens</div>
-    <div class="comp-items">${itensH}${(os.valor_mao_obra||0)>0?`<div class="comp-item-r"><span>Mão de Obra</span><span><b>${fmt(os.valor_mao_obra)}</b></span></div>`:''}</div>
-    <div class="comp-total"><span>TOTAL</span><span>${fmt(os.valor_total)}</span></div>
-    ${(os.valor_pago||0)>0?`<div class="comp-row"><span>Pago</span><span>${fmt(os.valor_pago)}</span></div>`:''}
-    ${(os.valor_pago||0)>(os.valor_total||0)?`<div class="comp-row"><span>Troco</span><span>${fmt((os.valor_pago||0)-(os.valor_total||0))}</span></div>`:''}
-    ${os.observacoes?`<div class="comp-sec">Observações</div><div style="font-size:12px;color:#555;line-height:1.6;margin-bottom:8px">${_e(os.observacoes)}</div>`:''}
-    ${fotosH}
-    ${os.assinatura?`<div class="comp-sec">Assinatura</div><div style="border:1px solid #ddd;border-radius:6px;padding:8px;text-align:center;margin-bottom:8px"><img src="${os.assinatura}" style="max-width:100%;max-height:55px"><div style="font-size:10px;color:#888;margin-top:3px">${_e(nome)}</div></div>`:''}
-    ${p.termos?`<div class="comp-terms">${_e(p.termos)}</div>`:''}
-    <div class="comp-footer">
-      <div id="${qrId}" style="display:flex;justify-content:center;margin-bottom:8px"></div>
-      <div><b>Código de Verificação</b></div>
-      <div class="comp-hash">OS: #${os.numero} | HASH: ${hash} | ${fDateFull(os.criado_em)}</div>
-      ${p.pix?`<div style="margin-top:7px"><b>PIX:</b> ${_e(p.pix)}</div>`:''}
-      <div style="margin-top:8px">Obrigado pela preferência! 🙏</div>
-    </div>
-  </div>`;
-  setTimeout(()=>{try{const el=document.getElementById(qrId);if(el&&window.QRCode)new QRCode(el,{text:'OS:#'+os.numero+'|HASH:'+hash,width:80,height:80,colorDark:'#1a6cf0',colorLight:'#ffffff'});}catch{}},200);
+      <div class="os-doc-number-card">
+        <span>OS</span><strong>#${_e(os.numero||'–')}</strong><small>${fDateFull(os.criado_em)}</small>
+      </div>
+    </header>
+    <section class="os-doc-summary">
+      <div class="os-doc-status" style="--status-color:${statusBgColor(st)}"><span>Status</span><strong>${statusLabel(os.status)}</strong></div>
+      <div class="os-doc-total"><span>Total</span><strong>${fmt(os.valor_total)}</strong><small>${payLabel(os.forma_pagamento)}</small></div>
+      <div class="os-doc-qr"><div id="${qrId}" data-qr-text="OS:#${_e(os.numero||'')}|HASH:${_e(hash)}|TOTAL:${_e(String(os.valor_total||0))}"></div><span>Validação QR</span></div>
+    </section>
+    <main class="os-doc-grid">
+      <section class="os-doc-section">
+        <div class="os-doc-section-title">Cliente</div>
+        ${renderOSInfo('Nome',nome)}${renderOSInfo('WhatsApp',tel)}${os.clientes?.cpf?renderOSInfo('Documento',os.clientes.cpf):''}
+      </section>
+      <section class="os-doc-section">
+        <div class="os-doc-section-title">Equipamento / Serviço</div>
+        ${renderOSInfo('Equipamento',os.equipamento||os.item||'–')}${renderOSInfo('Defeito',os.defeito)}${renderOSInfo('Diagnóstico',os.diagnostico)}
+      </section>
+    </main>
+    <section class="os-doc-section os-doc-break-inside">
+      <div class="os-doc-section-title">Itens e valores</div>
+      <div class="os-doc-items-head"><span>Descrição</span><span>Qtd</span><span>Unit.</span><span>Total</span></div>
+      <div class="os-doc-items">${itemRows}${(+os.valor_mao_obra||0)>0?`<div class="os-doc-item"><div><span class="os-doc-item-index">MO</span><strong>Mão de obra</strong></div><span>1x</span><span>${fmt(os.valor_mao_obra)}</span><strong>${fmt(os.valor_mao_obra)}</strong></div>`:''}</div>
+      <div class="os-doc-payments">
+        <div>${renderOSInfo('Forma de pagamento',payLabel(os.forma_pagamento))}${(+os.valor_pago||0)>0?renderOSInfo('Valor pago',fmt(os.valor_pago)):''}${troco?renderOSInfo('Troco',fmt(troco)):''}</div>
+        <div class="os-doc-grand-total"><span>Total geral</span><strong>${fmt(os.valor_total)}</strong></div>
+      </div>
+    </section>
+    ${os.observacoes?`<section class="os-doc-section"><div class="os-doc-section-title">Observações</div><p class="os-doc-text">${_e(os.observacoes)}</p></section>`:''}
+    ${photos}${assinatura}${termos}
+    <footer class="os-doc-footer">
+      <div><strong>Documento oficial NexOS</strong><span>OS #${_e(os.numero||'–')} · HASH ${_e(hash)}</span></div>
+      ${p.pix?`<div><strong>PIX</strong><span>${_e(p.pix)}</span></div>`:''}
+    </footer>
+  </article>`;
+}
+function hydrateOSDocument(root=document){
+  root.querySelectorAll('[data-qr-text]').forEach(el=>{
+    if(el.dataset.rendered==='1')return;
+    el.innerHTML='';
+    try{ if(window.QRCode)new QRCode(el,{text:el.dataset.qrText,width:86,height:86,colorDark:'#0f172a',colorLight:'#ffffff'}); el.dataset.rendered='1'; }catch{}
+  });
+}
+async function resolveOS(id){return APP.os.find(o=>o.id===id)||await API.getOSById(id).catch(()=>null);}
+function ensureOSRenderHost(){
+  let host=document.getElementById('osRenderHost');
+  if(!host){host=document.createElement('div');host.id='osRenderHost';host.className='os-render-host';document.body.appendChild(host);}
+  return host;
+}
+async function renderOSForExport(os){
+  const host=ensureOSRenderHost();
+  host.innerHTML=renderOSTemplate(os,{documentId:'osExportPaper',qrId:'osExportQr'});
+  hydrateOSDocument(host);
+  await new Promise(r=>setTimeout(r,180));
+  await Promise.all(Array.from(host.querySelectorAll('img')).map(img=>img.complete?Promise.resolve():new Promise(res=>{img.onload=img.onerror=res;})));
+  return host.querySelector('.os-doc');
+}
+async function osToCanvas(os,scale=2){
+  if(!window.html2canvas)throw new Error('Biblioteca html2canvas não carregou');
+  const el=await renderOSForExport(os);
+  return html2canvas(el,{scale,backgroundColor:'#ffffff',useCORS:true,allowTaint:false,logging:false,windowWidth:el.scrollWidth,windowHeight:el.scrollHeight});
+}
+async function osToPngBlob(os){
+  const canvas=await osToCanvas(os,2);
+  return await new Promise(resolve=>canvas.toBlob(resolve,'image/png',0.98));
+}
+async function osToPdfBlob(os){
+  const jsPDFLib=window.jspdf?.jsPDF||window.jsPDF;
+  if(!jsPDFLib)throw new Error('Biblioteca PDF não carregou');
+  const canvas=await osToCanvas(os,2);
+  const img=canvas.toDataURL('image/png');
+  const pdf=new jsPDFLib({orientation:'p',unit:'mm',format:'a4'});
+  const pageW=210,pageH=297;
+  const imgH=canvas.height*pageW/canvas.width;
+  let remaining=imgH, y=0;
+  pdf.addImage(img,'PNG',0,y,pageW,imgH,'','FAST');
+  remaining-=pageH;
+  while(remaining>0){y-=pageH;pdf.addPage();pdf.addImage(img,'PNG',0,y,pageW,imgH,'','FAST');remaining-=pageH;}
+  return pdf.output('blob');
+}
+function downloadBlob(blob,name){
+  const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+async function shareOSFile(os,prefer='pdf'){
+  UI.toast('Gerando documento para compartilhar...','info');
+  const ext=prefer==='png'?'png':'pdf';
+  const blob=ext==='png'?await osToPngBlob(os):await osToPdfBlob(os);
+  const file=new File([blob],osFileName(os,ext),{type:ext==='png'?'image/png':'application/pdf'});
+  if(navigator.canShare?.({files:[file]})&&navigator.share){
+    await navigator.share({title:`OS #${os.numero}`,files:[file]});
+    UI.toast('Documento compartilhado! ✅','success');
+  }else{
+    downloadBlob(blob,file.name);
+    UI.toast('Compartilhamento de arquivo indisponível neste navegador. Documento baixado.','warning');
+  }
+}
+
+async function abrirComp(id) {
+  _compId=id;
+  const os=await resolveOS(id);if(!os){UI.toast('OS não encontrada','error');return;}
+  const content=document.getElementById('compContent');if(!content)return;
+  content.innerHTML=renderOSTemplate(os,{documentId:'compPaper',qrId:'compQr'});
+  hydrateOSDocument(content);
   document.getElementById('compView').classList.add('open');
 }
 function fecharComp(){document.getElementById('compView').classList.remove('open');}
-function compartilharComp(){
-  const os=APP.os.find(o=>o.id===_compId);if(!os)return;
-  const txt=`OS #${os.numero} - ${os.clientes?.nome||os.cliente_nome||'–'}\nTotal: ${fmt(os.valor_total)}\n${fDateFull(os.criado_em)}`;
-  if(navigator.share)navigator.share({title:'OS #'+os.numero,text:txt});
-  else navigator.clipboard.writeText(txt).then(()=>UI.toast('Copiado!','success'));
+async function compartilharComp(){if(_compId)await compartilharOS(_compId);}
+async function compartilharOS(id){const os=await resolveOS(id);if(os)await shareOSFile(os,'pdf');}
+async function enviarWA(id){
+  const os=await resolveOS(id);if(!os){UI.toast('OS não encontrada','error');return;}
+  try{await shareOSFile(os,'pdf');}
+  catch(e){console.error(e);UI.toast('Erro ao preparar documento para WhatsApp: '+e.message,'error');}
 }
-
-function enviarWA(id) {
-  const os=APP.os.find(o=>o.id===id);if(!os)return;
-  const p=STATE.perfil||{};
-  let itens=[];try{itens=JSON.parse(os.itens||'[]');}catch{}
-  const nome=os.clientes?.nome||os.cliente_nome||'–';
-  const tel=os.clientes?.telefone||'';
-  const hash=os.hash_doc||genHash(id+(os.valor_total||0));
-  const itensMsg=itens.map(it=>`- ${it.descricao||it.desc||''} x${it.quantidade||1} = ${fmt((it.quantidade||1)*(it.valor_unit||0))}`).join('\n');
-  const msg=`*${p.empresa_nome||'NexOS'}*\n\nOS #${os.numero}\n*${nome}*\n${fDateFull(os.criado_em)}\n\nItens:\n${itensMsg}${(os.valor_mao_obra||0)>0?`\nMão de Obra: ${fmt(os.valor_mao_obra)}`:''}\n\n*TOTAL: ${fmt(os.valor_total)}*\n${payLabel(os.forma_pagamento)} | ${statusLabel(os.status)}${p.pix?'\nPIX: '+p.pix:''}${p.telefone?'\n'+p.telefone:''}\n\nHash: ${hash}`;
-  window.open(API.buildWALink(tel,msg),'_blank');
-}
-
 async function gerarPDF(id) {
-  const os = APP.os.find(o=>o.id===id) || await API.getOSById(id).catch(()=>null);
-  if(!os){UI.toast('OS não encontrada','error');return;}
-
-  // Verificar se jsPDF está disponível
-  const jsPDFLib = window.jspdf?.jsPDF || window.jsPDF;
-  if(!jsPDFLib){
-    UI.toast('Biblioteca PDF não carregou. Tente pela tela de comprovante.','error');
-    abrirComp(id);
-    return;
-  }
-
-  UI.toast('Gerando PDF...','info');
-  const p   = STATE.perfil||{};
-  let itens = []; try{itens=JSON.parse(os.itens||'[]');}catch{}
-  let fotos = []; try{fotos=JSON.parse(os.fotos||'[]');}catch{}
-  const nome = os.clientes?.nome||os.cliente_nome||'–';
-  const tel  = os.clientes?.telefone||'';
-  const st   = _normSt(os.status);
-  const hash = os.hash_doc||genHash(id+(os.valor_total||0));
-
-  try {
-    const doc = new jsPDFLib({unit:'mm',format:'a4'});
-    const W=210, M=15; let y=M;
-
-    // Fundo
-    doc.setFillColor(10,15,30); doc.rect(0,0,W,297,'F');
-    doc.setFillColor(17,24,39); doc.rect(0,0,W,44,'F');
-
-    // Cabeçalho empresa
-    doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(56,189,248);
-    doc.text(p.empresa_nome||'NexOS', M, 16);
-    doc.setFontSize(7.5); doc.setTextColor(90,112,153);
-    if(p.cnpj)     doc.text('CNPJ: '+p.cnpj, M, 22);
-    if(p.endereco) doc.text(p.endereco, M, 27);
-    if(p.telefone) doc.text(p.telefone, M, 32);
-
-    // Número OS
-    doc.setFontSize(22); doc.setFont('helvetica','bold'); doc.setTextColor(56,189,248);
-    doc.text('#'+os.numero, W-M, 16, {align:'right'});
-    doc.setFontSize(7.5); doc.setTextColor(90,112,153);
-    doc.text('ORDEM DE SERVIÇO', W-M, 22, {align:'right'});
-    doc.text(fDateFull(os.criado_em), W-M, 27, {align:'right'});
-
-    // Badge status
-    const scol={concluido:[0,200,100],aguardando:[255,140,66],andamento:[56,189,248],cancelado:[100,120,150],fiado:[167,139,250],retirada:[251,146,60]};
-    doc.setFillColor(...(scol[st]||[56,189,248]));
-    doc.roundedRect(W-M-30,32,30,8,2,2,'F');
-    doc.setTextColor(255,255,255); doc.setFontSize(7);
-    doc.text(statusLabel(os.status).toUpperCase(), W-M-15, 37.5, {align:'center'});
-    y = 53;
-
-    // Total destaque
-    doc.setFillColor(10,35,20); doc.roundedRect(M,y,W-2*M,13,3,3,'F');
-    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(90,112,153);
-    doc.text('TOTAL', M+4, y+9);
-    doc.setFontSize(15); doc.setTextColor(0,229,160);
-    doc.text(fmt(os.valor_total), W-M-2, y+9, {align:'right'});
-    y += 18;
-
-    // Helpers
-    const sec = t => {
-      doc.setFillColor(18,28,48); doc.rect(M,y,W-2*M,7,'F');
-      doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(56,189,248);
-      doc.text(t, M+3, y+5); y+=9;
-    };
-    const row = (l,v) => {
-      if(!v) return;
-      doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(90,112,153);
-      doc.text(l+':', M+2, y);
-      doc.setTextColor(220,232,255); doc.setFont('helvetica','bold');
-      const ls = doc.splitTextToSize(String(v), W-2*M-36);
-      doc.text(ls, M+38, y); y += 5.5*ls.length;
-    };
-
-    // Cliente
-    sec('CLIENTE'); row('Nome',nome); row('Tel',tel);
-    if(os.clientes?.cpf) row('CPF',os.clientes.cpf);
-    y += 2;
-
-    // Equipamento
-    if(os.equipamento||os.item){
-      sec('EQUIPAMENTO');
-      row('Equip.',os.equipamento||os.item);
-      row('Defeito',os.defeito);
-      row('Diag.',os.diagnostico);
-      y += 2;
-    }
-
-    // Itens
-    sec('ITENS');
-    doc.setFillColor(16,24,42); doc.rect(M,y,W-2*M,5.5,'F');
-    doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(90,112,153);
-    doc.text('Descrição',M+2,y+4); doc.text('Qtd',W-M-42,y+4); doc.text('Total',W-M-2,y+4,{align:'right'});
-    y += 7;
-
-    itens.forEach((it,i) => {
-      doc.setFillColor(i%2===0?16:18, i%2===0?24:26, i%2===0?40:42);
-      doc.rect(M,y-1,W-2*M,6,'F');
-      doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(220,232,255);
-      doc.text((it.descricao||it.desc||'').slice(0,45), M+2, y+4);
-      doc.setTextColor(90,112,153); doc.text('x'+(it.quantidade||1), W-M-42, y+4);
-      doc.setTextColor(0,229,160); doc.setFont('helvetica','bold');
-      doc.text(fmt((it.quantidade||1)*(it.valor_unit||0)), W-M-2, y+4, {align:'right'});
-      y += 6;
-    });
-
-    // Mão de obra
-    if((os.valor_mao_obra||0)>0) {
-      doc.setFillColor(16,24,40); doc.rect(M,y-1,W-2*M,6,'F');
-      doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(220,232,255);
-      doc.text('Mão de Obra', M+2, y+4);
-      doc.setTextColor(0,229,160); doc.setFont('helvetica','bold');
-      doc.text(fmt(os.valor_mao_obra), W-M-2, y+4, {align:'right'});
-      y += 6;
-    }
-
-    // Total linha
-    doc.setFillColor(12,30,18); doc.rect(M,y,W-2*M,7,'F');
-    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(0,229,160);
-    doc.text('TOTAL', M+2, y+5);
-    doc.text(fmt(os.valor_total), W-M-2, y+5, {align:'right'});
-    y += 10;
-
-    // Pagamento
-    if(os.forma_pagamento){
-      sec('PAGAMENTO');
-      row('Forma', payLabel(os.forma_pagamento));
-      if((os.valor_pago||0)>0) row('Pago', fmt(os.valor_pago));
-      y += 2;
-    }
-
-    // Observações
-    if(os.observacoes){
-      sec('OBSERVAÇÕES');
-      doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(220,232,255);
-      const ls2 = doc.splitTextToSize(os.observacoes, W-2*M-4);
-      doc.text(ls2, M+2, y); y += ls2.length*5+4;
-    }
-
-    // Fotos (até 3)
-    if(fotos.length){
-      if(y>215){doc.addPage();doc.setFillColor(10,15,30);doc.rect(0,0,W,297,'F');y=M;}
-      sec('FOTOS ('+fotos.length+')');
-      const pw=(W-2*M-8)/3;
-      for(let fi=0;fi<Math.min(fotos.length,3);fi++){
-        try{doc.addImage(fotos[fi],'JPEG',M+fi*(pw+4),y,pw,pw*.75,'','FAST');}catch{}
-      }
-      y += pw*.75+5;
-    }
-
-    // Assinatura
-    if(os.assinatura){
-      if(y>235){doc.addPage();doc.setFillColor(10,15,30);doc.rect(0,0,W,297,'F');y=M;}
-      sec('ASSINATURA DIGITAL');
-      try{doc.addImage(os.assinatura,'PNG',M,y,70,20,'','FAST');}catch{}
-      y += 25;
-      doc.setFont('helvetica','italic'); doc.setFontSize(8); doc.setTextColor(90,112,153);
-      doc.text(nome+' - '+fDateFull(os.criado_em), M, y); y += 7;
-    }
-
-    // Termos
-    if(p.termos){
-      if(y>245){doc.addPage();doc.setFillColor(10,15,30);doc.rect(0,0,W,297,'F');y=M;}
-      sec('TERMOS');
-      doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(90,112,153);
-      const tl = doc.splitTextToSize(p.termos, W-2*M-4);
-      doc.text(tl, M+2, y); y += tl.length*4.5+4;
-    }
-
-    // Rodapé com hash
-    if(y>260){doc.addPage();doc.setFillColor(10,15,30);doc.rect(0,0,W,297,'F');y=M;}
-    doc.setFillColor(16,22,38); doc.rect(M,y,W-2*M,20,'F');
-    doc.setFont('courier','bold'); doc.setFontSize(7); doc.setTextColor(56,189,248);
-    doc.text('DOCUMENTO VÁLIDO — NexOS v4.0', M+3, y+6);
-    doc.setFont('courier','normal'); doc.setFontSize(6.5); doc.setTextColor(90,112,153);
-    doc.text('OS: #'+os.numero+' | '+fDateFull(os.criado_em), M+3, y+11);
-    doc.text('HASH: '+hash, M+3, y+16);
-    if(p.pix) doc.text('PIX: '+p.pix, W-M-2, y+13, {align:'right'});
-
-    doc.save('OS_'+os.numero+'_'+nome.replace(/\s+/g,'_')+'.pdf');
-    UI.toast('PDF gerado! ✅','success');
-  } catch(e) {
-    console.error('PDF erro:', e);
-    UI.toast('Erro ao gerar PDF: '+e.message,'error');
-  }
+  const os=await resolveOS(id);if(!os){UI.toast('OS não encontrada','error');return;}
+  UI.toast('Gerando PDF a partir do template oficial...','info');
+  try{const blob=await osToPdfBlob(os);downloadBlob(blob,osFileName(os,'pdf'));UI.toast('PDF gerado! ✅','success');}
+  catch(e){console.error('PDF erro:',e);UI.toast('Erro ao gerar PDF: '+e.message,'error');}
 }
-
+async function salvarComoImagem(id=_compId) {
+  const os=await resolveOS(id);if(!os){UI.toast('OS não encontrada','error');return;}
+  UI.toast('Gerando imagem a partir do template oficial...','info');
+  try{const blob=await osToPngBlob(os);downloadBlob(blob,osFileName(os,'png'));UI.toast('Imagem salva! ✅','success');}
+  catch(e){console.error(e);UI.toast('Erro ao gerar imagem: '+e.message,'error');}
+}
+async function imprimirOS(id=_compId||_verOsId){
+  const os=await resolveOS(id);if(!os){UI.toast('OS não encontrada','error');return;}
+  await abrirComp(os.id);
+  setTimeout(()=>window.print(),220);
+}
 
 
 // ════════════════════════════════════════════════════════════
@@ -1435,23 +1308,6 @@ function confirmarAssinatura() {
   UI.toast('Assinatura confirmada!','success');
 }
 
-// ── Salvar comprovante como imagem ─────────────────────────
-async function salvarComoImagem() {
-  const el = document.getElementById('compPaper');
-  if(!el){UI.toast('Comprovante não encontrado','error');return;}
-  if(!window.html2canvas){UI.toast('Biblioteca não carregou','error');return;}
-  UI.toast('Gerando imagem...','info');
-  try {
-    const canvas = await html2canvas(el, {scale:2, backgroundColor:'#ffffff', useCORS:true, logging:false});
-    const link = document.createElement('a');
-    const os = APP.os.find(o=>o.id===_compId);
-    link.download = 'OS_'+(os?.numero||'comprovante')+'.png';
-    link.href = canvas.toDataURL('image/png');
-    link.click();
-    UI.toast('Imagem salva! ✅','success');
-  } catch(e) { UI.toast('Erro ao gerar imagem','error'); console.error(e); }
-}
-
 // ── Exportar dados do usuário ───────────────────────────────
 async function exportarDados() {
   UI.toast('Exportando dados...','info');
@@ -1512,14 +1368,8 @@ async function verificarOSVencidas() {
 Deseja enviar cobrança via WhatsApp para os clientes?`);
   if(!conf) return;
   for(const os of osFiado) {
-    const tel = os.clientes?.telefone||'';
-    if(!tel) continue;
-    const nome = os.clientes?.nome||os.cliente_nome||'Cliente';
-    const pix2 = STATE.perfil?.pix?'\n\n🔑 *PIX:* '+STATE.perfil.pix:'';
-    const msg='Olá *'+nome+'*! 👋\n\nPassando para lembrá-lo(a) da OS em aberto:\n\n📋 *OS #'+os.numero+'*\n🔧 '+(os.equipamento||os.item||'Serviço')+'\n💰 *Valor: '+fmt(os.valor_total)+'*'+pix2+'\n\n_'+(STATE.perfil?.empresa_nome||'NexOS')+'_';
-    const num = tel.replace(/\D/g,'');
-    window.open('https://wa.me/'+(num.startsWith('55')?num:'55'+num)+'?text='+encodeURIComponent(msg),'_blank');
-    await new Promise(r=>setTimeout(r,1500));
+    await shareOSFile(os,'pdf');
+    await new Promise(r=>setTimeout(r,500));
   }
 }
 
@@ -1597,15 +1447,11 @@ function novaOSparaCliente() {
     const nd = document.getElementById('m-cli-doc');    if(nd) nd.value=c.cpf||'';
   }, 200);
 }
-function cobrarClienteWA(id) {
-  const c = APP.clientes.find(x=>x.id===id); if(!c||!c.telefone) return;
+async function cobrarClienteWA(id) {
+  const c = APP.clientes.find(x=>x.id===id); if(!c) return;
   const osFiado = APP.os.filter(o=>(o.cliente_id===id||o.cliente_nome===c.nome)&&o.status==='fiado');
-  const total = osFiado.reduce((a,o)=>a+(+o.valor_total||0),0);
-  const p = STATE.perfil||{};
-  const listaOS = osFiado.map(o=>'• OS #'+o.numero+' — '+(o.equipamento||o.item||'Serviço')+' — '+fmt(o.valor_total)).join('\n');
-  const msg = 'Olá *'+c.nome+'*! 👋\n\nPassando para lembrá-lo(a) do(s) serviço(s) em aberto:\n\n💰 *Total em aberto: '+fmt(total)+'*\n\n'+listaOS+(p.pix?'\n\n🔑 *PIX:* '+p.pix:'')+'\n\n_'+(p.empresa_nome||'NexOS')+'_';
-  const num = (c.telefone||'').replace(/\D/g,'');
-  window.open('https://wa.me/'+(num.startsWith('55')?num:'55'+num)+'?text='+encodeURIComponent(msg),'_blank');
+  if(!osFiado.length){UI.toast('Nenhuma OS em fiado para compartilhar','info');return;}
+  for(const os of osFiado) await shareOSFile(os,'pdf');
 }
 
 // ── setPay — adicionar aguardando ──────────────────────────
