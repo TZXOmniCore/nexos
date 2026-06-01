@@ -251,12 +251,12 @@ const API = {
     return data||[];
   },
   async saveEvento(uid,d) {
-    const p = {dono_id:uid,...d};
-    if(d.id) {
-      const {data,error} = await sb.from('agenda').update(p).eq('id',d.id).eq('dono_id',uid).select().single();
-      if(error) throw error; return data;
+    const { id, ...payload } = d;
+    const p = { dono_id: uid, ...payload };
+    if(id) {
+      const { data, error } = await sb.from('agenda').update(p).eq('id', id).eq('dono_id', uid).select().single();
     }
-    const {data,error} = await sb.from('agenda').insert(p).select().single();
+    const { data, error } = await sb.from('agenda').insert(p).select().single();   
     if(error) throw error; return data;
   },
   async deleteEvento(uid,id) {
