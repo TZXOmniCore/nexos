@@ -557,22 +557,25 @@ async function excluirOS(id) {
 }
 function verFoto(osId,idx){const os=APP.os.find(o=>o.id===osId);if(!os)return;let f=[];try{f=JSON.parse(os.fotos||'[]');}catch{}openModal(`<div style="text-align:center"><img src="${f[idx]}" style="max-width:100%;border-radius:12px"><div style="margin-top:10px;font-family:var(--mono);font-size:11px;color:var(--text-2)">Foto ${idx+1}/${f.length}</div></div>`);}
 
-// ── Comprovante (V_TEST style) ────────────────────────────
+// ════════════════════════════════════════════════════════════
+// TEMPLATE ÚNICO DE OS — tela, PDF, impressão e compartilhamento
+// ════════════════════════════════════════════════════════════
 let _compId=null;
-function abrirComp(id) {
-  _compId=id;
-  const os=APP.os.find(o=>o.id===id);if(!os)return;
+
+function buildOSTemplate(os) {
   const p=STATE.perfil||{};
   let itens=[];try{itens=JSON.parse(os.itens||'[]');}catch{}
   let fotos=[];try{fotos=JSON.parse(os.fotos||'[]');}catch{}
-  const nome=os.clientes?.nome||os.cliente_nome||'–';
+  const nome=os.clientes?.nome||os.cliente_nome||'\u2013';
   const tel=os.clientes?.telefone||'';
   const st=_normSt(os.status);
-  const hash=os.hash_doc||genHash(id+(os.valor_total||0));
+  const hash=os.hash_doc||genHash(os.id+(os.valor_total||0));
   const qrId='qr'+Date.now();
+
   const itensH=itens.map(it=>`<div class="comp-item-r"><span>${_e(it.descricao||it.desc||'')} (x${it.quantidade||1})</span><span><b>${fmt((it.quantidade||1)*(it.valor_unit||0))}</b></span></div>`).join('');
-  const fotosH=fotos.length?`<div class="comp-sec">Fotos</div><div class="comp-photos">${fotos.slice(0,6).map(f=>`<img src="${f}">`).join('')}</div>`:'';
-  document.getElementById('compContent').innerHTML=`
+  const fotosH=fotos.length?`<div class="comp-sec">Fotos</div><div class="comp-photos">${fotos.slice(0,6).map(f=>`<img src="${f}" crossorigin="anonymous">`).join('')}</div>`:'';
+
+  const html=`
   <div class="comp-paper" id="compPaper">
     <div class="comp-header">
       <div class="comp-store">${_e(p.empresa_nome||'NexOS')}</div>
@@ -581,8 +584,8 @@ function abrirComp(id) {
       ${p.telefone?`<div class="comp-sub">${_e(p.telefone)}</div>`:''}
     </div>
     <div style="text-align:center;margin-bottom:10px">
-      <div style="font-size:10px;color:#888;font-weight:700;letter-spacing:2px;text-transform:uppercase">ORDEM DE SERVIÇO</div>
-      <div class="comp-os-num">#${os.numero||'–'}</div>
+      <div style="font-size:10px;color:#888;font-weight:700;letter-spacing:2px;text-transform:uppercase">ORDEM DE SERVI\u00c7O</div>
+      <div class="comp-os-num">#${os.numero||'\u2013'}</div>
       <div class="comp-date">${fDateFull(os.criado_em)}</div>
       <div style="margin-top:6px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
         <span style="background:${statusBgColor(st)};color:#fff;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700;text-transform:uppercase">${statusLabel(os.status)}</span>
@@ -592,231 +595,123 @@ function abrirComp(id) {
     <div class="comp-sec">Cliente</div>
     <div class="comp-row"><span>Nome</span><span><b>${_e(nome)}</b></span></div>
     ${tel?`<div class="comp-row"><span>Tel</span><span>${_e(tel)}</span></div>`:''}
-    ${os.equipamento||os.item?`<div class="comp-sec">Equipamento</div><div class="comp-row"><span>Equip.</span><span>${_e(os.equipamento||os.item||'')}</span></div>${os.defeito?`<div class="comp-row"><span>Defeito</span><span>${_e(os.defeito)}</span></div>`:''}`:''}
+    ${os.equipamento||os.item?`<div class="comp-sec">Equipamento</div><div class="comp-row"><span>Equip.</span><span>${_e(os.equipamento||os.item||'')}</span></div>${os.defeito?`<div class="comp-row"><span>Defeito</span><span>${_e(os.defeito)}</span></div>`:''}${os.diagnostico?`<div class="comp-row"><span>Diag.</span><span>${_e(os.diagnostico)}</span></div>`:''}`: ''}
     <div class="comp-sec">Itens</div>
-    <div class="comp-items">${itensH}${(os.valor_mao_obra||0)>0?`<div class="comp-item-r"><span>Mão de Obra</span><span><b>${fmt(os.valor_mao_obra)}</b></span></div>`:''}</div>
+    <div class="comp-items">${itensH}${(os.valor_mao_obra||0)>0?`<div class="comp-item-r"><span>M\u00e3o de Obra</span><span><b>${fmt(os.valor_mao_obra)}</b></span></div>`:''}</div>
     <div class="comp-total"><span>TOTAL</span><span>${fmt(os.valor_total)}</span></div>
     ${(os.valor_pago||0)>0?`<div class="comp-row"><span>Pago</span><span>${fmt(os.valor_pago)}</span></div>`:''}
     ${(os.valor_pago||0)>(os.valor_total||0)?`<div class="comp-row"><span>Troco</span><span>${fmt((os.valor_pago||0)-(os.valor_total||0))}</span></div>`:''}
-    ${os.observacoes?`<div class="comp-sec">Observações</div><div style="font-size:12px;color:#555;line-height:1.6;margin-bottom:8px">${_e(os.observacoes)}</div>`:''}
+    ${os.observacoes?`<div class="comp-sec">Observa\u00e7\u00f5es</div><div style="font-size:12px;color:#555;line-height:1.6;margin-bottom:8px">${_e(os.observacoes)}</div>`:''}
     ${fotosH}
-    ${os.assinatura?`<div class="comp-sec">Assinatura</div><div style="border:1px solid #ddd;border-radius:6px;padding:8px;text-align:center;margin-bottom:8px"><img src="${os.assinatura}" style="max-width:100%;max-height:55px"><div style="font-size:10px;color:#888;margin-top:3px">${_e(nome)}</div></div>`:''}
+    ${os.assinatura?`<div class="comp-sec">Assinatura</div><div style="border:1px solid #ddd;border-radius:6px;padding:8px;text-align:center;margin-bottom:8px"><img src="${os.assinatura}" crossorigin="anonymous" style="max-width:100%;max-height:55px"><div style="font-size:10px;color:#888;margin-top:3px">${_e(nome)}</div></div>`:''}
     ${p.termos?`<div class="comp-terms">${_e(p.termos)}</div>`:''}
     <div class="comp-footer">
       <div id="${qrId}" style="display:flex;justify-content:center;margin-bottom:8px"></div>
-      <div><b>Código de Verificação</b></div>
+      <div><b>C\u00f3digo de Verifica\u00e7\u00e3o</b></div>
       <div class="comp-hash">OS: #${os.numero} | HASH: ${hash} | ${fDateFull(os.criado_em)}</div>
       ${p.pix?`<div style="margin-top:7px"><b>PIX:</b> ${_e(p.pix)}</div>`:''}
-      <div style="margin-top:8px">Obrigado pela preferência! 🙏</div>
+      <div style="margin-top:8px">Obrigado pela prefer\u00eancia! \ud83d\ude4f</div>
     </div>
   </div>`;
-  setTimeout(()=>{try{const el=document.getElementById(qrId);if(el&&window.QRCode)new QRCode(el,{text:'OS:#'+os.numero+'|HASH:'+hash,width:80,height:80,colorDark:'#1a6cf0',colorLight:'#ffffff'});}catch{}},200);
-  document.getElementById('compView').classList.add('open');
-}
-function fecharComp(){document.getElementById('compView').classList.remove('open');}
-function compartilharComp(){
-  const os=APP.os.find(o=>o.id===_compId);if(!os)return;
-  const txt=`OS #${os.numero} - ${os.clientes?.nome||os.cliente_nome||'–'}\nTotal: ${fmt(os.valor_total)}\n${fDateFull(os.criado_em)}`;
-  if(navigator.share)navigator.share({title:'OS #'+os.numero,text:txt});
-  else navigator.clipboard.writeText(txt).then(()=>UI.toast('Copiado!','success'));
+
+  return {html,qrId,hash};
 }
 
-function enviarWA(id) {
+function _renderComprovante(id) {
+  const os=APP.os.find(o=>o.id===id);if(!os)return null;
+  const {html,qrId,hash}=buildOSTemplate(os);
+  document.getElementById('compContent').innerHTML=html;
+  setTimeout(()=>{
+    try{const el=document.getElementById(qrId);if(el&&window.QRCode)new QRCode(el,{text:'OS:#'+os.numero+'|HASH:'+hash,width:80,height:80,colorDark:'#1a6cf0',colorLight:'#ffffff'});}catch{}
+  },200);
+  return os;
+}
+
+function abrirComp(id){_compId=id;if(!_renderComprovante(id))return;document.getElementById('compView').classList.add('open');}
+function fecharComp(){document.getElementById('compView').classList.remove('open');}
+
+// Compartilhar: envia PNG gerado do template — nunca texto puro
+async function compartilharComp(){
+  const os=APP.os.find(o=>o.id===_compId);if(!os)return;
+  const el=document.getElementById('compPaper');
+  if(!el||!window.html2canvas){enviarWA(_compId);return;}
+  try{
+    UI.toast('Preparando imagem...','info');
+    const canvas=await html2canvas(el,{scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false});
+    canvas.toBlob(async blob=>{
+      if(!blob){UI.toast('Erro ao gerar imagem','error');return;}
+      const file=new File([blob],`OS_${os.numero}.png`,{type:'image/png'});
+      if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+        try{await navigator.share({title:`OS #${os.numero}`,files:[file]});}
+        catch(e){if(e.name!=='AbortError'){_downloadBlob(blob,`OS_${os.numero}.png`);UI.toast('Imagem salva!','success');}}
+      } else {
+        _downloadBlob(blob,`OS_${os.numero}.png`);
+        UI.toast('Imagem salva! Compartilhe pelo app de fotos.','success');
+      }
+    },'image/png');
+  }catch(e){console.error('Compartilhar erro:',e);UI.toast('Erro ao compartilhar','error');}
+}
+
+function _downloadBlob(blob,filename){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=filename;a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),3000);
+}
+
+// WhatsApp: abre com texto formatado completo
+function enviarWA(id){
   const os=APP.os.find(o=>o.id===id);if(!os)return;
   const p=STATE.perfil||{};
   let itens=[];try{itens=JSON.parse(os.itens||'[]');}catch{}
-  const nome=os.clientes?.nome||os.cliente_nome||'–';
+  const nome=os.clientes?.nome||os.cliente_nome||'\u2013';
   const tel=os.clientes?.telefone||'';
   const hash=os.hash_doc||genHash(id+(os.valor_total||0));
   const itensMsg=itens.map(it=>`- ${it.descricao||it.desc||''} x${it.quantidade||1} = ${fmt((it.quantidade||1)*(it.valor_unit||0))}`).join('\n');
-  const msg=`*${p.empresa_nome||'NexOS'}*\n\nOS #${os.numero}\n*${nome}*\n${fDateFull(os.criado_em)}\n\nItens:\n${itensMsg}${(os.valor_mao_obra||0)>0?`\nMão de Obra: ${fmt(os.valor_mao_obra)}`:''}\n\n*TOTAL: ${fmt(os.valor_total)}*\n${payLabel(os.forma_pagamento)} | ${statusLabel(os.status)}${p.pix?'\nPIX: '+p.pix:''}${p.telefone?'\n'+p.telefone:''}\n\nHash: ${hash}`;
+  const msg=`*${p.empresa_nome||'NexOS'}*\n\nOS #${os.numero}\n*${nome}*\n${fDateFull(os.criado_em)}\n\nItens:\n${itensMsg}${(os.valor_mao_obra||0)>0?`\nM\u00e3o de Obra: ${fmt(os.valor_mao_obra)}`:''}\n\n*TOTAL: ${fmt(os.valor_total)}*\n${payLabel(os.forma_pagamento)} | ${statusLabel(os.status)}${p.pix?'\nPIX: '+p.pix:''}${p.telefone?'\n'+p.telefone:''}\n\nHash: ${hash}`;
   window.open(API.buildWALink(tel,msg),'_blank');
 }
-
 async function gerarPDF(id) {
-  const os = APP.os.find(o=>o.id===id) || await API.getOSById(id).catch(()=>null);
-  if(!os){UI.toast('OS não encontrada','error');return;}
-
-  // Verificar se jsPDF está disponível
-  const jsPDFLib = window.jspdf?.jsPDF || window.jsPDF;
-  if(!jsPDFLib){
-    UI.toast('Biblioteca PDF não carregou. Tente pela tela de comprovante.','error');
-    abrirComp(id);
-    return;
+  const os=APP.os.find(o=>o.id===id)||await API.getOSById(id).catch(()=>null);
+  if(!os){UI.toast('OS n\u00e3o encontrada','error');return;}
+  if(!window.html2canvas||!window.jspdf){
+    UI.toast('Biblioteca n\u00e3o carregou. Tente recarregar a p\u00e1gina.','error');return;
   }
-
+  // Garante que o comprovante est\u00e1 renderizado (pode ser chamado sem abrir compView)
+  const already=!!document.getElementById('compPaper');
+  if(!already){
+    _compId=id;
+    _renderComprovante(id);
+    await new Promise(r=>setTimeout(r,350)); // aguarda QR + fotos
+  }
+  const el=document.getElementById('compPaper');
+  if(!el){UI.toast('Erro ao gerar PDF','error');return;}
   UI.toast('Gerando PDF...','info');
-  const p   = STATE.perfil||{};
-  let itens = []; try{itens=JSON.parse(os.itens||'[]');}catch{}
-  let fotos = []; try{fotos=JSON.parse(os.fotos||'[]');}catch{}
-  const nome = os.clientes?.nome||os.cliente_nome||'–';
-  const tel  = os.clientes?.telefone||'';
-  const st   = _normSt(os.status);
-  const hash = os.hash_doc||genHash(id+(os.valor_total||0));
-
-  try {
-    const doc = new jsPDFLib({unit:'mm',format:'a4'});
-    const W=210, M=15; let y=M;
-
-    // Fundo
-    doc.setFillColor(10,15,30); doc.rect(0,0,W,297,'F');
-    doc.setFillColor(17,24,39); doc.rect(0,0,W,44,'F');
-
-    // Cabeçalho empresa
-    doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(56,189,248);
-    doc.text(p.empresa_nome||'NexOS', M, 16);
-    doc.setFontSize(7.5); doc.setTextColor(90,112,153);
-    if(p.cnpj)     doc.text('CNPJ: '+p.cnpj, M, 22);
-    if(p.endereco) doc.text(p.endereco, M, 27);
-    if(p.telefone) doc.text(p.telefone, M, 32);
-
-    // Número OS
-    doc.setFontSize(22); doc.setFont('helvetica','bold'); doc.setTextColor(56,189,248);
-    doc.text('#'+os.numero, W-M, 16, {align:'right'});
-    doc.setFontSize(7.5); doc.setTextColor(90,112,153);
-    doc.text('ORDEM DE SERVIÇO', W-M, 22, {align:'right'});
-    doc.text(fDateFull(os.criado_em), W-M, 27, {align:'right'});
-
-    // Badge status
-    const scol={concluido:[0,200,100],aguardando:[255,140,66],andamento:[56,189,248],cancelado:[100,120,150],fiado:[167,139,250],retirada:[251,146,60]};
-    doc.setFillColor(...(scol[st]||[56,189,248]));
-    doc.roundedRect(W-M-30,32,30,8,2,2,'F');
-    doc.setTextColor(255,255,255); doc.setFontSize(7);
-    doc.text(statusLabel(os.status).toUpperCase(), W-M-15, 37.5, {align:'center'});
-    y = 53;
-
-    // Total destaque
-    doc.setFillColor(10,35,20); doc.roundedRect(M,y,W-2*M,13,3,3,'F');
-    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(90,112,153);
-    doc.text('TOTAL', M+4, y+9);
-    doc.setFontSize(15); doc.setTextColor(0,229,160);
-    doc.text(fmt(os.valor_total), W-M-2, y+9, {align:'right'});
-    y += 18;
-
-    // Helpers
-    const sec = t => {
-      doc.setFillColor(18,28,48); doc.rect(M,y,W-2*M,7,'F');
-      doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(56,189,248);
-      doc.text(t, M+3, y+5); y+=9;
-    };
-    const row = (l,v) => {
-      if(!v) return;
-      doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(90,112,153);
-      doc.text(l+':', M+2, y);
-      doc.setTextColor(220,232,255); doc.setFont('helvetica','bold');
-      const ls = doc.splitTextToSize(String(v), W-2*M-36);
-      doc.text(ls, M+38, y); y += 5.5*ls.length;
-    };
-
-    // Cliente
-    sec('CLIENTE'); row('Nome',nome); row('Tel',tel);
-    if(os.clientes?.cpf) row('CPF',os.clientes.cpf);
-    y += 2;
-
-    // Equipamento
-    if(os.equipamento||os.item){
-      sec('EQUIPAMENTO');
-      row('Equip.',os.equipamento||os.item);
-      row('Defeito',os.defeito);
-      row('Diag.',os.diagnostico);
-      y += 2;
-    }
-
-    // Itens
-    sec('ITENS');
-    doc.setFillColor(16,24,42); doc.rect(M,y,W-2*M,5.5,'F');
-    doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(90,112,153);
-    doc.text('Descrição',M+2,y+4); doc.text('Qtd',W-M-42,y+4); doc.text('Total',W-M-2,y+4,{align:'right'});
-    y += 7;
-
-    itens.forEach((it,i) => {
-      doc.setFillColor(i%2===0?16:18, i%2===0?24:26, i%2===0?40:42);
-      doc.rect(M,y-1,W-2*M,6,'F');
-      doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(220,232,255);
-      doc.text((it.descricao||it.desc||'').slice(0,45), M+2, y+4);
-      doc.setTextColor(90,112,153); doc.text('x'+(it.quantidade||1), W-M-42, y+4);
-      doc.setTextColor(0,229,160); doc.setFont('helvetica','bold');
-      doc.text(fmt((it.quantidade||1)*(it.valor_unit||0)), W-M-2, y+4, {align:'right'});
-      y += 6;
-    });
-
-    // Mão de obra
-    if((os.valor_mao_obra||0)>0) {
-      doc.setFillColor(16,24,40); doc.rect(M,y-1,W-2*M,6,'F');
-      doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(220,232,255);
-      doc.text('Mão de Obra', M+2, y+4);
-      doc.setTextColor(0,229,160); doc.setFont('helvetica','bold');
-      doc.text(fmt(os.valor_mao_obra), W-M-2, y+4, {align:'right'});
-      y += 6;
-    }
-
-    // Total linha
-    doc.setFillColor(12,30,18); doc.rect(M,y,W-2*M,7,'F');
-    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(0,229,160);
-    doc.text('TOTAL', M+2, y+5);
-    doc.text(fmt(os.valor_total), W-M-2, y+5, {align:'right'});
-    y += 10;
-
-    // Pagamento
-    if(os.forma_pagamento){
-      sec('PAGAMENTO');
-      row('Forma', payLabel(os.forma_pagamento));
-      if((os.valor_pago||0)>0) row('Pago', fmt(os.valor_pago));
-      y += 2;
-    }
-
-    // Observações
-    if(os.observacoes){
-      sec('OBSERVAÇÕES');
-      doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(220,232,255);
-      const ls2 = doc.splitTextToSize(os.observacoes, W-2*M-4);
-      doc.text(ls2, M+2, y); y += ls2.length*5+4;
-    }
-
-    // Fotos (até 3)
-    if(fotos.length){
-      if(y>215){doc.addPage();doc.setFillColor(10,15,30);doc.rect(0,0,W,297,'F');y=M;}
-      sec('FOTOS ('+fotos.length+')');
-      const pw=(W-2*M-8)/3;
-      for(let fi=0;fi<Math.min(fotos.length,3);fi++){
-        try{doc.addImage(fotos[fi],'JPEG',M+fi*(pw+4),y,pw,pw*.75,'','FAST');}catch{}
+  try{
+    const canvas=await html2canvas(el,{scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false});
+    const imgData=canvas.toDataURL('image/png');
+    const {jsPDF}=window.jspdf;
+    const doc=new jsPDF({unit:'mm',format:'a4',orientation:'portrait'});
+    const W=doc.internal.pageSize.getWidth();
+    const H=doc.internal.pageSize.getHeight();
+    const ratio=canvas.width/canvas.height;
+    const imgH=W/ratio;
+    let posY=0;
+    // Paginação automática se o conteúdo for maior que uma página
+    if(imgH<=H){
+      doc.addImage(imgData,'PNG',0,0,W,imgH);
+    } else {
+      let remaining=imgH;
+      while(remaining>0){
+        doc.addImage(imgData,'PNG',0,-posY,W,imgH);
+        remaining-=H; posY+=H;
+        if(remaining>0)doc.addPage();
       }
-      y += pw*.75+5;
     }
-
-    // Assinatura
-    if(os.assinatura){
-      if(y>235){doc.addPage();doc.setFillColor(10,15,30);doc.rect(0,0,W,297,'F');y=M;}
-      sec('ASSINATURA DIGITAL');
-      try{doc.addImage(os.assinatura,'PNG',M,y,70,20,'','FAST');}catch{}
-      y += 25;
-      doc.setFont('helvetica','italic'); doc.setFontSize(8); doc.setTextColor(90,112,153);
-      doc.text(nome+' - '+fDateFull(os.criado_em), M, y); y += 7;
-    }
-
-    // Termos
-    if(p.termos){
-      if(y>245){doc.addPage();doc.setFillColor(10,15,30);doc.rect(0,0,W,297,'F');y=M;}
-      sec('TERMOS');
-      doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(90,112,153);
-      const tl = doc.splitTextToSize(p.termos, W-2*M-4);
-      doc.text(tl, M+2, y); y += tl.length*4.5+4;
-    }
-
-    // Rodapé com hash
-    if(y>260){doc.addPage();doc.setFillColor(10,15,30);doc.rect(0,0,W,297,'F');y=M;}
-    doc.setFillColor(16,22,38); doc.rect(M,y,W-2*M,20,'F');
-    doc.setFont('courier','bold'); doc.setFontSize(7); doc.setTextColor(56,189,248);
-    doc.text('DOCUMENTO VÁLIDO — NexOS v4.0', M+3, y+6);
-    doc.setFont('courier','normal'); doc.setFontSize(6.5); doc.setTextColor(90,112,153);
-    doc.text('OS: #'+os.numero+' | '+fDateFull(os.criado_em), M+3, y+11);
-    doc.text('HASH: '+hash, M+3, y+16);
-    if(p.pix) doc.text('PIX: '+p.pix, W-M-2, y+13, {align:'right'});
-
+    const nome=os.clientes?.nome||os.cliente_nome||'os';
     doc.save('OS_'+os.numero+'_'+nome.replace(/\s+/g,'_')+'.pdf');
-    UI.toast('PDF gerado! ✅','success');
-  } catch(e) {
-    console.error('PDF erro:', e);
+    UI.toast('PDF gerado! \u2705','success');
+  }catch(e){
+    console.error('PDF erro:',e);
     UI.toast('Erro ao gerar PDF: '+e.message,'error');
   }
 }
@@ -1435,21 +1330,20 @@ function confirmarAssinatura() {
   UI.toast('Assinatura confirmada!','success');
 }
 
-// ── Salvar comprovante como imagem ─────────────────────────
-async function salvarComoImagem() {
-  const el = document.getElementById('compPaper');
-  if(!el){UI.toast('Comprovante não encontrado','error');return;}
-  if(!window.html2canvas){UI.toast('Biblioteca não carregou','error');return;}
+// Salvar comprovante como imagem — usa o mesmo template renderizado
+async function salvarComoImagem(){
+  const el=document.getElementById('compPaper');
+  if(!el){UI.toast('Abra o comprovante primeiro','error');return;}
+  if(!window.html2canvas){UI.toast('Biblioteca n\u00e3o carregou','error');return;}
   UI.toast('Gerando imagem...','info');
-  try {
-    const canvas = await html2canvas(el, {scale:2, backgroundColor:'#ffffff', useCORS:true, logging:false});
-    const link = document.createElement('a');
-    const os = APP.os.find(o=>o.id===_compId);
-    link.download = 'OS_'+(os?.numero||'comprovante')+'.png';
-    link.href = canvas.toDataURL('image/png');
-    link.click();
-    UI.toast('Imagem salva! ✅','success');
-  } catch(e) { UI.toast('Erro ao gerar imagem','error'); console.error(e); }
+  try{
+    const canvas=await html2canvas(el,{scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false});
+    const os=APP.os.find(o=>o.id===_compId);
+    canvas.toBlob(blob=>{
+      _downloadBlob(blob,'OS_'+(os?.numero||'comprovante')+'.png');
+      UI.toast('Imagem salva! \u2705','success');
+    },'image/png');
+  }catch(e){UI.toast('Erro ao gerar imagem','error');console.error(e);}
 }
 
 // ── Exportar dados do usuário ───────────────────────────────
