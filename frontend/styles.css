@@ -711,8 +711,13 @@ textarea { resize: vertical; min-height: 70px; }
 }
 
 @media print {
-  #auth-screen, #app-shell .sidebar, #header, #mobile-nav, #toast-container, .btn, nav, #fab { display: none !important; }
-  #compView { position: static; overflow: visible; padding: 0; }
+  /* Esconder tudo exceto o comprovante */
+  body > *:not(#compView) { display: none !important; }
+  #auth-screen, #app-shell, #toast-container, #fab { display: none !important; }
+  #compView { display: block !important; position: static !important; overflow: visible !important; padding: 0 !important; background: #fff !important; }
+  #compView > div:first-child { display: none !important; }
+  #compPaper { box-shadow: none !important; max-width: 100% !important; margin: 0 auto !important; }
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 }
 
 /* ── GOOGLE BUTTON ────────────────────────────────────────── */
