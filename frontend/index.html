@@ -1,19 +1,24 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<!-- CSP — Feature #8: Segurança contra XSS de terceiros -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://twxotfzlronfjfjyaklx.supabase.co; font-src 'self' https://fonts.gstatic.com;">
 <meta name="theme-color" content="#0a0f1e">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="NexOS">
-<title>NexOS v4.0</title>
+<!-- X-Frame-Options via meta para proteção extra -->
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<title>NexOS v5.0</title>
 <link rel="icon" type="image/png" href="NexOS.png">
 <link rel="apple-touch-icon" href="NexOS.png">
 <link rel="manifest" href="manifest.json">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=46">
+<link rel="stylesheet" href="styles.css?v=50">
+<!-- Libs externas -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -23,14 +28,14 @@
 </head>
 <body>
 
-<!-- ══ LOADING ════════════════════════════════════════════ -->
+<!-- ══ LOADING ═══════════════════════════════════════════════ -->
 <div id="loading-screen">
   <img src="NexOS.png" class="loading-logo" alt="NexOS" onerror="this.style.display='none'">
   <div class="loading-bar"><div class="loading-bar-fill"></div></div>
-  <div class="loading-text">CARREGANDO...</div>
+  <p class="loading-msg" style="font-family:monospace;font-size:11px;color:#444;margin-top:8px">Iniciando NexOS...</p>
 </div>
 
-<!-- ══ AUTH (igual v3.5) ═════════════════════════════════ -->
+<!-- ══ AUTH ══════════════════════════════════════════════════ -->
 <div id="auth-screen">
   <div class="auth-box">
 
@@ -39,7 +44,7 @@
       <div class="auth-logo">
         <img src="NexOS.png" alt="NexOS" onerror="this.style.display='none'">
         <div class="auth-logo-name">NexOS</div>
-        <div class="auth-logo-sub">Gestão inteligente</div>
+        <div class="auth-logo-sub">Gestão inteligente v5</div>
       </div>
       <h2 class="auth-title">Bem-vindo de volta</h2>
       <p class="auth-sub">Entre com sua conta para continuar</p>
@@ -57,8 +62,7 @@
         </div>
       </div>
       <button id="btn-login" class="btn btn-primary btn-lg w-full" onclick="Auth.login()" style="margin-bottom:14px">
-        <i data-lucide="log-in" style="width:15px;height:15px"></i>
-        Entrar
+        <i data-lucide="log-in" style="width:15px;height:15px"></i> Entrar
       </button>
       <div class="auth-divider"><span>ou</span></div>
       <button class="btn-google" onclick="Auth.loginGoogle()">
@@ -82,7 +86,7 @@
       <div class="auth-logo">
         <img src="NexOS.png" alt="NexOS" onerror="this.style.display='none'">
         <div class="auth-logo-name">NexOS</div>
-        <div class="auth-logo-sub">Gestão inteligente</div>
+        <div class="auth-logo-sub">Gestão inteligente v5</div>
       </div>
       <h2 class="auth-title">Criar Conta</h2>
       <p class="auth-sub">Cadastre sua empresa gratuitamente</p>
@@ -116,8 +120,8 @@
   </div>
 </div>
 
-<!-- ══ APP SHELL ══════════════════════════════════════════ -->
-<div id="app-shell">
+<!-- ══ APP SHELL ══════════════════════════════════════════════ -->
+<div id="app-shell" style="display:none">
 
   <!-- Sidebar Desktop -->
   <aside id="sidebar">
@@ -132,6 +136,9 @@
       <div class="nav-item" data-page="os" onclick="goPage('os')">
         <i data-lucide="clipboard-list" class="nav-icon"></i> Ordens de Serviço
       </div>
+      <div class="nav-item" data-page="orcamentos" onclick="goPage('orcamentos')">
+        <i data-lucide="file-text" class="nav-icon"></i> Orçamentos
+      </div>
       <div class="nav-item" data-page="clientes" onclick="goPage('clientes')">
         <i data-lucide="users" class="nav-icon"></i> Clientes
       </div>
@@ -144,12 +151,11 @@
       <div class="nav-item" data-page="agenda" onclick="goPage('agenda')">
         <i data-lucide="calendar" class="nav-icon"></i> Agenda
       </div>
-
+      <div class="nav-item" data-page="carnes" onclick="goPage('carnes')">
+        <i data-lucide="scroll" class="nav-icon"></i> Carnês
+      </div>
       <div class="nav-item" data-page="config" onclick="goPage('config')">
         <i data-lucide="settings" class="nav-icon"></i> Configurações
-      </div>
-      <div class="nav-item" data-page="plans" onclick="window.location.href='plans.html'">
-        <i data-lucide="credit-card" class="nav-icon"></i> Planos
       </div>
     </nav>
     <div class="sidebar-footer">
@@ -159,6 +165,7 @@
           <div class="sidebar-user-name" id="sidebar-name">NexOS</div>
           <div class="sidebar-user-role" id="sidebar-role">Proprietário</div>
         </div>
+        <i data-lucide="chevrons-up-down" style="width:14px;height:14px;color:var(--text-3);flex-shrink:0"></i>
       </div>
     </div>
   </aside>
@@ -166,20 +173,21 @@
   <!-- Main -->
   <div id="main-wrap">
     <header id="header">
-      <!-- Logo clicável (mobile) -->
-      <div id="header-logo" onclick="goPage('dashboard')" style="display:none;align-items:center;gap:8px;cursor:pointer;-webkit-tap-highlight-color:transparent">
+      <div id="header-logo" onclick="goPage('dashboard')" style="display:none;align-items:center;gap:8px;cursor:pointer">
         <img src="NexOS.png" alt="N" style="width:28px;height:28px;border-radius:7px;flex-shrink:0" onerror="this.style.display='none'">
         <span style="font-size:1rem;font-weight:800;letter-spacing:-.04em;background:var(--grad-logo);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">NexOS</span>
       </div>
-      <!-- Título desktop -->
       <div id="header-title">Dashboard</div>
-      <div class="header-search">
+
+      <!-- Busca Global — Feature #37 -->
+      <div class="header-search" onclick="abrirBuscaGlobal()">
         <i data-lucide="search" class="header-search-icon" style="width:14px;height:14px"></i>
-        <input type="search" placeholder="Buscar OS, cliente..." oninput="globalSearch(this.value)">
+        <input type="search" id="header-search-input" placeholder="Buscar OS, cliente, produto..." readonly style="cursor:pointer">
       </div>
+
       <div class="header-spacer"></div>
       <div class="header-actions">
-        <div class="header-btn" onclick="openQrReader()" title="Ler QR Code">
+        <div class="header-btn" onclick="openQrReader()" title="Ler QR (Alt+Q)">
           <i data-lucide="scan-line" style="width:16px;height:16px"></i>
         </div>
         <div class="header-avatar" id="header-avatar" onclick="toggleUserMenu()">N</div>
@@ -188,7 +196,7 @@
 
     <main id="page-content">
 
-      <!-- ══ DASHBOARD ══════════════════════════════════ -->
+      <!-- ══ DASHBOARD ══════════════════════════════════════ -->
       <div class="page active" id="page-dashboard">
         <div class="kpi-grid">
           <div class="kpi-card green">
@@ -215,16 +223,30 @@
             <div class="kpi-label">OS Abertas</div>
           </div>
         </div>
+
+        <!-- Feature #19 — Meta Mensal -->
+        <div id="meta-section" class="card" style="display:none;margin-bottom:12px">
+          <div class="card-title"><div class="ct-bar"></div>Meta do Mês</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:.78rem;color:var(--text-2)" id="meta-val">R$ 0 / R$ 0</span>
+            <span style="font-size:.78rem;font-weight:700;color:var(--accent)" id="meta-pct">0%</span>
+          </div>
+          <div style="background:var(--bg-2);border-radius:99px;height:8px;overflow:hidden">
+            <div id="meta-bar" style="background:var(--accent);height:100%;width:0%;border-radius:99px;transition:width .6s ease"></div>
+          </div>
+        </div>
+
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;background:var(--bg-1);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px 14px">
           <span style="font-size:.82rem;color:var(--text-2);display:flex;align-items:center;gap:6px">
-            <i data-lucide="alert-triangle" style="width:14px;height:14px;color:var(--orange)"></i>
-            Alertas
+            <i data-lucide="alert-triangle" style="width:14px;height:14px;color:var(--orange)"></i> Alertas
           </span>
           <span class="kpi-value" id="kpi-alertas" style="font-size:1.1rem;color:var(--green)">✓</span>
         </div>
+
         <div class="card">
           <div class="card-title"><div class="ct-bar"></div>OS Recentes</div>
           <div id="dash-os-list"></div>
+          <button class="btn btn-ghost btn-sm w-full" style="margin-top:8px" onclick="goPage('os')">Ver todas →</button>
         </div>
         <div class="card">
           <div class="card-title"><div class="ct-bar"></div>Agenda de Hoje</div>
@@ -232,7 +254,7 @@
         </div>
       </div>
 
-      <!-- ══ ORDENS DE SERVIÇO (LISTA) ══════════════════ -->
+      <!-- ══ ORDENS DE SERVIÇO ═══════════════════════════════ -->
       <div class="page" id="page-os">
         <div class="page-header">
           <div>
@@ -246,13 +268,14 @@
         <div class="toolbar">
           <div class="search-box">
             <i data-lucide="search" class="search-box-icon" style="width:14px;height:14px"></i>
-            <input type="search" id="os-search" placeholder="Buscar por cliente, equipamento, número..." oninput="renderOS()">
+            <input type="search" id="os-search" placeholder="Buscar cliente, equipamento, número..." oninput="renderOS()">
           </div>
         </div>
         <div class="filter-chips">
           <div class="chip on" onclick="setOsFilter('all',this)">Todas</div>
           <div class="chip" onclick="setOsFilter('aguardando',this)">Aguardando</div>
           <div class="chip" onclick="setOsFilter('andamento',this)">Em Andamento</div>
+          <div class="chip" onclick="setOsFilter('retirada',this)">Pronto</div>
           <div class="chip" onclick="setOsFilter('concluido',this)">Concluídas</div>
           <div class="chip" onclick="setOsFilter('fiado',this)">Fiado</div>
           <div class="chip" onclick="setOsFilter('cancelado',this)">Canceladas</div>
@@ -260,7 +283,7 @@
         <div id="os-list"></div>
       </div>
 
-      <!-- ══ NOVA OS (PÁGINA) ════════════════════════════ -->
+      <!-- ══ NOVA OS / ORÇAMENTO ════════════════════════════ -->
       <div class="page" id="page-nova-os">
         <div class="page-header">
           <div style="display:flex;align-items:center;gap:10px">
@@ -273,12 +296,14 @@
             <i data-lucide="save" style="width:14px;height:14px"></i> Salvar
           </button>
         </div>
+
+        <!-- Cliente -->
         <div class="card">
           <div class="card-title"><div class="ct-bar"></div>Cliente</div>
           <div class="form-group" style="position:relative">
             <label class="form-label">Buscar cliente cadastrado</label>
-            <input type="text" id="m-cli-search" class="form-control" placeholder="Digite o nome para buscar..." autocomplete="off" oninput="filtrarClienteOS(this.value)" onfocus="filtrarClienteOS(this.value)">
-            <div id="m-cli-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg-1);border:1px solid var(--border-md);border-radius:var(--radius-md);max-height:200px;overflow-y:auto;z-index:200;box-shadow:var(--shadow-lg)"></div>
+            <input type="text" id="m-cli-search" class="form-control" placeholder="Digite o nome..." autocomplete="off" oninput="filtrarClienteOS(this.value)" onfocus="filtrarClienteOS(this.value)">
+            <div id="m-cli-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg-1);border:1px solid var(--border-md);border-radius:var(--radius-md);max-height:220px;overflow-y:auto;z-index:200;box-shadow:var(--shadow-lg)"></div>
             <input type="hidden" id="m-cli-id">
           </div>
           <div class="form-group">
@@ -296,10 +321,12 @@
             </div>
           </div>
         </div>
+
+        <!-- Equipamento -->
         <div class="card">
-          <div class="card-title"><div class="ct-bar"></div>Equipamento</div>
+          <div class="card-title"><div class="ct-bar"></div>Equipamento / Item</div>
           <div class="form-group">
-            <label class="form-label">Equipamento / Produto <span style="color:var(--red)">*</span></label>
+            <label class="form-label">Equipamento / Produto</label>
             <input type="text" id="m-equip" class="form-control" placeholder="Ex: iPhone 13, Notebook Dell...">
           </div>
           <div class="form-group">
@@ -310,7 +337,26 @@
             <label class="form-label">Diagnóstico Técnico</label>
             <textarea id="m-diag" class="form-control" rows="2" placeholder="Diagnóstico após análise..."></textarea>
           </div>
+          <!-- Feature #22 — Checklist -->
+          <div class="form-row" style="align-items:flex-end">
+            <div class="form-group" style="flex:1">
+              <label class="form-label">Checklist</label>
+              <select id="m-checklist-sel" class="form-control">
+                <option value="">Sem checklist</option>
+              </select>
+            </div>
+            <button class="btn btn-ghost btn-sm" style="margin-bottom:1px;flex-shrink:0" onclick="aplicarChecklist()">
+              <i data-lucide="check-square" style="width:13px;height:13px"></i> Aplicar
+            </button>
+          </div>
+          <!-- Feature #25 — Garantia -->
+          <div class="form-group">
+            <label class="form-label">Garantia (dias)</label>
+            <input type="number" id="m-garantia-dias" class="form-control" placeholder="0 = sem garantia" min="0" style="width:160px">
+          </div>
         </div>
+
+        <!-- Itens -->
         <div class="card">
           <div class="card-title"><div class="ct-bar"></div>Itens / Peças</div>
           <div class="it-head"><span>Descrição</span><span>Qtd</span><span>R$</span><span></span></div>
@@ -328,29 +374,39 @@
               <i data-lucide="package" style="width:13px;height:13px"></i> Do Estoque
             </button>
           </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0 0;border-top:1px solid var(--border);margin-top:12px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-end;padding:12px 0 0;border-top:1px solid var(--border);margin-top:12px;gap:12px;flex-wrap:wrap">
             <div class="form-group" style="margin-bottom:0">
               <label class="form-label">Mão de Obra R$</label>
               <input type="number" id="m-mao-obra" class="form-control" value="0" step="0.01" style="width:130px;margin-bottom:0" oninput="recalcTotalOS()">
             </div>
+            <!-- Feature #11 — Desconto -->
+            <div class="form-group" style="margin-bottom:0">
+              <label class="form-label">Desconto %</label>
+              <input type="number" id="m-desconto" class="form-control" value="0" min="0" max="100" step="1" style="width:90px;margin-bottom:0" oninput="recalcTotalOS()">
+            </div>
             <div style="text-align:right">
+              <div style="font-size:.7rem;color:var(--red);min-height:16px" id="m-desconto-val"></div>
               <div class="it-total-label">TOTAL</div>
               <div class="it-total-val" id="m-total">R$ 0,00</div>
             </div>
           </div>
         </div>
+
+        <!-- Fotos — Feature #3: até 5MB com compressão -->
         <div class="card">
-          <div class="card-title"><div class="ct-bar"></div>Fotos</div>
+          <div class="card-title"><div class="ct-bar"></div>Fotos <span style="font-size:.7rem;color:var(--text-3);font-weight:400">(até 9 fotos · 5MB cada)</span></div>
           <div style="display:flex;gap:8px;margin-bottom:10px">
             <button class="btn btn-ghost btn-sm" style="flex:1" onclick="document.getElementById('fileInOS').click()">
-              <i data-lucide="camera" style="width:14px;height:14px"></i> Câmera / Foto
+              <i data-lucide="camera" style="width:14px;height:14px"></i> Câmera
             </button>
             <button class="btn btn-ghost btn-sm" style="flex:1" onclick="document.getElementById('fileInOSGallery').click()">
-              <i data-lucide="image" style="width:14px;height:14px"></i> Arquivo / Galeria
+              <i data-lucide="image" style="width:14px;height:14px"></i> Galeria
             </button>
           </div>
           <div class="photo-grid" id="m-photo-grid"></div>
         </div>
+
+        <!-- Pagamento -->
         <div class="card">
           <div class="card-title"><div class="ct-bar"></div>Pagamento</div>
           <div class="pay-chips" id="payChips">
@@ -358,10 +414,29 @@
             <div class="pchip" onclick="setPay('pix',this)">📱 PIX</div>
             <div class="pchip" onclick="setPay('credito',this)">💳 Crédito</div>
             <div class="pchip" onclick="setPay('debito',this)">💳 Débito</div>
+            <div class="pchip" onclick="setPay('transferencia',this)">🏦 Transfer.</div>
             <div class="pchip" onclick="setPay('fiado',this)">📝 Fiado</div>
             <div class="pchip" onclick="setPay('carne',this)">📜 Carnê</div>
             <div class="pchip" onclick="setPay('aguardando',this)">⏳ Aguardando</div>
           </div>
+
+          <!-- Feature #6 — QR Code PIX com valor real -->
+          <div id="pix-qr-section" style="display:none;margin:14px 0;padding:16px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius-md);text-align:center">
+            <div style="font-size:.8rem;font-weight:700;margin-bottom:10px;color:var(--text-2)">📱 QR Code PIX — valor real</div>
+            <div id="pix-qr-canvas" style="display:inline-block;background:#fff;padding:8px;border-radius:8px;margin-bottom:10px"></div>
+            <div style="font-size:.72rem;color:var(--text-3);margin-bottom:8px">Copia e Cola:</div>
+            <div style="display:flex;gap:6px">
+              <input id="pix-copia-cola" class="form-control" readonly style="font-size:10px;font-family:monospace;flex:1">
+              <button class="btn btn-ghost btn-sm" onclick="copiarPixCode()">
+                <i data-lucide="copy" style="width:13px;height:13px"></i>
+              </button>
+            </div>
+            <!-- Feature #7 — Confirmar pagamento muda status para Concluído -->
+            <button class="btn btn-primary btn-sm w-full" style="margin-top:10px" id="btn-confirmar-pix" onclick="alert('Salve a OS primeiro, depois confirme o PIX na tela de detalhes.')">
+              <i data-lucide="check-circle" style="width:13px;height:13px"></i> Confirmar Pagamento PIX
+            </button>
+          </div>
+
           <div id="carneConfig" style="display:none">
             <div style="background:var(--purple-dim);border:1px solid rgba(167,139,250,.2);border-radius:var(--radius-sm);padding:14px;margin-bottom:12px">
               <div class="form-row-3">
@@ -381,10 +456,12 @@
               <div id="carnePreview" style="font-family:var(--mono);font-size:11px;color:var(--text-2);margin-top:10px;line-height:1.8"></div>
             </div>
           </div>
+
           <div id="fiadoWarn" style="display:none;background:var(--red-dim);border:1px solid rgba(248,113,113,.2);border-radius:var(--radius-sm);padding:10px;font-size:12px;color:var(--red);margin-bottom:12px">
             <i data-lucide="alert-circle" style="width:13px;height:13px;vertical-align:middle"></i>
             Fiado: será registrado como conta a receber
           </div>
+
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Valor pago R$</label>
@@ -395,37 +472,44 @@
               <input type="number" id="m-troco" class="form-control" readonly style="color:var(--green)">
             </div>
           </div>
+
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Status</label>
               <select id="m-status" class="form-control">
-                <option value="paga">Paga / Concluída</option>
-                <option value="aberta">Em Aberto</option>
+                <option value="aguardando">Aguardando</option>
+                <option value="andamento">Em Andamento</option>
+                <option value="concluido">Concluído</option>
+                <option value="retirada">Pronto p/ Retirada</option>
                 <option value="fiado">Fiado</option>
-                <option value="parcial">Parcial / Carnê</option>
-                <option value="cancelada">Cancelada</option>
+                <option value="cancelado">Cancelado</option>
+                <option value="orcamento">Orçamento</option>
               </select>
             </div>
             <div class="form-group">
               <label class="form-label">Tipo</label>
               <select id="m-tipo" class="form-control">
                 <option value="servico">Serviço</option>
-                <option value="venda">Venda</option>
+                <option value="produto">Venda Produto</option>
+                <option value="misto">Serviço + Produto</option>
                 <option value="orcamento">Orçamento</option>
               </select>
             </div>
           </div>
+
           <div class="form-group">
             <label class="form-label">Data / Hora</label>
             <input type="datetime-local" id="m-data" class="form-control">
           </div>
         </div>
+
+        <!-- Observações -->
         <div class="card">
           <div class="card-title"><div class="ct-bar"></div>Observações</div>
-          <div class="form-group">
-            <textarea id="m-obs" class="form-control" rows="3" placeholder="Anotações, termos, garantia..."></textarea>
-          </div>
+          <textarea id="m-obs" class="form-control" rows="3" placeholder="Anotações, condições, observações..."></textarea>
         </div>
+
+        <!-- Assinatura -->
         <div class="card">
           <div class="card-title"><div class="ct-bar"></div>Assinatura Digital</div>
           <button class="btn btn-ghost w-full" onclick="abrirAssinatura()" style="margin-bottom:8px">
@@ -434,7 +518,8 @@
           </button>
           <canvas id="sigCanvas" style="display:none"></canvas>
         </div>
-        <!-- Botão Salvar fixo no final da página -->
+
+        <!-- Botão fixo -->
         <div style="position:sticky;bottom:0;left:0;right:0;background:var(--bg);border-top:1px solid var(--border);padding:12px 0;margin:0 -20px;padding-left:20px;padding-right:20px">
           <button class="btn btn-primary btn-lg w-full" onclick="salvarOS()">
             <i data-lucide="check-circle" style="width:16px;height:16px"></i> EMITIR ORDEM DE SERVIÇO
@@ -443,7 +528,7 @@
         <div style="height:80px"></div>
       </div>
 
-      <!-- ══ VER OS (PÁGINA) ════════════════════════════ -->
+      <!-- ══ VER OS ══════════════════════════════════════════ -->
       <div class="page" id="page-ver-os">
         <div class="page-header">
           <div style="display:flex;align-items:center;gap:10px">
@@ -455,16 +540,28 @@
               <div class="page-subtitle" id="ver-os-status">–</div>
             </div>
           </div>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-primary btn-sm" onclick="abrirComp(_verOsId)">
-              <i data-lucide="receipt" style="width:13px;height:13px"></i> Comprovante
-            </button>
-          </div>
+          <button class="btn btn-primary btn-sm" onclick="abrirComp(_verOsId)">
+            <i data-lucide="receipt" style="width:13px;height:13px"></i> Comprovante
+          </button>
         </div>
         <div id="ver-os-body"></div>
       </div>
 
-      <!-- ══ CLIENTES (LISTA) ═══════════════════════════ -->
+      <!-- ══ ORÇAMENTOS — Feature #13 ══════════════════════ -->
+      <div class="page" id="page-orcamentos">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Orçamentos</div>
+            <div class="page-subtitle">Aguardando aprovação do cliente</div>
+          </div>
+          <button class="btn btn-primary" onclick="novoOrcamento()">
+            <i data-lucide="plus" style="width:14px;height:14px"></i> Novo
+          </button>
+        </div>
+        <div id="orc-list"></div>
+      </div>
+
+      <!-- ══ CLIENTES ════════════════════════════════════════ -->
       <div class="page" id="page-clientes">
         <div class="page-header">
           <div class="page-title">Clientes</div>
@@ -481,7 +578,7 @@
         <div id="cli-list"></div>
       </div>
 
-      <!-- ══ VER CLIENTE (PÁGINA) ══════════════════════ -->
+      <!-- ══ VER CLIENTE ═════════════════════════════════════ -->
       <div class="page" id="page-ver-cliente">
         <div class="page-header">
           <div style="display:flex;align-items:center;gap:10px">
@@ -505,7 +602,7 @@
         <div id="vcli-body"></div>
       </div>
 
-      <!-- ══ NOVO/EDITAR CLIENTE (PÁGINA) ══════════════ -->
+      <!-- ══ NOVO/EDITAR CLIENTE ════════════════════════════ -->
       <div class="page" id="page-novo-cliente">
         <div class="page-header">
           <div style="display:flex;align-items:center;gap:10px">
@@ -542,10 +639,23 @@
             <label class="form-label">Endereço</label>
             <input type="text" id="form-cli-end" class="form-control" placeholder="Rua, número, bairro, cidade">
           </div>
+          <!-- Feature #28 — Aniversário -->
+          <div class="form-group">
+            <label class="form-label">🎂 Aniversário</label>
+            <input type="date" id="form-cli-aniv" class="form-control">
+          </div>
+          <!-- Feature #32 — Blacklist -->
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 0;border-top:1px solid var(--border);margin-top:4px">
+            <input type="checkbox" id="form-cli-blacklist" style="accent-color:var(--red);width:16px;height:16px">
+            <div>
+              <div style="font-size:.85rem;font-weight:600;color:var(--red)">⛔ Blacklist</div>
+              <div style="font-size:.75rem;color:var(--text-3)">Exibirá alerta ao criar nova OS para este cliente</div>
+            </div>
+          </label>
         </div>
       </div>
 
-      <!-- ══ ESTOQUE (LISTA) ════════════════════════════ -->
+      <!-- ══ ESTOQUE ════════════════════════════════════════ -->
       <div class="page" id="page-estoque">
         <div class="page-header">
           <div class="page-title">Estoque</div>
@@ -562,7 +672,7 @@
         <div id="est-list"></div>
       </div>
 
-      <!-- ══ NOVO/EDITAR PRODUTO (PÁGINA) ══════════════ -->
+      <!-- ══ NOVO/EDITAR PRODUTO ════════════════════════════ -->
       <div class="page" id="page-novo-produto">
         <div class="page-header">
           <div style="display:flex;align-items:center;gap:10px">
@@ -595,6 +705,16 @@
               <input type="number" id="form-prd-venda" class="form-control" step="0.01" placeholder="0,00" oninput="updMgPrd()">
             </div>
           </div>
+          <!-- Feature #17 — Precificação automática -->
+          <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:14px">
+            <div class="form-group" style="margin-bottom:0;flex:1">
+              <label class="form-label">Margem desejada %</label>
+              <input type="number" id="form-prd-margem-sug" class="form-control" placeholder="30" value="30" min="1" max="99">
+            </div>
+            <button class="btn btn-ghost btn-sm" style="flex-shrink:0;margin-bottom:1px" onclick="sugerirPreco()">
+              <i data-lucide="sparkles" style="width:13px;height:13px"></i> Sugerir preço
+            </button>
+          </div>
           <div id="mg-prev" style="font-family:var(--mono);font-size:11px;color:var(--blue);margin-bottom:14px"></div>
           <div class="form-row">
             <div class="form-group">
@@ -607,8 +727,12 @@
             </div>
           </div>
         </div>
+        <!-- Feature #20 — Histórico de preços -->
+        <button id="btn-hist-precos" class="btn btn-ghost btn-sm w-full" style="display:none;margin-bottom:12px">
+          <i data-lucide="trending-up" style="width:13px;height:13px"></i> Ver Histórico de Preços
+        </button>
         <div id="prd-resumo" style="display:none" class="card">
-          <div class="card-title"><div class="ct-bar"></div>Resumo</div>
+          <div class="card-title"><div class="ct-bar"></div>Resumo Atual</div>
           <div class="ir"><span class="irl">Venda</span><span class="irv" style="color:var(--green)" id="res-venda">–</span></div>
           <div class="ir"><span class="irl">Custo</span><span class="irv" id="res-custo">–</span></div>
           <div class="ir"><span class="irl">Margem</span><span class="irv" style="color:var(--blue)" id="res-mg">–</span></div>
@@ -616,10 +740,13 @@
         </div>
       </div>
 
-      <!-- ══ CAIXA ══════════════════════════════════════ -->
+      <!-- ══ CAIXA ═══════════════════════════════════════════ -->
       <div class="page" id="page-caixa">
         <div class="page-header">
           <div class="page-title">Caixa</div>
+          <button class="btn btn-ghost btn-sm" onclick="gerarRelatorioPDF()">
+            <i data-lucide="file-text" style="width:13px;height:13px"></i> Relatório
+          </button>
         </div>
         <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center">
           <input type="date" id="cx-date" class="form-control" style="flex:1" onchange="renderCaixa()">
@@ -644,18 +771,18 @@
         </div>
       </div>
 
-      <!-- ══ CARNÊS ══════════════════════════════════════ -->
+      <!-- ══ CARNÊS ══════════════════════════════════════════ -->
       <div class="page" id="page-carnes">
         <div class="page-header">
           <div class="page-title">Carnês</div>
           <button class="btn btn-ghost btn-sm" onclick="renderCarnes()">
-            <i data-lucide="refresh-cw" style="width:13px;height:13px"></i> Atualizar
+            <i data-lucide="refresh-cw" style="width:13px;height:13px"></i>
           </button>
         </div>
         <div id="carne-list"></div>
       </div>
 
-      <!-- ══ AGENDA ═════════════════════════════════════ -->
+      <!-- ══ AGENDA ══════════════════════════════════════════ -->
       <div class="page" id="page-agenda">
         <div class="page-header">
           <div class="page-title">Agenda</div>
@@ -670,7 +797,7 @@
         <div id="ag-list"></div>
       </div>
 
-      <!-- ══ NOVO/EDITAR EVENTO (PÁGINA) ═══════════════ -->
+      <!-- ══ NOVO/EDITAR EVENTO ══════════════════════════════ -->
       <div class="page" id="page-novo-evento">
         <div class="page-header">
           <div style="display:flex;align-items:center;gap:10px">
@@ -701,9 +828,7 @@
           </div>
           <div class="form-group">
             <label class="form-label">Cliente</label>
-            <select id="form-ev-cli" class="form-control">
-              <option value="">Sem cliente</option>
-            </select>
+            <select id="form-ev-cli" class="form-control"><option value="">Sem cliente</option></select>
           </div>
           <div class="form-group">
             <label class="form-label">Cor</label>
@@ -716,9 +841,26 @@
         </div>
       </div>
 
-      <!-- ══ CONFIGURAÇÕES ══════════════════════════════ -->
+      <!-- ══ CONFIGURAÇÕES ═══════════════════════════════════ -->
       <div class="page" id="page-config">
         <div class="page-title" style="margin-bottom:20px">Configurações</div>
+
+        <!-- Feature #4 — Upload de Logo -->
+        <div class="card">
+          <div class="card-title"><div class="ct-bar"></div>Logo / Foto da Loja</div>
+          <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px">
+            <img id="cfg-logo-preview" src="" alt="Logo" style="width:72px;height:72px;object-fit:contain;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-2)" onerror="this.style.display='none'">
+            <div>
+              <button class="btn btn-ghost btn-sm" onclick="document.getElementById('logoInput').click()">
+                <i data-lucide="upload" style="width:13px;height:13px"></i> Upload Logo
+              </button>
+              <div style="font-size:.72rem;color:var(--text-3);margin-top:4px">PNG, JPG ou WEBP · máx. 2MB</div>
+            </div>
+          </div>
+          <input type="file" id="logoInput" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="handleLogoUpload(event)">
+        </div>
+
+        <!-- Dados da empresa -->
         <div class="card">
           <div class="card-title"><div class="ct-bar"></div>Dados da Empresa</div>
           <div class="form-group">
@@ -735,24 +877,48 @@
               <input id="cfg-tel" type="tel" class="form-control">
             </div>
           </div>
-          <div class="form-group">
-            <label class="form-label">Endereço</label>
-            <input id="cfg-end" type="text" class="form-control">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Endereço</label>
+              <input id="cfg-end" type="text" class="form-control">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Cidade</label>
+              <input id="cfg-cidade" type="text" class="form-control" placeholder="Ex: São Paulo - SP">
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label">Chave PIX</label>
-            <input id="cfg-pix" type="text" class="form-control">
+            <input id="cfg-pix" type="text" class="form-control" placeholder="CPF, e-mail, telefone ou chave aleatória">
+          </div>
+          <!-- Feature #19 — Meta mensal -->
+          <div class="form-group">
+            <label class="form-label">🎯 Meta Mensal R$</label>
+            <input id="cfg-meta" type="number" class="form-control" placeholder="0,00" step="100">
           </div>
         </div>
+
+        <!-- Termos -->
         <div class="card">
           <div class="card-title"><div class="ct-bar"></div>Termos da Nota</div>
-          <div class="form-group">
-            <textarea id="cfg-termos" class="form-control" rows="4" placeholder="Termos e condições que aparecem no comprovante..."></textarea>
-          </div>
+          <textarea id="cfg-termos" class="form-control" rows="4" placeholder="Termos e condições que aparecem no comprovante..."></textarea>
         </div>
+
+        <!-- Template de comprovante — Feature #2 -->
+        <div class="card">
+          <div class="card-title"><div class="ct-bar"></div>Template de Comprovante</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-ghost btn-sm" onclick="setCompTemplate('classico')">📜 Clássico</button>
+            <button class="btn btn-ghost btn-sm" onclick="setCompTemplate('moderno')">✨ Moderno</button>
+            <button class="btn btn-ghost btn-sm" onclick="setCompTemplate('minimalista')">◻️ Minimalista</button>
+          </div>
+          <p style="font-size:.75rem;color:var(--text-3);margin-top:8px">Template atual: <b id="comp-template-atual">Clássico</b></p>
+        </div>
+
+        <!-- PIN -->
         <div class="card">
           <div class="card-title"><div class="ct-bar"></div>PIN de Segurança</div>
-          <p style="font-size:.82rem;color:var(--text-2);margin-bottom:14px">PIN de 4 dígitos para confirmar exclusão de movimentações do caixa.</p>
+          <p style="font-size:.82rem;color:var(--text-2);margin-bottom:14px">PIN de 4 dígitos para ações sensíveis.</p>
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Novo PIN</label>
@@ -767,34 +933,63 @@
             <i data-lucide="shield" style="width:13px;height:13px"></i> Salvar PIN
           </button>
         </div>
-        <div class="card">
-          <div class="card-title"><div class="ct-bar"></div>WhatsApp / Z-API (opcional)</div>
-          <p style="font-size:.82rem;color:var(--text-2);margin-bottom:14px">Configure para envio automático de cobranças de carnê.</p>
-          <div class="form-group">
-            <label class="form-label">Instance ID</label>
-            <input id="cfg-zapi-inst" type="text" class="form-control" placeholder="Ex: 3D123456789...">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Token</label>
-            <input id="cfg-zapi-tok" type="text" class="form-control" placeholder="Token da instância">
-          </div>
-        </div>
+
         <button class="btn btn-primary btn-lg w-full" onclick="salvarConfig()">
           <i data-lucide="save" style="width:14px;height:14px"></i> Salvar Configurações
         </button>
-        <button class="btn btn-ghost btn-sm w-full" style="margin-top:10px" onclick="Auth.logout()">
-          <i data-lucide="log-out" style="width:13px;height:13px"></i> Sair da conta
-        </button>
+
+        <!-- Dados e Privacidade -->
         <div class="card" style="margin-top:16px">
           <div class="card-title"><div class="ct-bar"></div>Dados e Privacidade</div>
           <button class="btn btn-secondary w-full" style="margin-bottom:10px" onclick="exportarDados()">
-            <i data-lucide="download" style="width:14px;height:14px"></i> Exportar Meus Dados (JSON)
+            <i data-lucide="download" style="width:14px;height:14px"></i> Backup Completo (JSON)
+          </button>
+          <button class="btn btn-ghost w-full" style="margin-bottom:10px" onclick="gerarRelatorioPDF()">
+            <i data-lucide="file-text" style="width:14px;height:14px"></i> Relatório Mensal PDF
+          </button>
+          <button class="btn btn-ghost w-full" style="margin-bottom:10px" onclick="goPage('auditoria')">
+            <i data-lucide="clipboard-list" style="width:14px;height:14px"></i> Log de Auditoria
           </button>
           <button class="btn btn-danger w-full" onclick="excluirContaPermanente()">
             <i data-lucide="trash-2" style="width:14px;height:14px"></i> Excluir Conta Permanentemente
           </button>
           <p style="font-size:.72rem;color:var(--text-3);margin-top:8px;line-height:1.5">A exclusão é irreversível. Todos os dados serão apagados permanentemente após confirmação com sua senha.</p>
         </div>
+
+        <button class="btn btn-ghost btn-sm w-full" style="margin-top:10px" onclick="Auth.logout()">
+          <i data-lucide="log-out" style="width:13px;height:13px"></i> Sair da conta
+        </button>
+
+        <!-- Atalhos de teclado — Feature #34 -->
+        <div class="card" style="margin-top:16px">
+          <div class="card-title"><div class="ct-bar"></div>⌨️ Atalhos de Teclado</div>
+          <div style="font-size:.78rem;color:var(--text-2);line-height:2;font-family:var(--mono)">
+            <div><kbd style="background:var(--bg-2);border:1px solid var(--border);border-radius:4px;padding:1px 6px">N</kbd> Nova OS</div>
+            <div><kbd style="background:var(--bg-2);border:1px solid var(--border);border-radius:4px;padding:1px 6px">D</kbd> Dashboard</div>
+            <div><kbd style="background:var(--bg-2);border:1px solid var(--border);border-radius:4px;padding:1px 6px">C</kbd> Clientes</div>
+            <div><kbd style="background:var(--bg-2);border:1px solid var(--border);border-radius:4px;padding:1px 6px">E</kbd> Estoque</div>
+            <div><kbd style="background:var(--bg-2);border:1px solid var(--border);border-radius:4px;padding:1px 6px">X</kbd> Caixa</div>
+            <div><kbd style="background:var(--bg-2);border:1px solid var(--border);border-radius:4px;padding:1px 6px">A</kbd> Agenda</div>
+            <div><kbd style="background:var(--bg-2);border:1px solid var(--border);border-radius:4px;padding:1px 6px">/</kbd> Busca global</div>
+            <div><kbd style="background:var(--bg-2);border:1px solid var(--border);border-radius:4px;padding:1px 6px">Esc</kbd> Fechar modal</div>
+          </div>
+        </div>
+
+        <div style="height:40px"></div>
+      </div>
+
+      <!-- ══ LOG DE AUDITORIA — Feature #39 ════════════════ -->
+      <div class="page" id="page-auditoria">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Log de Auditoria</div>
+            <div class="page-subtitle">Todas as ações registradas</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="renderAuditoria()">
+            <i data-lucide="refresh-cw" style="width:13px;height:13px"></i>
+          </button>
+        </div>
+        <div id="audit-list"></div>
       </div>
 
     </main>
@@ -831,71 +1026,125 @@
   <i data-lucide="plus" style="width:22px;height:22px"></i>
 </button>
 
-<!-- Comprovante full screen -->
+<!-- ══ COMPROVANTE FULLSCREEN ═════════════════════════════════ -->
 <div id="compView">
   <div style="display:flex;gap:8px;flex-wrap:wrap;padding:16px 16px 0;max-width:500px;margin:0 auto">
-    <button class="btn btn-ghost btn-sm" onclick="fecharComp()" style="width:auto">
+    <button class="btn btn-ghost btn-sm" onclick="fecharComp()">
       <i data-lucide="arrow-left" style="width:13px;height:13px"></i> Voltar
     </button>
-    <button class="btn btn-secondary btn-sm" onclick="window.print()" style="width:auto">
+    <!-- Feature #2 — Templates -->
+    <select class="form-control" style="width:auto;font-size:.78rem;padding:4px 8px" onchange="setCompTemplate(this.value)">
+      <option value="classico">📜 Clássico</option>
+      <option value="moderno">✨ Moderno</option>
+      <option value="minimalista">◻️ Minimalista</option>
+    </select>
+    <button class="btn btn-secondary btn-sm" onclick="window.print()">
       <i data-lucide="printer" style="width:13px;height:13px"></i> Imprimir
     </button>
-    <button class="btn btn-primary btn-sm" onclick="gerarPDF(_compId)" style="width:auto">
+    <button class="btn btn-primary btn-sm" onclick="gerarPDF(_compId)">
       <i data-lucide="file-text" style="width:13px;height:13px"></i> PDF
     </button>
-    <button class="btn btn-ghost btn-sm" onclick="compartilharComp()" style="width:auto">
+    <button class="btn btn-ghost btn-sm" onclick="compartilharComp()">
       <i data-lucide="share-2" style="width:13px;height:13px"></i> Compartilhar
     </button>
-    <button class="btn btn-green btn-sm" onclick="enviarWA(_compId)" style="width:auto">
+    <button class="btn btn-ghost btn-sm" style="background:#25D366;border-color:#25D366;color:#fff" onclick="enviarWA(_compId)">
       <i data-lucide="message-circle" style="width:13px;height:13px"></i> WhatsApp
     </button>
-    <button class="btn btn-secondary btn-sm" onclick="salvarComoImagem()" style="width:auto">
-      <i data-lucide="image" style="width:13px;height:13px"></i> Salvar Imagem
+    <!-- Feature #36 — Impressão térmica -->
+    <button class="btn btn-secondary btn-sm" onclick="imprimirTermico(_compId)">
+      <i data-lucide="printer" style="width:13px;height:13px"></i> 58mm
+    </button>
+    <button class="btn btn-secondary btn-sm" onclick="salvarComoImagem()">
+      <i data-lucide="image" style="width:13px;height:13px"></i> Imagem
     </button>
   </div>
   <div id="compContent" style="padding:14px"></div>
 </div>
 
-<!-- QR Reader -->
+<!-- ══ BUSCA GLOBAL — Feature #37 ════════════════════════════ -->
+<div id="global-search-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);z-index:800;display:none;flex-direction:column;padding:20px">
+  <div style="max-width:560px;width:100%;margin:0 auto">
+    <div style="display:flex;gap:10px;margin-bottom:12px">
+      <div style="flex:1;position:relative">
+        <i data-lucide="search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--text-3)"></i>
+        <input type="search" id="global-search-input" class="form-control" placeholder="Buscar OS, cliente, produto..." style="padding-left:38px;font-size:.95rem" oninput="globalSearch(this.value)" autocomplete="off">
+      </div>
+      <button class="btn btn-ghost" onclick="fecharBuscaGlobal()">
+        <i data-lucide="x" style="width:18px;height:18px"></i>
+      </button>
+    </div>
+    <div id="global-search-results" style="background:var(--bg-1);border:1px solid var(--border-md);border-radius:var(--radius-lg);overflow:hidden;max-height:60vh;overflow-y:auto"></div>
+    <div style="margin-top:10px;font-size:.72rem;color:var(--text-3);text-align:center">
+      Pressione <kbd style="background:var(--bg-2);border:1px solid var(--border);border-radius:4px;padding:1px 6px">Esc</kbd> para fechar
+    </div>
+  </div>
+</div>
+
+<!-- ══ ASSINATURA FULLSCREEN ══════════════════════════════════ -->
+<div id="sig-fullscreen" style="display:none;position:fixed;inset:0;background:#fff;z-index:900;flex-direction:column">
+  <div style="padding:12px 16px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;background:#f8fafc">
+    <div style="font-weight:700;color:#111;font-size:.9rem">✍️ Assinatura do Cliente</div>
+    <div style="display:flex;gap:8px">
+      <button onclick="limparSigFS()" style="background:none;border:1px solid #e5e7eb;border-radius:8px;padding:6px 12px;font-size:.8rem;cursor:pointer;color:#666">Limpar</button>
+      <button onclick="fecharAssinatura()" style="background:none;border:1px solid #e5e7eb;border-radius:8px;padding:6px 12px;font-size:.8rem;cursor:pointer;color:#666">Cancelar</button>
+      <button onclick="confirmarAssinatura()" style="background:#38BDF8;border:none;border-radius:8px;padding:6px 14px;font-size:.8rem;cursor:pointer;color:#fff;font-weight:700">✅ Confirmar</button>
+    </div>
+  </div>
+  <div style="padding:8px 16px;font-size:.75rem;color:#999;text-align:center">Assine no espaço abaixo</div>
+  <canvas id="sigCanvasFS" style="flex:1;width:100%;touch-action:none;cursor:crosshair;border-top:2px dashed #e5e7eb"></canvas>
+</div>
+
+<!-- ══ QR READER ══════════════════════════════════════════════ -->
 <div id="qrReaderWrap">
   <video id="qrVideo" autoplay playsinline muted></video>
   <p style="color:#fff;font-family:var(--mono);font-size:12px">Aponte para o QR Code da OS</p>
   <button class="btn btn-ghost btn-sm" onclick="closeQrReader()" style="color:#fff;border-color:#fff;width:auto">Cancelar</button>
 </div>
 
+<!-- ══ MODAL GENÉRICO ════════════════════════════════════════ -->
+<div id="mwrap" class="modal-wrap" onclick="if(event.target===this)closeModal()">
+  <div class="modal-box">
+    <div id="mbody"></div>
+  </div>
+</div>
+
+<!-- Inputs de arquivo -->
 <input type="file" id="fileInOS" accept="image/*" multiple capture="environment" style="display:none" onchange="handlePhotos(event)">
-<input type="file" id="fileInOSGallery" accept="image/*,application/pdf" multiple style="display:none" onchange="handlePhotos(event)">
+<input type="file" id="fileInOSGallery" accept="image/*" multiple style="display:none" onchange="handlePhotos(event)">
+
+<!-- Toast -->
 <div id="toast-container"></div>
 
+<!-- Scripts na ordem correta -->
+<script src="core/api.js?v=50"></script>
+<script src="core/auth.js?v=50"></script>
+<script src="core/app.js?v=50"></script>
 
-<script src="api.js?v=46"></script>
-<script src="auth.js?v=46"></script>
-<script src="app.js?v=46"></script>
-<script src="nexos_plan_control.js?v=46"></script>
-<script src="nexos_gateway.js?v=46"></script>
 <script>
-function globalSearch(q) {
-  if(!q||q.length<2)return;
-  if(APP._page==='os'||APP._page==='dashboard'){APP.osSearch=(q||'').toLowerCase();renderOS&&renderOS();}
-  else if(APP._page==='clientes'){const el=document.getElementById('cli-search');if(el){el.value=q;renderClientes&&renderClientes();}}
-  else if(APP._page==='estoque'){const el=document.getElementById('est-search');if(el){el.value=q;renderEstoque&&renderEstoque();}}
-}
-document.addEventListener('DOMContentLoaded',()=>{
-  const cx=document.getElementById('cx-date');if(cx)cx.value=today();
-  const ag=document.getElementById('ag-date');if(ag)ag.value=today();
-  // data/hora para nova OS
-  const md=document.getElementById('m-data');
-  if(md){const n=new Date();md.value=n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0')+'T'+String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');}
-  // ── Service Worker: registro com auto-update ──────────────
+document.addEventListener('DOMContentLoaded', () => {
+  // Datas padrão
+  const cx = document.getElementById('cx-date'); if (cx) cx.value = today();
+  const ag = document.getElementById('ag-date'); if (ag) ag.value = today();
+
+  // Fechar busca global com Esc
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      fecharBuscaGlobal();
+      closeModal();
+    }
+  });
+
+  // Fechar busca ao clicar fora
+  document.getElementById('global-search-overlay')?.addEventListener('click', e => {
+    if (e.target === e.currentTarget) fecharBuscaGlobal();
+  });
+
+  // Service Worker com auto-update
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').then(reg => {
-      // Verifica update a cada 60 segundos enquanto a aba está aberta
       setInterval(() => reg.update(), 60_000);
-
-      // Quando novo SW está esperando → recarrega silenciosamente
       reg.addEventListener('updatefound', () => {
-        const sw = reg.installing;
-        if (!sw) return;
+        const sw = reg.installing; if (!sw) return;
         sw.addEventListener('statechange', () => {
           if (sw.state === 'installed' && navigator.serviceWorker.controller) {
             sw.postMessage('SKIP_WAITING');
@@ -903,12 +1152,55 @@ document.addEventListener('DOMContentLoaded',()=>{
         });
       });
     }).catch(() => {});
-
-    // Recarrega quando o SW novo assumir o controle
     let refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (!refreshing) { refreshing = true; location.reload(); }
     });
+  }
+
+  // QR reader helper (movido do app.js original)
+  let _qrStream = null;
+  window.openQrReader = function() {
+    const w = document.getElementById('qrReaderWrap'); if (!w) return;
+    w.classList.add('open');
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      .then(stream => { _qrStream = stream; document.getElementById('qrVideo').srcObject = stream; _scanQR(); })
+      .catch(() => { UI.toast('Sem acesso à câmera', 'error'); closeQrReader(); });
+  };
+  window.closeQrReader = function() {
+    if (_qrStream) { _qrStream.getTracks().forEach(t => t.stop()); _qrStream = null; }
+    document.getElementById('qrReaderWrap')?.classList.remove('open');
+  };
+  function _scanQR() {
+    const video = document.getElementById('qrVideo');
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    function scan() {
+      if (!_qrStream) return;
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0);
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        if (window.jsQR) {
+          const code = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'dontInvert' });
+          if (code) {
+            closeQrReader();
+            const mo = code.data.match(/OS:#(\d+)/);
+            if (mo) {
+              const num = parseInt(mo[1]);
+              const os  = APP.os.find(o => o.numero === num);
+              if (os) { UI.toast('OS #' + num + ' encontrada!', 'success'); verOS(os.id); }
+              else UI.toast('OS #' + num + ' não encontrada', 'warning');
+            } else {
+              UI.toast('QR: ' + code.data.slice(0, 40), 'info');
+            }
+            return;
+          }
+        }
+      }
+      requestAnimationFrame(scan);
+    }
+    requestAnimationFrame(scan);
   }
 });
 </script>
