@@ -16,9 +16,9 @@ const CACHE_FONT   = CACHE_VER + '-fonts';
 const PRECACHE = [
   './index.html',
   './styles.css',
-  './core/api.js',
-  './core/auth.js',
-  './core/app.js',
+  './api.js',
+  './auth.js',
+  './app.js',
   './manifest.json',
   './NexOS.png',
 ];
