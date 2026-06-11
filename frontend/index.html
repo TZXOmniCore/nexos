@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <!-- CSP — Feature #8: Segurança contra XSS de terceiros -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://twxotfzlronfjfjyaklx.supabase.co; font-src 'self' https://fonts.gstatic.com;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://twxotfzlronfjfjyaklx.supabase.co https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com; font-src 'self' https://fonts.gstatic.com;">
 <meta name="theme-color" content="#0a0f1e">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -25,6 +25,10 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<!-- App Scripts — carregados no head para today() estar disponível -->
+<script src="api.js?v=50"></script>
+<script src="auth.js?v=50"></script>
+<script src="app.js?v=50"></script>
 </head>
 <body>
 
@@ -1115,16 +1119,13 @@
 <!-- Toast -->
 <div id="toast-container"></div>
 
-<!-- Scripts na ordem correta -->
-<script src="core/api.js?v=50"></script>
-<script src="core/auth.js?v=50"></script>
-<script src="core/app.js?v=50"></script>
+<!-- Scripts movidos para o <head> -->
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
   // Datas padrão
-  const cx = document.getElementById('cx-date'); if (cx) cx.value = today();
-  const ag = document.getElementById('ag-date'); if (ag) ag.value = today();
+  const cx = document.getElementById('cx-date'); if (cx) cx.value = (typeof today === 'function' ? today() : new Date().toISOString().split('T')[0]);
+  const ag = document.getElementById('ag-date'); if (ag) ag.value = (typeof today === 'function' ? today() : new Date().toISOString().split('T')[0]);
 
   // Fechar busca global com Esc
   document.addEventListener('keydown', e => {
