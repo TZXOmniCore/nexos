@@ -222,10 +222,9 @@ const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 window.sb = supabase.createClient(SB_URL, SB_KEY, {
   auth: {
-    persistSession:    true,
-    autoRefreshToken:  true,
-    storageKey:        'nexos_v5_auth',
-    flowType:          'pkce',
+    persistSession:     true,
+    autoRefreshToken:   true,
+    storageKey:         'nexos_v5_auth',
     detectSessionInUrl: true,
   },
 });
