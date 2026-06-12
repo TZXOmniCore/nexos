@@ -1141,7 +1141,7 @@ async function gerarRelatorioPDF() {
   try {
     const [os, caixa] = await Promise.all([
       API.getOS(STATE.user.id),
-      API.getCaixa(STATE.user.id, mes + '-01', mes + '-31'),
+      API.getCaixa(STATE.user.id, mes + '-01', new Date(+mes.split('-')[0], +mes.split('-')[1], 0).toISOString().slice(0,10)),
     ]);
     const osMes  = os.filter(o => (o.criado_em || '').startsWith(mes));
     const ent    = caixa.filter(c => c.tipo === 'entrada').reduce((a, c) => a + (c.valor || 0), 0);
