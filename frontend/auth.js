@@ -215,12 +215,17 @@ const Auth = {
 
   async loginGoogle() {
     try {
+      // redirectTo deve ser exatamente a URL cadastrada no Google Console e no Supabase
+      const redirectTo = location.origin + location.pathname;
       const { error } = await window.sb.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: location.origin + location.pathname },
+        options: {
+          redirectTo,
+          queryParams: { access_type: 'offline', prompt: 'select_account' },
+        },
       });
-      if (error) UI.toast('Erro ao entrar com Google', 'error');
-    } catch {
+      if (error) UI.toast('Erro ao entrar com Google: ' + error.message, 'error');
+    } catch(e) {
       UI.toast('Erro ao entrar com Google', 'error');
     }
   },
@@ -344,17 +349,34 @@ document.addEventListener('DOMContentLoaded', async () => {
   _showLoading('Iniciando NexOS...');
 
   try {
-    const { data: { session } } = await window.sb.auth.getSession();
-    if (session?.user) await Auth.loadUser(session.user);
-    else _showAuth();
-  } catch {
+    // Processar hash OAuth (Google redirect) antes de qualquer outra coisa
+    if (location.hash && location.hash.includes('access_token')) {
+      // Supabase processa automaticamente via detectSessionInUrl: true
+      // Aguarda um tick para o SDK processar
+      await new Promise(r => setTimeout(r, 300));
+    }
+
+    const { data: { session }, error } = await window.sb.auth.getSession();
+    if (session?.user) {
+      await Auth.loadUser(session.user);
+    } else {
+      _showAuth();
+    }
+  } catch(e) {
+    console.error('[NexOS] getSession error:', e);
     _showAuth();
   }
 
   window.sb.auth.onAuthStateChange(async (ev, session) => {
-    if (ev === 'SIGNED_IN'      && session?.user && !STATE.user) await Auth.loadUser(session.user);
-    else if (ev === 'TOKEN_REFRESHED' && session?.user)          STATE.user = session.user;
-    else if (ev === 'SIGNED_OUT') { STATE.user = STATE.perfil = null; _showAuth(); }
+    console.log('[NexOS Auth]', ev, session?.user?.email);
+    if ((ev === 'SIGNED_IN' || ev === 'INITIAL_SESSION') && session?.user) {
+      if (!STATE.user) await Auth.loadUser(session.user);
+    } else if (ev === 'TOKEN_REFRESHED' && session?.user) {
+      STATE.user = session.user;
+    } else if (ev === 'SIGNED_OUT') {
+      STATE.user = STATE.perfil = null;
+      _showAuth();
+    }
   });
 
   // Atalhos de teclado globais — Feature #34
