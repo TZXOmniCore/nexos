@@ -1,8 +1,8 @@
 /* ============================================================
-   NexOS v5.0 — core/auth.js
-   Auth, PIN, Sessões, Rate Limit, 2FA preparado
-   Novo: tema/acento persistido, aniversariantes ao login,
-         sessões ativas (visual), logout protegido por PIN
+   NexOS v5.1 — core/auth.js
+   Auth, Sessões, Rate Limit, 2FA preparado
+   tema/acento persistido, aniversariantes ao login,
+   sessões ativas (visual)
    ============================================================ */
 'use strict';
 
@@ -100,87 +100,6 @@ function setAcento(a) {
   localStorage.setItem('nexos_acento', a);
   aplicarTema();
   UI.toast('Tema atualizado!', 'success');
-}
-
-// ══════════════════════════════════════════════════════════════
-// PIN — SHA-256 + salt = user_id (WebCrypto)
-// ══════════════════════════════════════════════════════════════
-async function _pinHash(pin) {
-  const uid  = STATE.user?.id || '';
-  const data = new TextEncoder().encode(uid + ':nexos_v5:' + pin);
-  const buf  = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-async function verifyPIN(pin) {
-  const stored = STATE.perfil?.pin_hash;
-  if (!stored) return false;
-  const newHash = await _pinHash(pin);
-  if (stored === newHash) return true;
-  // Migração legado (btoa simples)
-  if (stored.length < 20 && stored === btoa(pin)) {
-    try {
-      const updated = await API.upsertPerfil(STATE.user.id, { pin_hash: newHash });
-      if (updated) STATE.perfil = updated;
-    } catch {}
-    return true;
-  }
-  return false;
-}
-
-async function showPINModal(onSuccess, titulo = 'Confirmar PIN') {
-  const id = 'pm_' + Date.now();
-  const el = document.createElement('div');
-  el.id    = id;
-  el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.92);backdrop-filter:blur(8px);z-index:900;display:flex;align-items:center;justify-content:center;padding:20px';
-  el.innerHTML = `
-  <div style="background:var(--bg-1);border:1px solid var(--border-md);border-radius:var(--radius-xl);padding:32px 28px;width:100%;max-width:340px;text-align:center">
-    <div style="font-size:2rem;margin-bottom:8px">🔐</div>
-    <h3 style="font-weight:700;margin-bottom:6px">${titulo}</h3>
-    <p style="font-size:.82rem;color:var(--text-2);margin-bottom:20px">Digite seu PIN de 4 dígitos</p>
-    <div style="display:flex;gap:12px;justify-content:center;margin-bottom:14px" id="${id}-pins">
-      <input class="pin-input" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]" autocomplete="off">
-      <input class="pin-input" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]" autocomplete="off">
-      <input class="pin-input" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]" autocomplete="off">
-      <input class="pin-input" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]" autocomplete="off">
-    </div>
-    <div id="${id}-err" style="color:var(--red);font-size:.8rem;min-height:18px;margin-bottom:12px"></div>
-    <div style="display:flex;gap:8px;justify-content:center">
-      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('${id}').remove()">Cancelar</button>
-      <button class="btn btn-primary btn-sm" id="${id}-ok">Confirmar</button>
-    </div>
-  </div>`;
-  document.body.appendChild(el);
-
-  const inputs = el.querySelectorAll('.pin-input');
-  inputs.forEach((inp, i) => {
-    inp.addEventListener('input', () => {
-      inp.value = inp.value.replace(/\D/g, '').slice(0, 1);
-      if (inp.value && i < inputs.length - 1) inputs[i + 1].focus();
-    });
-    inp.addEventListener('keydown', e => {
-      if (e.key === 'Backspace' && !inp.value && i > 0) inputs[i - 1].focus();
-      if (e.key === 'Enter') document.getElementById(id + '-ok').click();
-    });
-  });
-  inputs[0].focus();
-
-  document.getElementById(id + '-ok').onclick = async () => {
-    const pin = Array.from(inputs).map(i => i.value).join('');
-    if (pin.length < 4) { document.getElementById(id + '-err').textContent = 'Digite os 4 dígitos'; return; }
-    if (RL.locked('pin')) {
-      document.getElementById(id + '-err').textContent = `Bloqueado por ${RL.mins('pin')} min`;
-      return;
-    }
-    const ok = await verifyPIN(pin);
-    if (ok) { RL.reset('pin'); el.remove(); onSuccess(); }
-    else {
-      RL.fail('pin');
-      document.getElementById(id + '-err').textContent = 'PIN incorreto';
-      inputs.forEach(i => i.value = '');
-      inputs[0].focus();
-    }
-  };
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -487,8 +406,6 @@ function toggleUserMenu() {
 // Expor globais necessários
 window.Auth         = Auth;
 window.RL           = RL;
-window.showPINModal = showPINModal;
-window.verifyPIN    = verifyPIN;
 window.setTema      = setTema;
 window.setAcento    = setAcento;
 window.aplicarTema  = aplicarTema;
