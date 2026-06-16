@@ -1,13 +1,15 @@
 /* ============================================================
-   NexOS v5.0 — core/app.js
+   NexOS v5.1 — core/app.js
    Features: desconto OS (#11), blacklist (#32), garantia (#25),
-   checklist (#22), meta mensal (#19), histórico preços (#20),
+   meta mensal (#19), histórico preços (#20),
    aniversário (#28), precificação automática (#17),
    pesquisa global aprimorada (#37), orçamento (#13),
    PIX QR Code (#6), comprovante automático (#7),
    impressão térmica (#36), relatório PDF (#10),
    notificação push OS vencida (#9), log auditoria (#39),
    backup (#40)
+   v5.1: dashboard vendas x mão de obra, carnês dentro do Caixa,
+   remoção de checklist e PIN não usados
    ============================================================ */
 'use strict';
 
@@ -36,7 +38,7 @@ const calcMargem = (c, v) => v > 0 ? (((v - c) / v) * 100).toFixed(0) : 0;
 const PAGE_TITLES = {
   dashboard:'Dashboard', os:'Ordens de Serviço', clientes:'Clientes',
   estoque:'Estoque', caixa:'Caixa', agenda:'Agenda', config:'Configurações',
-  carnes:'Carnês', orcamentos:'Orçamentos', auditoria:'Log de Auditoria',
+  orcamentos:'Orçamentos', auditoria:'Log de Auditoria',
   'nova-os':'Nova OS', 'ver-os':'OS', 'novo-cliente':'Novo Cliente',
   'ver-cliente':'Cliente', 'novo-produto':'Novo Produto', 'novo-evento':'Novo Evento',
   'novo-orcamento':'Novo Orçamento',
@@ -73,7 +75,7 @@ function goPage(page, opts = {}) {
   const renderers = {
     dashboard: renderDash, os: renderOS, clientes: renderClientes,
     estoque: renderEstoque, caixa: renderCaixa, agenda: renderAgenda,
-    config: renderConfig, carnes: renderCarnes, orcamentos: renderOrcamentos,
+    config: renderConfig, orcamentos: renderOrcamentos,
     auditoria: renderAuditoria,
   };
   if (renderers[page]) renderers[page]();
@@ -120,7 +122,8 @@ const App = {
     setTimeout(pushOSPendentes, 12000);
 
     const last = localStorage.getItem('nexos_v5_page') || 'dashboard';
-    goPage(SECONDARY_PAGES.includes(last) ? 'dashboard' : last);
+    const lastValido = !SECONDARY_PAGES.includes(last) && document.getElementById('page-' + last);
+    goPage(lastValido ? last : 'dashboard');
     if (window.lucide) lucide.createIcons();
   },
 
@@ -201,6 +204,10 @@ async function renderDash() {
     const kf = document.getElementById('kpi-fat');   if (kf) kf.textContent = fmt(d.faturamento);
     const kl = document.getElementById('kpi-lucro'); if (kl) kl.textContent = fmt(d.lucro);
     const ko = document.getElementById('kpi-os');    if (ko) ko.textContent = d.os_abertas;
+
+    // v5.1 — Vendas x Mão de Obra
+    const kv = document.getElementById('kpi-vendas');   if (kv) kv.textContent = fmt(d.vendas_pecas   || 0);
+    const km = document.getElementById('kpi-maoobra');  if (km) km.textContent = fmt(d.vendas_mao_obra || 0);
 
     const ka = document.getElementById('kpi-alertas');
     if (ka) {
@@ -342,67 +349,285 @@ async function comprimirFoto(file, maxKB = 800) {
   });
 }
 
-function novaOS(isOrcamento = false) {
-  _newItens = []; _newFotos = []; _curPay = '';
+// v5.1 — estado de edição e pagamento múltiplo
+let _editOsId   = null;   // null = novo, id = editando
+let _editOriginalItens = []; // cópia dos itens ANTES da edição, p/ reconciliar estoque
+let _editOriginalAssinatura = null; // assinatura já salva, p/ não apagar se o usuário não redesenhar
+let _multiPays  = [];     // [{ forma:'pix', valor:0 }, ...]
 
-  // Limpar campos
+function novaOS(isOrcamento = false) {
+  _editOsId  = null;
+  _editOriginalItens = [];
+  _editOriginalAssinatura = null;
+  _newItens  = []; _newFotos = [];
+  _multiPays = [];
+
   const campos = ['m-cli-search','m-cli-nome','m-cli-tel','m-cli-doc','m-equip','m-defeito',
-                   'm-diag','m-obs','m-pago','m-troco','m-desconto','m-garantia-dias'];
+                   'm-diag','m-obs','m-garantia-dias'];
   campos.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   ['m-mao-obra'].forEach(id => { const el = document.getElementById(id); if (el) el.value = '0'; });
+  ['m-desconto'].forEach(id => { const el = document.getElementById(id); if (el) el.value = '0'; });
 
   const mid = document.getElementById('m-cli-id'); if (mid) mid.value = '';
   const dd  = document.getElementById('m-cli-dropdown'); if (dd) dd.style.display = 'none';
 
   document.getElementById('m-status').value = isOrcamento ? 'orcamento' : 'aguardando';
-  document.getElementById('m-tipo').value   = 'servico';
+  document.getElementById('m-tipo').value   = isOrcamento ? 'orcamento' : 'servico';
 
   document.querySelectorAll('.pchip').forEach(c => c.className = 'pchip');
-  _curPay = isOrcamento ? 'aguardando' : '';
-
   document.getElementById('carneConfig').style.display = 'none';
   document.getElementById('fiadoWarn').style.display   = 'none';
+  document.getElementById('pix-qr-section').style.display = 'none';
 
   const box = document.getElementById('m-itens-rows');
   if (box) box.innerHTML = '<p style="font-size:12px;color:var(--text-3);padding:8px 4px">Nenhum item adicionado</p>';
 
   document.getElementById('m-total').textContent = 'R$ 0,00';
-
   const pg = document.getElementById('m-photo-grid'); if (pg) pg.innerHTML = '';
+
+  renderMultiPay();
+  setTipoOS(isOrcamento ? 'orcamento' : 'servico');
 
   const t = document.getElementById('nova-os-title');
   if (t) t.textContent = isOrcamento ? 'Novo Orçamento' : 'Nova OS';
 
-  // Data/hora atual
+  const btn = document.getElementById('btn-emitir-os');
+  if (btn) btn.textContent = isOrcamento ? '📄 SALVAR ORÇAMENTO' : '✅ EMITIR ORDEM DE SERVIÇO';
+
   const md = document.getElementById('m-data');
   if (md) {
     const n = new Date();
-    md.value = n.getFullYear() + '-' + pad(n.getMonth() + 1) + '-' + pad(n.getDate()) +
+    md.value = n.getFullYear() + '-' + pad(n.getMonth()+1) + '-' + pad(n.getDate()) +
                'T' + pad(n.getHours()) + ':' + pad(n.getMinutes());
   }
-
-  // Checklist — Feature #22
-  _carregarChecklists();
 
   goPage('nova-os');
   setTimeout(() => { initSig(); if (window.lucide) lucide.createIcons(); }, 150);
 }
 
-// Feature #22 — Carregar checklists disponíveis
-async function _carregarChecklists() {
-  try {
-    const lists = await API.getChecklists(STATE.user.id);
-    const sel   = document.getElementById('m-checklist-sel');
-    if (!sel) return;
-    sel.innerHTML = '<option value="">Sem checklist</option>' +
-      lists.map(l => `<option value="${l.id}">${_e(l.nome)}</option>`).join('');
-  } catch {}
+// v5.1 — Editar OS existente
+async function editarOS(id) {
+  const os = APP.os.find(o => o.id === id) || await API.getOSById(id, STATE.user.id).catch(() => null);
+  if (!os) { UI.toast('OS não encontrada', 'error'); return; }
+
+  _editOsId  = id;
+  _newFotos  = [];
+  _multiPays = [];
+  try { _newFotos = JSON.parse(os.fotos || '[]'); } catch {}
+
+  // Restaurar itens
+  let itensArr = [];
+  try { itensArr = JSON.parse(os.itens || '[]'); } catch {}
+  _newItens = itensArr.map(i => ({
+    desc: i.descricao || i.desc || '',
+    qty:  i.quantidade || 1,
+    preco: i.valor_unit || 0,
+    produto_id: i.produto_id || null,
+    preco_custo: i.preco_custo || 0,
+  }));
+  // v5.1 — snapshot dos itens originais (antes do usuário alterar), p/ reconciliar estoque ao salvar
+  _editOriginalItens = JSON.parse(JSON.stringify(_newItens));
+  _editOriginalAssinatura = os.assinatura || null;
+
+  // Campos texto
+  const sv = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+  sv('m-cli-nome',      os.clientes?.nome || os.cliente_nome || '');
+  sv('m-cli-tel',       os.clientes?.telefone || '');
+  sv('m-cli-doc',       os.clientes?.cpf || '');
+  sv('m-cli-search',    os.clientes?.nome || os.cliente_nome || '');
+  sv('m-cli-id',        os.cliente_id || '');
+  sv('m-equip',         os.equipamento || os.item || '');
+  sv('m-defeito',       os.defeito || '');
+  sv('m-diag',          os.diagnostico || '');
+  sv('m-obs',           os.observacoes || '');
+  sv('m-mao-obra',      os.valor_mao_obra || '0');
+  sv('m-desconto',      os.desconto_pct || '0');
+  sv('m-garantia-dias', os.garantia_dias || '');
+  sv('m-status',        os.status || 'aguardando');
+  sv('m-tipo',          os.tipo || 'servico');
+
+  // Data
+  const md = document.getElementById('m-data');
+  if (md && os.criado_em) {
+    const d = new Date(os.criado_em);
+    md.value = d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes());
+  }
+
+  // Pagamento múltiplo ou simples
+  if (os.pagamentos_multiplos) {
+    try { _multiPays = JSON.parse(os.pagamentos_multiplos); } catch {}
+  }
+  if (!_multiPays.length && os.forma_pagamento && os.forma_pagamento !== 'aguardando') {
+    _multiPays = [{ forma: os.forma_pagamento, valor: os.valor_total || 0 }];
+  }
+
+  renderOSItens();
+  renderMultiPay();
+  setTipoOS(os.tipo || 'servico');
+
+  // Marcar chips
+  document.querySelectorAll('.pchip').forEach(c => c.className = 'pchip');
+  _multiPays.forEach(p => {
+    const chip = document.querySelector(`.pchip[onclick*="'${p.forma}'"]`);
+    if (chip) chip.classList.add('p-active');
+  });
+
+  const t = document.getElementById('nova-os-title');
+  if (t) t.textContent = `Editando OS #${os.numero || '–'}`;
+
+  // v5.1 — indicar visualmente que já existe assinatura registrada
+  const sigLbl = document.getElementById('sig-status-label');
+  if (sigLbl) sigLbl.textContent = _editOriginalAssinatura ? '✅ Assinatura já registrada (toque para refazer)' : 'Toque para assinar';
+
+  const btn = document.getElementById('btn-emitir-os');
+  if (btn) { btn.innerHTML = '<i data-lucide="save" style="width:16px;height:16px"></i> SALVAR ALTERAÇÕES'; }
+
+  const pg = document.getElementById('m-photo-grid');
+  if (pg) pg.innerHTML = _newFotos.map((f, i) =>
+    `<div class="photo-thumb"><img src="${f}"><button class="photo-del" onclick="_newFotos.splice(${i},1);editarOS('${id}')">✕</button></div>`).join('');
+
+  goPage('nova-os');
+  setTimeout(() => { initSig(); if (window.lucide) lucide.createIcons(); }, 150);
 }
 
-function aplicarChecklist() {
-  const sel = document.getElementById('m-checklist-sel'); if (!sel || !sel.value) return;
-  // Placeholder: mostra itens no campo de observações
-  UI.toast('Checklist aplicado!', 'success');
+// v5.1 — Tipo de OS
+function setTipoOS(tipo) {
+  document.getElementById('m-tipo').value = tipo;
+  ['servico','produto','misto','orcamento'].forEach(t => {
+    const btn = document.getElementById('tbtn-' + t);
+    if (btn) btn.classList.toggle('active', t === tipo);
+  });
+
+  // Equipamento/defeito visível só em serviço, misto, orçamento
+  const cardEquip = document.getElementById('card-equip-os');
+  if (cardEquip) cardEquip.style.display = tipo === 'produto' ? 'none' : 'block';
+
+  // Mão de obra visível só em serviço, misto, orçamento
+  const cardMO = document.getElementById('card-mao-obra-os');
+  if (cardMO) cardMO.style.display = tipo === 'produto' ? 'none' : 'block';
+
+  // Pagamento oculto em orçamento
+  const cardPag = document.getElementById('card-pag-os');
+  if (cardPag) cardPag.style.display = tipo === 'orcamento' ? 'none' : 'block';
+
+  // Status automático
+  const st = document.getElementById('m-status');
+  if (st && tipo === 'orcamento' && st.value !== 'orcamento') st.value = 'orcamento';
+  if (st && tipo !== 'orcamento' && st.value === 'orcamento') st.value = 'aguardando';
+
+  // Texto do botão
+  const btn = document.getElementById('btn-emitir-os');
+  if (btn && !_editOsId) {
+    const labels = { servico:'✅ EMITIR ORDEM DE SERVIÇO', produto:'✅ REGISTRAR VENDA',
+                     misto:'✅ EMITIR ORDEM DE SERVIÇO', orcamento:'📄 SALVAR ORÇAMENTO' };
+    btn.innerHTML = `<i data-lucide="check-circle" style="width:16px;height:16px"></i> ${labels[tipo] || 'SALVAR'}`;
+    if (window.lucide) setTimeout(() => lucide.createIcons(), 50);
+  }
+}
+
+// v5.1 — Pagamento múltiplo
+function togglePayChip(forma, el) {
+  // Formas únicas (exclusivas): aguardando, fiado, carne → substituem tudo
+  const exclusivas = ['aguardando','fiado','carne'];
+  const isExclusiva = exclusivas.includes(forma);
+
+  if (isExclusiva) {
+    // Se já é a única selecionada, deseleciona
+    if (_multiPays.length === 1 && _multiPays[0].forma === forma) {
+      _multiPays = [];
+    } else {
+      _multiPays = [{ forma, valor: recalcTotalOS() }];
+    }
+  } else {
+    // Remove formas exclusivas se existirem
+    _multiPays = _multiPays.filter(p => !exclusivas.includes(p.forma));
+    const idx = _multiPays.findIndex(p => p.forma === forma);
+    if (idx >= 0) {
+      _multiPays.splice(idx, 1);
+    } else {
+      // Se já tem uma forma, o novo recebe 0 pra usuário digitar
+      const total = recalcTotalOS();
+      const jaUsado = _multiPays.reduce((s, p) => s + (+p.valor || 0), 0);
+      _multiPays.push({ forma, valor: Math.max(0, total - jaUsado) });
+    }
+  }
+
+  // Atualiza chips
+  document.querySelectorAll('.pchip').forEach(c => c.className = 'pchip');
+  _multiPays.forEach(p => {
+    const chip = document.querySelector(`.pchip[onclick*="'${p.forma}'"]`);
+    if (chip) chip.classList.add('p-active');
+  });
+
+  // Extras exclusivos
+  document.getElementById('fiadoWarn').style.display    = _multiPays.some(p => p.forma==='fiado') ? 'block' : 'none';
+  document.getElementById('carneConfig').style.display  = _multiPays.some(p => p.forma==='carne') ? 'block' : 'none';
+  const temPix = _multiPays.some(p => p.forma==='pix');
+  document.getElementById('pix-qr-section').style.display = temPix ? 'block' : 'none';
+  if (temPix) setTimeout(() => gerarQRPix(), 300);
+  if (_multiPays.some(p => p.forma==='carne')) calcCarne();
+
+  renderMultiPay();
+}
+
+function renderMultiPay() {
+  const box = document.getElementById('multi-pay-rows'); if (!box) return;
+  if (!_multiPays.length) { box.innerHTML = ''; return; }
+
+  const total = recalcTotalOS();
+  const payEmojis = { dinheiro:'💵', pix:'📱', credito:'💳', debito:'💳',
+                      transferencia:'🏦', fiado:'📝', carne:'📜', aguardando:'⏳' };
+
+  box.innerHTML = _multiPays.map((p, i) => {
+    const emoji = payEmojis[p.forma] || '💰';
+    return `<div class="mpay-row">
+      <div class="mpay-label">${emoji} ${payLabel(p.forma)}</div>
+      <input type="number" class="form-control mpay-input" value="${(+p.valor || 0).toFixed(2)}"
+             step="0.01" placeholder="R$"
+             oninput="_multiPays[${i}].valor = parseFloat(this.value)||0; _atualizarTrocoMulti()">
+      <button class="mpay-del" onclick="removerPay(${i})" title="Remover">✕</button>
+    </div>`;
+  }).join('');
+
+  _atualizarTrocoMulti();
+}
+
+// v5.1 — remove uma forma de pagamento da lista (sem o bug de criar item fantasma)
+function removerPay(i) {
+  _multiPays.splice(i, 1);
+  document.querySelectorAll('.pchip').forEach(c => c.className = 'pchip');
+  _multiPays.forEach(p => {
+    const chip = document.querySelector(`.pchip[onclick*="'${p.forma}'"]`);
+    if (chip) chip.classList.add('p-active');
+  });
+  document.getElementById('fiadoWarn').style.display    = _multiPays.some(p => p.forma==='fiado') ? 'block' : 'none';
+  document.getElementById('carneConfig').style.display  = _multiPays.some(p => p.forma==='carne') ? 'block' : 'none';
+  document.getElementById('pix-qr-section').style.display = _multiPays.some(p => p.forma==='pix') ? 'block' : 'none';
+  renderMultiPay();
+}
+
+function _atualizarTrocoMulti() {
+  const total   = recalcTotalOS();
+  const pago    = _multiPays.reduce((s, p) => s + (+p.valor || 0), 0);
+  const troco   = pago - total;
+  const warn    = document.getElementById('multi-pay-total-warn');
+  if (!warn) return;
+  if (_multiPays.length <= 1) { warn.style.display = 'none'; return; }
+  warn.style.display = 'block';
+  if (troco > 0.009)
+    warn.innerHTML = `<span style="color:var(--green)">✅ Troco: ${fmt(troco)}</span>`;
+  else if (troco < -0.009)
+    warn.innerHTML = `⚠️ Falta: ${fmt(Math.abs(troco))}`;
+  else
+    warn.innerHTML = `<span style="color:var(--green)">✅ Valor exato!</span>`;
+}
+
+// Compatibilidade reversa (ainda chamado pelo PIX/carne internamente)
+function setPay(p, el) { togglePayChip(p, el); }
+
+function calcTrocoOS() {
+  // mantida por chamadas legadas no carne
+  _atualizarTrocoMulti();
 }
 
 // ── Itens ────────────────────────────────────────────────────
@@ -481,27 +706,6 @@ function sugerirPreco() {
   const el = document.getElementById('form-prd-venda'); if (el) el.value = venda.toFixed(2);
   updMgPrd();
   UI.toast(`Preço sugerido com margem de ${margem}%`, 'success');
-}
-
-// ── Pagamento ────────────────────────────────────────────────
-function setPay(p, el) {
-  _curPay = p;
-  document.querySelectorAll('.pchip').forEach(c => c.className = 'pchip');
-  el.classList.add('p-' + p);
-  document.getElementById('fiadoWarn').style.display  = p === 'fiado'  ? 'block' : 'none';
-  document.getElementById('carneConfig').style.display = p === 'carne' ? 'block' : 'none';
-  if (p === 'carne') calcCarne();
-  // PIX — mostrar QR ao selecionar
-  if (p === 'pix') setTimeout(() => gerarQRPix(), 300);
-  const pixSec = document.getElementById('pix-qr-section');
-  if (pixSec) pixSec.style.display = p === 'pix' ? 'block' : 'none';
-}
-
-function calcTrocoOS() {
-  const paid  = gn('m-pago', 0);
-  const total = recalcTotalOS();
-  const tr    = document.getElementById('m-troco');
-  if (tr) tr.value = Math.max(0, paid - total).toFixed(2);
 }
 
 function calcCarne() {
@@ -612,7 +816,14 @@ async function salvarOS() {
   if (!_newItens.length && !gn('m-mao-obra', 0)) { UI.toast('Adicione ao menos 1 item ou mão de obra', 'warning'); return; }
 
   const status = gv('m-status', 'aguardando');
-  if (status !== 'orcamento' && !_curPay) { UI.toast('Selecione a forma de pagamento', 'warning'); return; }
+  // v5.1 — pagamento múltiplo: forma principal = primeira ou 'aguardando'
+  const formasPrincipais = _multiPays.filter(p => p.forma !== 'aguardando');
+  const formaPrincipal = formasPrincipais.length ? formasPrincipais[0].forma :
+                          (_multiPays[0]?.forma || 'aguardando');
+
+  if (status !== 'orcamento' && !_multiPays.length) {
+    UI.toast('Selecione a forma de pagamento', 'warning'); return;
+  }
 
   const totalItens = _newItens.reduce((a, i) => a + i.qty * i.preco, 0);
   const maoObra    = gn('m-mao-obra', 0);
@@ -622,14 +833,17 @@ async function salvarOS() {
   const total      = Math.max(0, subtotal - descValor);
 
   const sig     = document.getElementById('sigCanvas');
-  const sigData = sig && !isEmptySig(sig) ? sig.toDataURL('image/png') : null;
+  let sigData   = sig && !isEmptySig(sig) ? sig.toDataURL('image/png') : null;
+  // v5.1 — BUGFIX: ao editar, o canvas sempre abre vazio (não redesenhamos a
+  // assinatura antiga nele). Sem isso, qualquer edição apagaria a assinatura
+  // do cliente mesmo que o usuário só quisesse mudar o status/valor.
+  if (!sigData && _editOsId && _editOriginalAssinatura) sigData = _editOriginalAssinatura;
 
-  // Garantia — Feature #25
   const garantiaDias = gi('m-garantia-dias', 0) || 0;
 
   // Carnê
   let carneData = null;
-  if (_curPay === 'carne') {
+  if (_multiPays.some(p => p.forma === 'carne')) {
     const n   = gi('carneN', 3) || 3;
     const dia = gi('carneDia', 10) || 10;
     const ent = gn('carneEnt', 0);
@@ -642,10 +856,9 @@ async function salvarOS() {
     }
   }
 
-  // Cliente — Feature #32: verificar blacklist antes de salvar
   let clienteId = gv('m-cli-id', '') || null;
   const tel     = _c(gv('m-cli-tel', ''), 20);
-  if (!clienteId && (nome || tel)) {
+  if (!clienteId && nome) {
     try {
       const nc = await API.saveCliente(STATE.user.id, { nome, telefone: tel, cpf: _c(gv('m-cli-doc', ''), 20) });
       clienteId = nc.id;
@@ -653,26 +866,28 @@ async function salvarOS() {
     } catch(e) { console.error('criar cli:', e); }
   }
 
-  // Verificar blacklist
   if (clienteId) {
     const cli = APP.clientes.find(c => c.id === clienteId);
     if (cli?.blacklist) {
-      UI.confirm(`⛔ <b>${_e(cli.nome)}</b> está na blacklist.<br><br>Deseja continuar emitindo a OS mesmo assim?`, async () => {
-        await _finalizarSalvarOS({ nome, tel, clienteId, totalItens, maoObra, total, descPct, descValor, status, sigData, carneData, garantiaDias });
+      UI.confirm(`⛔ <b>${_e(cli.nome)}</b> está na blacklist.<br><br>Deseja continuar?`, async () => {
+        await _finalizarSalvarOS({ nome, tel, clienteId, totalItens, maoObra, total, descPct, descValor, status, sigData, carneData, garantiaDias, formaPrincipal });
       });
       return;
     }
   }
 
-  await _finalizarSalvarOS({ nome, tel, clienteId, totalItens, maoObra, total, descPct, descValor, status, sigData, carneData, garantiaDias });
+  await _finalizarSalvarOS({ nome, tel, clienteId, totalItens, maoObra, total, descPct, descValor, status, sigData, carneData, garantiaDias, formaPrincipal });
 }
 
-async function _finalizarSalvarOS({ nome, tel, clienteId, totalItens, maoObra, total, descPct, descValor, status, sigData, carneData, garantiaDias }) {
+async function _finalizarSalvarOS({ nome, tel, clienteId, totalItens, maoObra, total, descPct, descValor, status, sigData, carneData, garantiaDias, formaPrincipal }) {
   const isOrc = status === 'orcamento';
   const itensJSON = JSON.stringify(_newItens.map(i => ({
     descricao: i.desc, quantidade: i.qty, valor_unit: i.preco,
     produto_id: i.produto_id || null, preco_custo: i.preco_custo || 0,
   })));
+
+  // v5.1 — pagamentos múltiplos serializado + valor_pago total
+  const pagosTotal = _multiPays.reduce((s, p) => s + (+p.valor || 0), 0);
 
   const payload = {
     cliente_id: clienteId, cliente_nome: nome,
@@ -683,66 +898,124 @@ async function _finalizarSalvarOS({ nome, tel, clienteId, totalItens, maoObra, t
     itens: itensJSON, valor_pecas: totalItens,
     valor_mao_obra: maoObra, valor_total: total,
     desconto_pct: descPct, desconto_valor: descValor,
-    valor_pago: gn('m-pago', 0),
-    forma_pagamento: _curPay || 'aguardando',
+    valor_pago: pagosTotal,
+    forma_pagamento: formaPrincipal || 'aguardando',
+    pagamentos_multiplos: _multiPays.length > 1 ? JSON.stringify(_multiPays) : null,
     status, tipo: gv('m-tipo', 'servico'),
     assinatura: sigData,
     fotos:      _newFotos.length ? JSON.stringify(_newFotos) : null,
-    carne_data: carneData         ? JSON.stringify(carneData) : null,
+    carne_data: carneData ? JSON.stringify(carneData) : null,
     garantia_dias: garantiaDias   || null,
     hash_doc: genHash(nome + total + Date.now()),
   };
 
-  Object.keys(payload).forEach(k => { if (payload[k] === '' || payload[k] === null) delete payload[k]; });
+  // v5.1 — BUGFIX: no CRIAR, removemos chaves vazias (evita inserir '' onde
+  // o banco prefere null/default). No EDITAR isso é proibido: se removêssemos
+  // a chave, o campo limpo pelo usuário (ex: apagar Observações, tirar garantia,
+  // remover assinatura, voltar de pagamento múltiplo p/ único) NUNCA seria
+  // atualizado no banco — o valor antigo ficaria preso pra sempre.
+  if (!_editOsId) {
+    Object.keys(payload).forEach(k => { if (payload[k] === '' || payload[k] === null) delete payload[k]; });
+  }
 
-  const btn = document.querySelector('#page-nova-os .btn-green, #page-nova-os .btn-primary');
+  const btn = document.getElementById('btn-emitir-os');
   if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
 
   try {
-    const saved = await API.createOS(STATE.user.id, payload);
+    let saved;
+    const isEdicao = !!_editOsId;
 
-    // Baixar estoque
-    for (const it of _newItens) {
-      if (it.produto_id) {
-        const p = APP.produtos.find(x => x.id === it.produto_id);
-        if (p && (p.quantidade || 0) >= it.qty) {
-          const nq = (p.quantidade || 0) - it.qty;
-          await API.updateEstoque(STATE.user.id, it.produto_id, nq);
-          p.quantidade = nq;
+    if (isEdicao) {
+      saved = await API.updateOS(_editOsId, STATE.user.id, payload);
+      if (!saved) saved = { ...(APP.os.find(o => o.id === _editOsId) || {}), ...payload, id: _editOsId };
+      await API.addHistorico(_editOsId, `OS editada. Status: ${statusLabel(status)}`);
+      const idx = APP.os.findIndex(o => o.id === _editOsId);
+      if (idx >= 0) APP.os[idx] = { ...APP.os[idx], ...saved };
+
+      // v5.1 — Reconciliar ESTOQUE: devolve qtd dos itens originais, deduz qtd dos itens atuais.
+      // Itens que não mudaram se cancelam (devolve e deduz o mesmo valor = sem efeito líquido).
+      for (const it of _editOriginalItens) {
+        if (it.produto_id) {
+          const p = APP.produtos.find(x => x.id === it.produto_id);
+          if (p) {
+            p.quantidade = (p.quantidade || 0) + it.qty;
+            await API.updateEstoque(STATE.user.id, it.produto_id, p.quantidade).catch(() => {});
+          }
         }
       }
+      for (const it of _newItens) {
+        if (it.produto_id) {
+          const p = APP.produtos.find(x => x.id === it.produto_id);
+          if (p) {
+            p.quantidade = Math.max(0, (p.quantidade || 0) - it.qty);
+            await API.updateEstoque(STATE.user.id, it.produto_id, p.quantidade).catch(() => {});
+          }
+        }
+      }
+
+      // v5.1 — Reconciliar CAIXA: remove lançamentos antigos desta OS e relança com os valores/formas atuais
+      if (!isOrc) {
+        await window.sb.from('caixa').delete().eq('ordem_id', _editOsId).eq('dono_id', STATE.user.id).catch(() => {});
+        const dia = today();
+        for (const pg of _multiPays) {
+          if (pg.forma === 'aguardando') continue;
+          if (pg.forma === 'fiado') {
+            await API.addCaixa(STATE.user.id, { tipo:'entrada', descricao:`Fiado - OS #${saved.numero} - ${nome}`, valor: 0, forma:'fiado', ordem_id: _editOsId, data: dia }).catch(() => {});
+          } else if (pg.forma === 'carne') {
+            if (carneData?.entrada > 0) await API.addCaixa(STATE.user.id, { tipo:'entrada', descricao:`Entrada carnê - OS #${saved.numero} - ${nome}`, valor: carneData.entrada, forma:'carne', ordem_id: _editOsId, data: dia }).catch(() => {});
+          } else {
+            const label = _multiPays.length > 1 ? ` (${payLabel(pg.forma)})` : '';
+            await API.addCaixa(STATE.user.id, { tipo:'entrada', descricao:`OS #${saved.numero} - ${nome}${label}`, valor: +pg.valor || total, forma: pg.forma, ordem_id: _editOsId, data: dia }).catch(() => {});
+          }
+        }
+      }
+
+      UI.toast(`OS #${saved.numero || '–'} atualizada! ✅`, 'success');
+    } else {
+      saved = await API.createOS(STATE.user.id, payload);
+
+      for (const it of _newItens) {
+        if (it.produto_id) {
+          const p = APP.produtos.find(x => x.id === it.produto_id);
+          if (p && (p.quantidade || 0) >= it.qty) {
+            const nq = (p.quantidade || 0) - it.qty;
+            await API.updateEstoque(STATE.user.id, it.produto_id, nq);
+            p.quantidade = nq;
+          }
+        }
+      }
+
+      if (!isOrc) {
+        const dia = today();
+        for (const pg of _multiPays) {
+          if (pg.forma === 'aguardando') continue;
+          if (pg.forma === 'fiado') {
+            await API.addCaixa(STATE.user.id, { tipo:'entrada', descricao:`Fiado - OS #${saved.numero} - ${nome}`, valor: 0, forma:'fiado', ordem_id: saved.id, data: dia });
+          } else if (pg.forma === 'carne') {
+            if (carneData?.entrada > 0) await API.addCaixa(STATE.user.id, { tipo:'entrada', descricao:`Entrada carnê - OS #${saved.numero} - ${nome}`, valor: carneData.entrada, forma:'carne', ordem_id: saved.id, data: dia });
+          } else {
+            const label = _multiPays.length > 1 ? ` (${payLabel(pg.forma)})` : '';
+            await API.addCaixa(STATE.user.id, { tipo:'entrada', descricao:`OS #${saved.numero} - ${nome}${label}`, valor: +pg.valor || total, forma: pg.forma, ordem_id: saved.id, data: dia });
+          }
+        }
+        if (carneData) {
+          for (const p of carneData.itens) {
+            await window.sb.from('parcelas').insert({ dono_id: STATE.user.id, ordem_id: saved.id, numero: p.num, total: carneData.parcelas, valor: p.valor, vencimento: p.venc, pago: false }).catch(() => {});
+          }
+        }
+      }
+
+      APP.os.unshift(saved);
+      UI.toast(`${isOrc ? 'Orçamento' : 'OS'} #${saved.numero} emitida! ✅`, 'success');
     }
 
-    // Caixa — só se não for orçamento
-    if (!isOrc) {
-      const dia = today();
-      if (['pago','concluido','retirada'].includes(status) || status === 'aguardando') {
-        if (_curPay !== 'fiado' && _curPay !== 'carne' && _curPay !== 'aguardando') {
-          await API.addCaixa(STATE.user.id, { tipo:'entrada', descricao:`OS #${saved.numero} - ${nome}`, valor: total, forma: _curPay, ordem_id: saved.id, data: dia });
-        }
-      }
-      if (_curPay === 'fiado') await API.addCaixa(STATE.user.id, { tipo:'entrada', descricao:`Fiado - OS #${saved.numero} - ${nome}`, valor: 0, forma:'fiado', ordem_id: saved.id, data: dia });
-      if (_curPay === 'carne' && carneData?.entrada > 0) await API.addCaixa(STATE.user.id, { tipo:'entrada', descricao:`Entrada carnê - OS #${saved.numero} - ${nome}`, valor: carneData.entrada, forma:'carne', ordem_id: saved.id, data: dia });
-
-      // Parcelas
-      if (carneData) {
-        for (const p of carneData.itens) {
-          await window.sb.from('parcelas').insert({ dono_id: STATE.user.id, ordem_id: saved.id, numero: p.num, total: carneData.parcelas, valor: p.valor, vencimento: p.venc, pago: false }).catch(() => {});
-        }
-      }
-    }
-
-    APP.os.unshift(saved);
-    UI.toast(`${isOrc ? 'Orçamento' : 'OS'} #${saved.numero} emitida! ✅`, 'success');
     goBack();
     renderOS();
-
-    // Feature #7: Abrir comprovante automaticamente
-    setTimeout(() => abrirComp(saved.id), 400);
+    if (!isEdicao && !isOrc) setTimeout(() => abrirComp(saved.id), 400);
 
   } catch(e) {
     UI.toast('Erro: ' + e.message, 'error');
-    if (btn) { btn.disabled = false; btn.textContent = '✅ EMITIR ORDEM DE SERVIÇO'; }
+    if (btn) { btn.disabled = false; btn.textContent = _editOsId ? '💾 SALVAR ALTERAÇÕES' : '✅ EMITIR ORDEM DE SERVIÇO'; }
   }
 }
 
@@ -1550,6 +1823,8 @@ async function renderCaixa() {
         </div>`).join('')
       : '<div style="font-size:12px;color:var(--text-3);font-family:monospace">Nenhuma movimentação</div>';
   } catch(e) { console.error('renderCaixa:', e); }
+
+  renderCarnes();
 }
 
 async function registrarSaida() {
@@ -1769,19 +2044,6 @@ async function handleLogoUpload(e) {
     const lp = document.getElementById('cfg-logo-preview'); if (lp) lp.src = url;
     App._ui();
     UI.toast('Logo atualizada! ✅', 'success');
-  } catch(e) { UI.toast('Erro: ' + e.message, 'error'); }
-}
-
-async function salvarPIN() {
-  const p1 = gv('cfg-pin-new', ''), p2 = gv('cfg-pin-conf', '');
-  if (p1.length !== 4 || !/^\d{4}$/.test(p1)) { UI.toast('PIN deve ter 4 dígitos', 'warning'); return; }
-  if (p1 !== p2) { UI.toast('PINs não coincidem', 'warning'); return; }
-  const pin_hash = await _pinHash(p1);
-  try {
-    STATE.perfil = await API.upsertPerfil(STATE.user.id, { pin_hash });
-    UI.toast('PIN salvo! ✅', 'success');
-    document.getElementById('cfg-pin-new').value  = '';
-    document.getElementById('cfg-pin-conf').value = '';
   } catch(e) { UI.toast('Erro: ' + e.message, 'error'); }
 }
 
