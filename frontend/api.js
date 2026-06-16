@@ -1,5 +1,5 @@
 /* ============================================================
-   NexOS v5.0 — core/api.js
+   NexOS v5.1 — core/api.js
    Utilitários, UI, Supabase, API
    Correções: saveEvento bug, número OS único, rate limit
    Novo: auditoria, histórico de preços, backup, logo
@@ -504,25 +504,6 @@ const API = {
     await API.audit('agenda', 'DELETE', id, {});
   },
 
-  // ── CHECKLISTS ── Feature #22 ────────────────────────────────
-  async getChecklists(uid) {
-    const { data } = await sb.from('checklists')
-      .select('*').eq('dono_id', uid).order('nome');
-    return data || [];
-  },
-  async saveChecklist(uid, d) {
-    const p = { dono_id: uid, nome: d.nome, itens: JSON.stringify(d.itens || []) };
-    if (d.id) {
-      const { data, error } = await sb.from('checklists')
-        .update(p).eq('id', d.id).eq('dono_id', uid).select().single();
-      if (error) throw error;
-      return data;
-    }
-    const { data, error } = await sb.from('checklists').insert(p).select().single();
-    if (error) throw error;
-    return data;
-  },
-
   // ── GARANTIAS ── Feature #25 ─────────────────────────────────
   async verificarGarantia(osId) {
     const { data } = await sb.from('ordens_servico')
@@ -566,7 +547,7 @@ const API = {
   async getDashboard(uid) {
     const mes = today().slice(0, 7);
     const [os, caixa, agenda, parcVenc] = await Promise.all([
-      sb.from('ordens_servico').select('status,valor_total,criado_em')
+      sb.from('ordens_servico').select('status,valor_total,valor_pecas,valor_mao_obra,criado_em')
         .eq('dono_id', uid).gte('criado_em', mes + '-01'),
       sb.from('caixa').select('tipo,valor')
         .eq('dono_id', uid).gte('data', mes + '-01'),
@@ -577,6 +558,8 @@ const API = {
     const cxData = caixa.data || [];
     const pagas  = osData.filter(o => ['concluido', 'retirada'].includes(o.status));
     const fat    = pagas.reduce((s, o) => s + (+o.valor_total || 0), 0);
+    const vendasPecas = pagas.reduce((s, o) => s + (+o.valor_pecas || 0), 0);
+    const maoObra     = pagas.reduce((s, o) => s + (+o.valor_mao_obra || 0), 0);
     const saidas = cxData.filter(c => c.tipo === 'saida').reduce((s, c) => s + (+c.valor || 0), 0);
 
     // Feature #19: meta mensal
@@ -585,6 +568,8 @@ const API = {
     return {
       faturamento:        fat,
       lucro:              fat - saidas,
+      vendas_pecas:       vendasPecas,
+      vendas_mao_obra:    maoObra,
       os_abertas:         osData.filter(o => ['aguardando', 'andamento', 'retirada'].includes(o.status)).length,
       agenda_hoje:        agenda,
       parcelas_vencidas:  parcVenc.length,
