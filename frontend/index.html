@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="NexOS">
 <!-- X-Frame-Options via meta para proteção extra -->
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
-<title>NexOS v5.0</title>
+<title>NexOS</title>
 <link rel="icon" type="image/png" href="NexOS.png">
 <link rel="apple-touch-icon" href="NexOS.png">
 <link rel="manifest" href="manifest.json">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=50">
+<link rel="stylesheet" href="styles.css?v=51">
 <!-- Libs externas -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
@@ -26,9 +26,9 @@
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <!-- App Scripts — carregados no head para today() estar disponível -->
-<script src="api.js?v=50"></script>
-<script src="auth.js?v=50"></script>
-<script src="app.js?v=50"></script>
+<script src="api.js?v=51"></script>
+<script src="auth.js?v=51"></script>
+<script src="app.js?v=51"></script>
 </head>
 <body>
 
@@ -48,9 +48,9 @@
       <div class="auth-logo">
         <img src="NexOS.png" alt="NexOS" onerror="this.style.display='none'">
         <div class="auth-logo-name">NexOS</div>
-        <div class="auth-logo-sub">Gestão inteligente v5</div>
+        <div class="auth-logo-sub">Gestão inteligente</div>
       </div>
-      <h2 class="auth-title">Bem-vindo de volta</h2>
+      <h2 class="auth-title">Bem-vindo</h2>
       <p class="auth-sub">Entre com sua conta para continuar</p>
       <div class="form-group">
         <label class="form-label">E-mail</label>
@@ -90,7 +90,7 @@
       <div class="auth-logo">
         <img src="NexOS.png" alt="NexOS" onerror="this.style.display='none'">
         <div class="auth-logo-name">NexOS</div>
-        <div class="auth-logo-sub">Gestão inteligente v5</div>
+        <div class="auth-logo-sub">Gestão inteligente</div>
       </div>
       <h2 class="auth-title">Criar Conta</h2>
       <p class="auth-sub">Cadastre sua empresa gratuitamente</p>
@@ -154,9 +154,6 @@
       </div>
       <div class="nav-item" data-page="agenda" onclick="goPage('agenda')">
         <i data-lucide="calendar" class="nav-icon"></i> Agenda
-      </div>
-      <div class="nav-item" data-page="carnes" onclick="goPage('carnes')">
-        <i data-lucide="scroll" class="nav-icon"></i> Carnês
       </div>
       <div class="nav-item" data-page="config" onclick="goPage('config')">
         <i data-lucide="settings" class="nav-icon"></i> Configurações
@@ -228,6 +225,21 @@
           </div>
         </div>
 
+        <!-- v5.1 — Vendas (peças/produtos) x Mão de Obra -->
+        <div class="card" style="margin-bottom:12px">
+          <div class="card-title"><div class="ct-bar"></div>Vendas x Mão de Obra (mês)</div>
+          <div style="display:flex;gap:12px">
+            <div style="flex:1;text-align:center;padding:10px;background:var(--bg-2);border-radius:var(--radius-md)">
+              <div class="kpi-value" id="kpi-vendas" style="font-size:1.1rem;color:var(--blue)">R$ 0,00</div>
+              <div style="font-size:.72rem;color:var(--text-2);margin-top:2px">Peças / Produtos</div>
+            </div>
+            <div style="flex:1;text-align:center;padding:10px;background:var(--bg-2);border-radius:var(--radius-md)">
+              <div class="kpi-value" id="kpi-maoobra" style="font-size:1.1rem;color:var(--purple)">R$ 0,00</div>
+              <div style="font-size:.72rem;color:var(--text-2);margin-top:2px">Mão de Obra</div>
+            </div>
+          </div>
+        </div>
+
         <!-- Feature #19 — Meta Mensal -->
         <div id="meta-section" class="card" style="display:none;margin-bottom:12px">
           <div class="card-title"><div class="ct-bar"></div>Meta do Mês</div>
@@ -287,7 +299,7 @@
         <div id="os-list"></div>
       </div>
 
-      <!-- ══ NOVA OS / ORÇAMENTO ════════════════════════════ -->
+      <!-- ══ NOVA OS / EDITAR OS ════════════════════════════ -->
       <div class="page" id="page-nova-os">
         <div class="page-header">
           <div style="display:flex;align-items:center;gap:10px">
@@ -299,6 +311,29 @@
           <button class="btn btn-primary" onclick="salvarOS()">
             <i data-lucide="save" style="width:14px;height:14px"></i> Salvar
           </button>
+        </div>
+
+        <!-- v5.1 — Tipo: escolha antes de tudo -->
+        <div class="card" id="card-tipo-os">
+          <div class="card-title"><div class="ct-bar"></div>O que você vai registrar?</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px">
+            <button class="tipo-os-btn active" id="tbtn-servico" onclick="setTipoOS('servico')">
+              <span style="font-size:1.5rem">🔧</span>
+              <span>Ordem de Serviço</span>
+            </button>
+            <button class="tipo-os-btn" id="tbtn-produto" onclick="setTipoOS('produto')">
+              <span style="font-size:1.5rem">📦</span>
+              <span>Venda de Produto</span>
+            </button>
+            <button class="tipo-os-btn" id="tbtn-misto" onclick="setTipoOS('misto')">
+              <span style="font-size:1.5rem">🛠️</span>
+              <span>Serviço + Produto</span>
+            </button>
+            <button class="tipo-os-btn" id="tbtn-orcamento" onclick="setTipoOS('orcamento')">
+              <span style="font-size:1.5rem">📄</span>
+              <span>Orçamento</span>
+            </button>
+          </div>
         </div>
 
         <!-- Cliente -->
@@ -326,8 +361,8 @@
           </div>
         </div>
 
-        <!-- Equipamento -->
-        <div class="card">
+        <!-- Equipamento — oculto em venda pura -->
+        <div class="card" id="card-equip-os">
           <div class="card-title"><div class="ct-bar"></div>Equipamento / Item</div>
           <div class="form-group">
             <label class="form-label">Equipamento / Produto</label>
@@ -340,18 +375,6 @@
           <div class="form-group">
             <label class="form-label">Diagnóstico Técnico</label>
             <textarea id="m-diag" class="form-control" rows="2" placeholder="Diagnóstico após análise..."></textarea>
-          </div>
-          <!-- Feature #22 — Checklist -->
-          <div class="form-row" style="align-items:flex-end">
-            <div class="form-group" style="flex:1">
-              <label class="form-label">Checklist</label>
-              <select id="m-checklist-sel" class="form-control">
-                <option value="">Sem checklist</option>
-              </select>
-            </div>
-            <button class="btn btn-ghost btn-sm" style="margin-bottom:1px;flex-shrink:0" onclick="aplicarChecklist()">
-              <i data-lucide="check-square" style="width:13px;height:13px"></i> Aplicar
-            </button>
           </div>
           <!-- Feature #25 — Garantia -->
           <div class="form-group">
@@ -379,7 +402,7 @@
             </button>
           </div>
           <div style="display:flex;justify-content:space-between;align-items:flex-end;padding:12px 0 0;border-top:1px solid var(--border);margin-top:12px;gap:12px;flex-wrap:wrap">
-            <div class="form-group" style="margin-bottom:0">
+            <div class="form-group" id="card-mao-obra-os" style="margin-bottom:0">
               <label class="form-label">Mão de Obra R$</label>
               <input type="number" id="m-mao-obra" class="form-control" value="0" step="0.01" style="width:130px;margin-bottom:0" oninput="recalcTotalOS()">
             </div>
@@ -410,19 +433,25 @@
           <div class="photo-grid" id="m-photo-grid"></div>
         </div>
 
-        <!-- Pagamento -->
-        <div class="card">
+        <!-- Pagamento — v5.1: múltiplas formas -->
+        <div class="card" id="card-pag-os">
           <div class="card-title"><div class="ct-bar"></div>Pagamento</div>
+
+          <!-- Formas de pagamento -->
           <div class="pay-chips" id="payChips">
-            <div class="pchip" onclick="setPay('dinheiro',this)">💵 Dinheiro</div>
-            <div class="pchip" onclick="setPay('pix',this)">📱 PIX</div>
-            <div class="pchip" onclick="setPay('credito',this)">💳 Crédito</div>
-            <div class="pchip" onclick="setPay('debito',this)">💳 Débito</div>
-            <div class="pchip" onclick="setPay('transferencia',this)">🏦 Transfer.</div>
-            <div class="pchip" onclick="setPay('fiado',this)">📝 Fiado</div>
-            <div class="pchip" onclick="setPay('carne',this)">📜 Carnê</div>
-            <div class="pchip" onclick="setPay('aguardando',this)">⏳ Aguardando</div>
+            <div class="pchip" onclick="togglePayChip('dinheiro',this)">💵 Dinheiro</div>
+            <div class="pchip" onclick="togglePayChip('pix',this)">📱 PIX</div>
+            <div class="pchip" onclick="togglePayChip('credito',this)">💳 Crédito</div>
+            <div class="pchip" onclick="togglePayChip('debito',this)">💳 Débito</div>
+            <div class="pchip" onclick="togglePayChip('transferencia',this)">🏦 Transfer.</div>
+            <div class="pchip" onclick="togglePayChip('fiado',this)">📝 Fiado</div>
+            <div class="pchip" onclick="togglePayChip('carne',this)">📜 Carnê</div>
+            <div class="pchip" onclick="togglePayChip('aguardando',this)">⏳ Aguardando</div>
           </div>
+
+          <!-- v5.1 — Linhas de pagamento múltiplo -->
+          <div id="multi-pay-rows" style="margin-top:12px"></div>
+          <div id="multi-pay-total-warn" style="display:none;font-size:.78rem;color:var(--red);margin-top:6px"></div>
 
           <!-- Feature #6 — QR Code PIX com valor real -->
           <div id="pix-qr-section" style="display:none;margin:14px 0;padding:16px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius-md);text-align:center">
@@ -435,7 +464,6 @@
                 <i data-lucide="copy" style="width:13px;height:13px"></i>
               </button>
             </div>
-            <!-- Feature #7 — Confirmar pagamento muda status para Concluído -->
             <button class="btn btn-primary btn-sm w-full" style="margin-top:10px" id="btn-confirmar-pix" onclick="alert('Salve a OS primeiro, depois confirme o PIX na tela de detalhes.')">
               <i data-lucide="check-circle" style="width:13px;height:13px"></i> Confirmar Pagamento PIX
             </button>
@@ -466,40 +494,19 @@
             Fiado: será registrado como conta a receber
           </div>
 
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Valor pago R$</label>
-              <input type="number" id="m-pago" class="form-control" placeholder="0,00" step="0.01" oninput="calcTrocoOS()">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Troco</label>
-              <input type="number" id="m-troco" class="form-control" readonly style="color:var(--green)">
-            </div>
+          <div class="form-group" style="margin-top:12px">
+            <label class="form-label">Status</label>
+            <select id="m-status" class="form-control">
+              <option value="aguardando">Aguardando</option>
+              <option value="andamento">Em Andamento</option>
+              <option value="concluido">Concluído</option>
+              <option value="retirada">Pronto p/ Retirada</option>
+              <option value="fiado">Fiado</option>
+              <option value="cancelado">Cancelado</option>
+              <option value="orcamento">Orçamento</option>
+            </select>
           </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Status</label>
-              <select id="m-status" class="form-control">
-                <option value="aguardando">Aguardando</option>
-                <option value="andamento">Em Andamento</option>
-                <option value="concluido">Concluído</option>
-                <option value="retirada">Pronto p/ Retirada</option>
-                <option value="fiado">Fiado</option>
-                <option value="cancelado">Cancelado</option>
-                <option value="orcamento">Orçamento</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Tipo</label>
-              <select id="m-tipo" class="form-control">
-                <option value="servico">Serviço</option>
-                <option value="produto">Venda Produto</option>
-                <option value="misto">Serviço + Produto</option>
-                <option value="orcamento">Orçamento</option>
-              </select>
-            </div>
-          </div>
+          <input type="hidden" id="m-tipo" value="servico">
 
           <div class="form-group">
             <label class="form-label">Data / Hora</label>
@@ -525,7 +532,7 @@
 
         <!-- Botão fixo -->
         <div style="position:sticky;bottom:0;left:0;right:0;background:var(--bg);border-top:1px solid var(--border);padding:12px 0;margin:0 -20px;padding-left:20px;padding-right:20px">
-          <button class="btn btn-primary btn-lg w-full" onclick="salvarOS()">
+          <button class="btn btn-primary btn-lg w-full" id="btn-emitir-os" onclick="salvarOS()">
             <i data-lucide="check-circle" style="width:16px;height:16px"></i> EMITIR ORDEM DE SERVIÇO
           </button>
         </div>
@@ -544,9 +551,14 @@
               <div class="page-subtitle" id="ver-os-status">–</div>
             </div>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="abrirComp(_verOsId)">
-            <i data-lucide="receipt" style="width:13px;height:13px"></i> Comprovante
-          </button>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-ghost btn-sm" onclick="editarOS(_verOsId)">
+              <i data-lucide="edit-2" style="width:13px;height:13px"></i> Editar
+            </button>
+            <button class="btn btn-primary btn-sm" onclick="abrirComp(_verOsId)">
+              <i data-lucide="receipt" style="width:13px;height:13px"></i> Comprovante
+            </button>
+          </div>
         </div>
         <div id="ver-os-body"></div>
       </div>
@@ -760,6 +772,10 @@
         <div class="card"><div class="card-title"><div class="ct-bar"></div>Por Pagamento</div><div id="cx-pags"></div></div>
         <div class="card"><div class="card-title"><div class="ct-bar"></div>Movimentações</div><div id="cx-movs"></div></div>
         <div class="card">
+          <div class="card-title"><div class="ct-bar"></div>Carnês / Parcelas</div>
+          <div id="carne-list"></div>
+        </div>
+        <div class="card">
           <div class="card-title"><div class="ct-bar"></div>Registrar Saída</div>
           <div class="form-group">
             <label class="form-label">Descrição</label>
@@ -773,17 +789,6 @@
             <i data-lucide="minus-circle" style="width:14px;height:14px"></i> Registrar Saída
           </button>
         </div>
-      </div>
-
-      <!-- ══ CARNÊS ══════════════════════════════════════════ -->
-      <div class="page" id="page-carnes">
-        <div class="page-header">
-          <div class="page-title">Carnês</div>
-          <button class="btn btn-ghost btn-sm" onclick="renderCarnes()">
-            <i data-lucide="refresh-cw" style="width:13px;height:13px"></i>
-          </button>
-        </div>
-        <div id="carne-list"></div>
       </div>
 
       <!-- ══ AGENDA ══════════════════════════════════════════ -->
@@ -919,25 +924,6 @@
           <p style="font-size:.75rem;color:var(--text-3);margin-top:8px">Template atual: <b id="comp-template-atual">Clássico</b></p>
         </div>
 
-        <!-- PIN -->
-        <div class="card">
-          <div class="card-title"><div class="ct-bar"></div>PIN de Segurança</div>
-          <p style="font-size:.82rem;color:var(--text-2);margin-bottom:14px">PIN de 4 dígitos para ações sensíveis.</p>
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Novo PIN</label>
-              <input id="cfg-pin-new" type="password" class="form-control" maxlength="4" inputmode="numeric" style="font-family:var(--mono);font-size:1.4rem;letter-spacing:8px;text-align:center">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Confirmar</label>
-              <input id="cfg-pin-conf" type="password" class="form-control" maxlength="4" inputmode="numeric" style="font-family:var(--mono);font-size:1.4rem;letter-spacing:8px;text-align:center">
-            </div>
-          </div>
-          <button class="btn btn-secondary btn-sm" onclick="salvarPIN()">
-            <i data-lucide="shield" style="width:13px;height:13px"></i> Salvar PIN
-          </button>
-        </div>
-
         <button class="btn btn-primary btn-lg w-full" onclick="salvarConfig()">
           <i data-lucide="save" style="width:14px;height:14px"></i> Salvar Configurações
         </button>
@@ -977,6 +963,10 @@
             <div><kbd style="background:var(--bg-2);border:1px solid var(--border);border-radius:4px;padding:1px 6px">/</kbd> Busca global</div>
             <div><kbd style="background:var(--bg-2);border:1px solid var(--border);border-radius:4px;padding:1px 6px">Esc</kbd> Fechar modal</div>
           </div>
+        </div>
+
+        <div style="text-align:center;font-size:.72rem;color:var(--text-3);margin-top:18px;font-family:var(--mono)">
+          NexOS · Versão 5.1.0
         </div>
 
         <div style="height:40px"></div>
