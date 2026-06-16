@@ -1,5 +1,5 @@
 /* ============================================================
-   NexOS v5.0 — sw.js
+   NexOS v5.1 — sw.js
    Service Worker
    - HTML / JS / CSS  → network-first (sempre atualizado)
    - Imagens / fontes → cache-first (rápido offline)
@@ -8,7 +8,7 @@
    - Auto-update sem precisar fechar aba
    ============================================================ */
 
-const CACHE_VER    = 'nexos-v5.0';
+const CACHE_VER    = 'nexos-v5.1';
 const CACHE_STATIC = CACHE_VER + '-static';
 const CACHE_FONT   = CACHE_VER + '-fonts';
 
