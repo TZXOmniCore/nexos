@@ -337,15 +337,17 @@ const API = {
       // Feature #20: Histórico de preços — registra mudança antes de salvar
       const antigo = await sb.from('produtos').select('preco_venda,preco_custo').eq('id', d.id).single();
       if (antigo.data && (antigo.data.preco_venda !== p.preco_venda || antigo.data.preco_custo !== p.preco_custo)) {
-        await sb.from('historico_precos').insert({
-          dono_id:       uid,
-          produto_id:    d.id,
-          preco_custo:   antigo.data.preco_custo,
-          preco_venda:   antigo.data.preco_venda,
-          novo_custo:    p.preco_custo,
-          novo_venda:    p.preco_venda,
-          criado_em:     nowISO(),
-        }).catch(() => {}); // silencioso se tabela não existir ainda
+        try {
+          await sb.from('historico_precos').insert({
+            dono_id:       uid,
+            produto_id:    d.id,
+            preco_custo:   antigo.data.preco_custo,
+            preco_venda:   antigo.data.preco_venda,
+            novo_custo:    p.preco_custo,
+            novo_venda:    p.preco_venda,
+            criado_em:     nowISO(),
+          });
+        } catch {} // silencioso se tabela não existir ainda
       }
       const { data, error } = await sb.from('produtos')
         .update(p).eq('id', d.id).eq('dono_id', uid).select().single();
