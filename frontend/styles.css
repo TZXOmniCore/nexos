@@ -393,25 +393,180 @@ textarea { resize:vertical;min-height:70px; }
 .search-box input::placeholder { color:var(--text-3); }
 .search-box-icon { position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none; }
 
-/* ── COMPROVANTE ────────────────────────────────────────────── */
+/* ── COMPROVANTE v5.1 ───────────────────────────────────────── */
 #compView { display:none;position:fixed;inset:0;z-index:700;background:var(--bg);overflow-y:auto;padding:16px; }
 #compView.open { display:block; }
-.comp-paper { background:#fff;color:#111;border-radius:12px;padding:20px;max-width:420px;margin:0 auto; }
-.comp-header { text-align:center;border-bottom:2px dashed #ccc;padding-bottom:12px;margin-bottom:12px; }
-.comp-store  { font-size:18px;font-weight:900;letter-spacing:-1px; }
-.comp-sub    { font-size:11px;color:#666;margin-top:2px; }
-.comp-os-num { font-size:24px;font-weight:900;color:#1a6cf0;margin:8px 0 2px; }
-.comp-date   { font-size:11px;color:#888; }
-.comp-sec    { font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#999;margin:10px 0 5px; }
-.comp-row    { display:flex;justify-content:space-between;font-size:13px;padding:3px 0;border-bottom:1px dotted #eee; }
-.comp-total  { display:flex;justify-content:space-between;font-size:17px;font-weight:900;padding:8px 0;border-top:2px solid #111;margin-top:5px; }
-.comp-items  { border:1px solid #ddd;border-radius:6px;padding:8px;margin-bottom:10px; }
-.comp-item-r { display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px dotted #f0f0f0; }
-.comp-footer { text-align:center;border-top:2px dashed #ccc;padding-top:12px;margin-top:12px;font-size:11px;color:#777; }
-.comp-hash   { font-size:9px;color:#bbb;word-break:break-all;margin-top:5px;line-height:1.6; }
-.comp-photos { display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:10px; }
-.comp-photos img { width:100%;aspect-ratio:1;object-fit:cover;border-radius:5px; }
-.comp-terms  { font-size:10px;color:#999;line-height:1.6;margin-top:8px; }
+
+/* Wrapper do papel — modo claro (padrão) */
+.comp-paper {
+  background:#fff;color:#1a1a2e;
+  border-radius:12px;padding:0;
+  max-width:640px;margin:0 auto;
+  font-family:'Segoe UI',system-ui,sans-serif;
+  box-shadow:0 4px 32px rgba(0,0,0,.12);
+  overflow:hidden;
+}
+
+/* Modo escuro */
+.comp-paper.comp-dark {
+  background:#0f1623;color:#e8eaf0;
+  box-shadow:0 4px 32px rgba(0,0,0,.6);
+}
+
+/* ── Cabeçalho ── */
+.comp-top {
+  background:#1a3a6b;color:#fff;
+  padding:24px 28px 20px;
+  display:flex;align-items:flex-start;justify-content:space-between;gap:16px;
+}
+.comp-dark .comp-top { background:#0a1628; }
+.comp-top-left { display:flex;flex-direction:column;gap:4px; }
+.comp-logo { height:52px;object-fit:contain;margin-bottom:6px;border-radius:4px; }
+.comp-empresa { font-size:1.35rem;font-weight:800;letter-spacing:-.03em;line-height:1.15; }
+.comp-seg     { font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;opacity:.7;margin-top:2px; }
+.comp-top-right { display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0; }
+.comp-badge-os {
+  background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);
+  border-radius:6px;padding:4px 12px;
+  font-size:.6rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;
+}
+.comp-os-num { font-size:2rem;font-weight:900;letter-spacing:-.04em;line-height:1;color:#fff; }
+.comp-meta   { font-size:.72rem;opacity:.75;display:flex;flex-direction:column;align-items:flex-end;gap:3px; }
+.comp-meta span { display:flex;align-items:center;gap:5px; }
+.comp-status-pill {
+  display:inline-block;padding:3px 12px;border-radius:20px;
+  font-size:.65rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+}
+
+/* ── Corpo ── */
+.comp-body { padding:24px 28px; }
+.comp-dark .comp-body {}
+
+/* Grid de cards 2 colunas */
+.comp-cards {
+  display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;
+}
+@media(max-width:480px){ .comp-cards { grid-template-columns:1fr; } }
+
+.comp-card {
+  border:1px solid #e2e8f0;border-radius:8px;padding:14px;
+}
+.comp-dark .comp-card { border-color:#2a3550; }
+.comp-card-title {
+  display:flex;align-items:center;gap:7px;
+  font-size:.65rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+  color:#1a3a6b;margin-bottom:10px;
+}
+.comp-dark .comp-card-title { color:#5b8dee; }
+.comp-card-icon {
+  width:22px;height:22px;border-radius:50%;
+  background:#1a3a6b;color:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:.7rem;flex-shrink:0;
+}
+.comp-dark .comp-card-icon { background:#1e3a8a; }
+.comp-field { margin-bottom:7px; }
+.comp-field-label { font-size:.65rem;color:#94a3b8;font-weight:600; }
+.comp-field-value { font-size:.82rem;font-weight:600;color:#1a1a2e;line-height:1.3; }
+.comp-dark .comp-field-value { color:#e8eaf0; }
+
+/* Seções com título */
+.comp-section { margin-bottom:18px; }
+.comp-section-title {
+  font-size:.65rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;
+  color:#1a3a6b;border-bottom:2px solid #1a3a6b;padding-bottom:5px;margin-bottom:12px;
+}
+.comp-dark .comp-section-title { color:#5b8dee;border-color:#5b8dee; }
+
+/* Tabela de itens */
+.comp-table { width:100%;border-collapse:collapse;font-size:.8rem;margin-bottom:4px; }
+.comp-table th {
+  background:#1a3a6b;color:#fff;
+  padding:7px 10px;text-align:left;font-size:.65rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+}
+.comp-dark .comp-table th { background:#1e3a8a; }
+.comp-table th:last-child,.comp-table td:last-child { text-align:right; }
+.comp-table th:nth-child(2),.comp-table td:nth-child(2) { text-align:center;width:48px; }
+.comp-table th:nth-child(3),.comp-table td:nth-child(3) { text-align:right;width:88px; }
+.comp-table td { padding:7px 10px;border-bottom:1px solid #f0f4f8;color:#1a1a2e; }
+.comp-dark .comp-table td { border-color:#2a3550;color:#e8eaf0; }
+.comp-table tr:last-child td { border-bottom:none; }
+.comp-table tbody tr:hover td { background:#f8fafc; }
+.comp-dark .comp-table tbody tr:hover td { background:#1a2540; }
+
+/* Rodapé de valores */
+.comp-valores {
+  display:flex;justify-content:flex-end;margin-top:10px;
+}
+.comp-valores-box { min-width:240px; }
+.comp-valor-row {
+  display:flex;justify-content:space-between;
+  padding:5px 0;font-size:.82rem;color:#64748b;
+  border-bottom:1px solid #f0f4f8;
+}
+.comp-dark .comp-valor-row { color:#94a3b8;border-color:#2a3550; }
+.comp-valor-total {
+  display:flex;justify-content:space-between;align-items:center;
+  background:#1a3a6b;color:#fff;
+  padding:10px 14px;border-radius:8px;margin-top:8px;
+  font-size:1.05rem;font-weight:800;
+}
+.comp-dark .comp-valor-total { background:#1e3a8a; }
+
+/* Garantia */
+.comp-garantia-box {
+  display:flex;align-items:flex-start;gap:10px;
+  border:1px solid #bfdbfe;border-radius:8px;padding:12px;background:#eff6ff;
+}
+.comp-dark .comp-garantia-box { background:#0f2040;border-color:#1e3a8a; }
+.comp-garantia-dias { font-size:1.3rem;font-weight:900;color:#1a3a6b;line-height:1; }
+.comp-dark .comp-garantia-dias { color:#5b8dee; }
+.comp-garantia-info { font-size:.72rem;color:#3b82f6;line-height:1.4; }
+
+/* Rodapé — validação + recebimento */
+.comp-footer {
+  display:grid;grid-template-columns:1fr 1fr;gap:16px;
+  border-top:1px solid #e2e8f0;padding-top:18px;margin-top:18px;
+}
+.comp-dark .comp-footer { border-color:#2a3550; }
+@media(max-width:480px){ .comp-footer { grid-template-columns:1fr; } }
+.comp-footer-box {
+  display:flex;flex-direction:column;gap:6px;
+}
+.comp-footer-title {
+  font-size:.65rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+  color:#1a3a6b;display:flex;align-items:center;gap:6px;margin-bottom:4px;
+}
+.comp-dark .comp-footer-title { color:#5b8dee; }
+.comp-hash { font-size:.72rem;font-weight:800;letter-spacing:.06em;color:#1a1a2e; }
+.comp-dark .comp-hash { color:#e8eaf0; }
+.comp-assinatura-area {
+  border-bottom:1px solid #cbd5e1;padding-top:32px;margin-top:4px;
+}
+.comp-assinatura-label { font-size:.65rem;color:#94a3b8;margin-top:4px; }
+
+/* Rodapé inferior */
+.comp-bottom {
+  background:#f8fafc;border-top:1px solid #e2e8f0;
+  padding:14px 28px;display:flex;justify-content:center;align-items:center;gap:24px;flex-wrap:wrap;
+  font-size:.72rem;color:#64748b;
+}
+.comp-dark .comp-bottom { background:#0a1628;border-color:#2a3550;color:#94a3b8; }
+.comp-bottom-item { display:flex;align-items:center;gap:5px; }
+.comp-bottom-agradece {
+  width:100%;text-align:center;font-weight:700;font-size:.75rem;
+  color:#1a3a6b;border-bottom:1px solid #e2e8f0;padding-bottom:10px;margin-bottom:6px;
+  letter-spacing:.06em;text-transform:uppercase;
+}
+.comp-dark .comp-bottom-agradece { color:#5b8dee;border-color:#2a3550; }
+
+/* Fotos */
+.comp-photos { display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px; }
+.comp-photos img { width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px; }
+
+/* Observações / Termos */
+.comp-obs { font-size:.78rem;line-height:1.6;color:#475569;padding:10px;background:#f8fafc;border-radius:6px; }
+.comp-dark .comp-obs { background:#0f1a2e;color:#94a3b8; }
+
 
 /* ── QR READER ──────────────────────────────────────────────── */
 #qrReaderWrap { display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.96);flex-direction:column;align-items:center;justify-content:center;gap:16px; }
