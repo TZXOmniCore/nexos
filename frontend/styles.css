@@ -1,5 +1,5 @@
 /* ============================================================
-   NexOS v5.0 — styles.css
+   NexOS v5.1 — styles.css
    Dark/Light mode (#15), Temas por cor (#38),
    Impressão térmica (#36), Busca global (#37),
    PIX QR section, Garantia badge, Blacklist,
@@ -574,3 +574,32 @@ textarea { resize:vertical;min-height:70px; }
 
 /* ── LISTAS PRINCIPAIS SEM OVERFLOW ─────────────────────────── */
 #os-list,#cli-list,#est-list,#ag-list,#carne-list,#dash-os-list,#orc-list,#audit-list { width:100%;box-sizing:border-box;overflow-x:hidden; }
+
+/* ── v5.1 — TIPO DE OS ───────────────────────────────────────── */
+.tipo-os-btn {
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:6px;padding:14px 8px;
+  -webkit-appearance:none;appearance:none;
+  background:var(--bg-2);border:2px solid var(--border);border-radius:var(--radius-lg);
+  color:var(--text-1);font-size:.8rem;font-weight:600;cursor:pointer;
+  transition:all var(--fast);line-height:1.2;text-align:center;
+  font-family:inherit;
+}
+.tipo-os-btn:hover { border-color:var(--accent);background:var(--accent-dim); }
+.tipo-os-btn.active {
+  border-color:var(--accent);background:var(--accent-dim);
+  color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim);
+}
+
+/* ── v5.1 — MULTI-PAGAMENTO ──────────────────────────────────── */
+.mpay-row {
+  display:flex;align-items:center;gap:8px;padding:8px 0;
+  border-bottom:1px solid var(--border);
+}
+.mpay-row:last-child { border-bottom:none; }
+.mpay-label { font-size:.82rem;font-weight:600;flex:1;display:flex;align-items:center;gap:6px; }
+.mpay-input { width:110px;font-family:var(--mono);text-align:right; }
+.mpay-del { background:none;border:none;cursor:pointer;color:var(--text-3);padding:4px;font-size:1rem;transition:color var(--fast); }
+.mpay-del:hover { color:var(--red); }
+.mpay-troco { font-size:.78rem;color:var(--green);font-family:var(--mono);padding:4px 0;text-align:right; }
+.pchip.p-active { border:2px solid var(--accent);background:var(--accent-dim);color:var(--accent);font-weight:700; }
