@@ -1221,97 +1221,224 @@ function verFoto(osId, idx) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// COMPROVANTE / TEMPLATE — Feature #2
 // ══════════════════════════════════════════════════════════════
-let _compId = null;
-// Templates: classico, moderno, minimalista
-let _compTemplate = localStorage.getItem('nexos_comp_template') || 'classico';
+// COMPROVANTE v5.1
+// ══════════════════════════════════════════════════════════════
+// ── COMPROVANTE v5.1 ─────────────────────────────────────────
+let _compId       = null;
+let _compDark     = JSON.parse(localStorage.getItem('nexos_comp_dark') || 'false');
 
-function setCompTemplate(t) {
-  _compTemplate = t;
-  localStorage.setItem('nexos_comp_template', t);
-  if (_compId) _renderComprovante(_compId);
+function toggleCompTema() {
+  _compDark = !_compDark;
+  localStorage.setItem('nexos_comp_dark', JSON.stringify(_compDark));
+  const paper = document.querySelector('.comp-paper');
+  if (paper) paper.classList.toggle('comp-dark', _compDark);
+  const lbl = document.getElementById('comp-tema-label');
+  if (lbl) lbl.textContent = _compDark ? 'Escuro' : 'Claro';
+  const btn = document.getElementById('btn-comp-tema');
+  if (btn) btn.innerHTML = `<i data-lucide="${_compDark ? 'moon' : 'sun'}" style="width:13px;height:13px"></i> ${_compDark ? 'Escuro' : 'Claro'}`;
+  if (window.lucide) lucide.createIcons();
+}
+
+function _statusColor(st) {
+  const m = { concluido:'#16a34a', retirada:'#0891b2', andamento:'#d97706',
+               aguardando:'#6366f1', fiado:'#dc2626', cancelado:'#9ca3af', orcamento:'#7c3aed' };
+  return m[st] || '#64748b';
 }
 
 function buildOSTemplate(os) {
   const p = STATE.perfil || {};
   let itens = []; try { itens = JSON.parse(os.itens || '[]'); } catch {}
   let fotos = []; try { fotos = JSON.parse(os.fotos || '[]'); } catch {}
-  const nome = os.clientes?.nome || os.cliente_nome || '–';
-  const tel  = os.clientes?.telefone || '';
-  const st   = _normSt(os.status);
-  const hash = os.hash_doc || genHash(os.id + (os.valor_total || 0));
-  const qrId = 'qr' + Date.now();
+  const nome    = os.clientes?.nome || os.cliente_nome || '–';
+  const tel     = os.clientes?.telefone || '';
+  const cpf     = os.clientes?.cpf || '';
+  const st      = _normSt(os.status);
+  const hash    = os.hash_doc || genHash(os.id + (os.valor_total || 0));
+  const qrId    = 'qr' + Date.now();
+  const isDark  = _compDark;
+  const darkCls = isDark ? ' comp-dark' : '';
 
-  const itensH = itens.map(it =>
-    `<div class="comp-item-r"><span>${_e(it.descricao || it.desc || '')} (x${it.quantidade || 1})</span><span><b>${fmt((it.quantidade || 1) * (it.valor_unit || 0))}</b></span></div>`
-  ).join('');
+  // Tipo da OS
+  const tipoLabel = { servico:'Ordem de Serviço', produto:'Venda de Produto',
+                       misto:'OS + Produto', orcamento:'Orçamento' }[os.tipo || 'servico'] || 'Ordem de Serviço';
 
-  const fotosH = fotos.length
-    ? `<div class="comp-sec">Fotos</div><div class="comp-photos">${fotos.slice(0, 6).map(f => `<img src="${f}" crossorigin="anonymous">`).join('')}</div>` : '';
-
-  // Estilos por template
-  const tplStyles = {
-    classico:    'font-family:Georgia,serif;',
-    moderno:     'font-family:Inter,sans-serif;',
-    minimalista: 'font-family:monospace;border:none;',
-  };
-  const tplStyle = tplStyles[_compTemplate] || tplStyles.classico;
-
+  // Logo
   const logoHtml = p.logo_url
-    ? `<img src="${p.logo_url}" alt="Logo" style="height:48px;object-fit:contain;margin-bottom:6px">` : '';
+    ? `<img src="${p.logo_url}" alt="Logo" class="comp-logo" crossorigin="anonymous">` : '';
+
+  // Status pill
+  const stColor = _statusColor(st);
+  const statusPill = `<span class="comp-status-pill" style="background:${stColor}">${statusLabel(os.status)}</span>`;
+
+  // Itens da tabela
+  const itensRows = itens.map(it => {
+    const desc = _e(it.descricao || it.desc || '');
+    const qty  = it.quantidade || 1;
+    const unit = it.valor_unit || 0;
+    return `<tr>
+      <td>${desc}</td>
+      <td style="text-align:center">${qty}</td>
+      <td style="text-align:right">${fmt(unit)}</td>
+      <td style="text-align:right"><b>${fmt(qty * unit)}</b></td>
+    </tr>`;
+  }).join('');
+
+  const maoObraRow = (os.valor_mao_obra || 0) > 0
+    ? `<tr><td><b>Mão de Obra</b></td><td style="text-align:center">1</td><td style="text-align:right">${fmt(os.valor_mao_obra)}</td><td style="text-align:right"><b>${fmt(os.valor_mao_obra)}</b></td></tr>` : '';
+
+  const subtotal   = (os.valor_pecas || 0) + (os.valor_mao_obra || 0);
+  const descValor  = os.desconto_valor || 0;
+  const descRow    = descValor > 0
+    ? `<div class="comp-valor-row"><span>Desconto (${os.desconto_pct || 0}%)</span><span style="color:#dc2626">– ${fmt(descValor)}</span></div>` : '';
+
+  // Pagamento — suporte multi-pagamento
+  let pagFormas = '';
+  if (os.pagamentos_multiplos) {
+    try {
+      const pags = JSON.parse(os.pagamentos_multiplos);
+      pagFormas = pags.map(p2 => `${payLabel(p2.forma)}: ${fmt(p2.valor)}`).join(' · ');
+    } catch { pagFormas = payLabel(os.forma_pagamento); }
+  } else {
+    pagFormas = payLabel(os.forma_pagamento || 'aguardando');
+  }
+
+  // Equipamento
+  const equipBlock = (os.equipamento || os.item) ? `
+    <div class="comp-card">
+      <div class="comp-card-title">
+        <div class="comp-card-icon">📱</div> Equipamento
+      </div>
+      ${os.equipamento || os.item ? `<div class="comp-field"><div class="comp-field-label">Produto</div><div class="comp-field-value">${_e(os.equipamento || os.item)}</div></div>` : ''}
+      ${os.defeito     ? `<div class="comp-field"><div class="comp-field-label">Defeito</div><div class="comp-field-value">${_e(os.defeito)}</div></div>` : ''}
+      ${os.diagnostico ? `<div class="comp-field"><div class="comp-field-label">Diagnóstico</div><div class="comp-field-value">${_e(os.diagnostico)}</div></div>` : ''}
+    </div>` : '<div></div>';
+
+  // Garantia + Valores lado a lado
+  const garantiaBlock = (os.garantia_dias || 0) > 0 ? `
+    <div class="comp-section" style="grid-column:1">
+      <div class="comp-section-title">🛡️ Garantia</div>
+      <div class="comp-garantia-box">
+        <div>
+          <div class="comp-garantia-dias">${os.garantia_dias} DIAS</div>
+          <div class="comp-garantia-info">Garantia de serviço<br>A garantia cobre apenas defeitos<br>relacionados ao serviço executado.</div>
+        </div>
+      </div>
+    </div>` : '';
+
+  // Fotos
+  const fotosBlock = fotos.length ? `
+    <div class="comp-section">
+      <div class="comp-section-title">📷 Fotos</div>
+      <div class="comp-photos">${fotos.slice(0,6).map(f => `<img src="${f}" crossorigin="anonymous">`).join('')}</div>
+    </div>` : '';
+
+  // Obs
+  const obsBlock = os.observacoes ? `
+    <div class="comp-section">
+      <div class="comp-section-title">📋 Observações</div>
+      <div class="comp-obs">${_e(os.observacoes)}</div>
+    </div>` : '';
+
+  // Termos
+  const termosBlock = p.termos ? `
+    <div class="comp-section">
+      <div class="comp-section-title">Termos & Condições</div>
+      <div class="comp-obs">${_e(p.termos)}</div>
+    </div>` : '';
+
+  // Assinatura
+  const assinaturaBlock = os.assinatura ? `
+    <img src="${os.assinatura}" crossorigin="anonymous" style="max-height:48px;max-width:180px;display:block;margin-bottom:4px">` : '';
 
   const html = `
-  <div class="comp-paper" id="compPaper" style="${tplStyle}">
-    <div class="comp-header">
-      ${logoHtml}
-      <div class="comp-store">${_e(p.empresa_nome || 'NexOS')}</div>
-      ${p.cnpj    ? `<div class="comp-sub">CNPJ: ${_e(p.cnpj)}</div>`    : ''}
-      ${p.endereco? `<div class="comp-sub">${_e(p.endereco)}</div>`       : ''}
-      ${p.telefone? `<div class="comp-sub">${_e(p.telefone)}</div>`       : ''}
-    </div>
-    <div style="text-align:center;margin-bottom:10px">
-      <div style="font-size:10px;color:#888;font-weight:700;letter-spacing:2px;text-transform:uppercase">ORDEM DE SERVIÇO</div>
-      <div class="comp-os-num">#${os.numero || '–'}</div>
-      <div class="comp-date">${fDateFull(os.criado_em)}</div>
-      <div style="margin-top:6px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
-        <span style="background:${statusBgColor(st)};color:#fff;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700;text-transform:uppercase">${statusLabel(os.status)}</span>
-        <span style="background:#eee;color:#555;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700">${payLabel(os.forma_pagamento)}</span>
+  <div class="comp-paper${darkCls}" id="compPaper">
+
+    <!-- CABEÇALHO AZUL -->
+    <div class="comp-top">
+      <div class="comp-top-left">
+        ${logoHtml}
+        <div class="comp-empresa">${_e(p.empresa_nome || 'NexOS')}</div>
+        ${p.cnpj     ? `<div class="comp-seg">CNPJ: ${_e(p.cnpj)}</div>` : ''}
+        ${p.endereco ? `<div class="comp-seg">${_e(p.endereco)}</div>` : ''}
+      </div>
+      <div class="comp-top-right">
+        <div class="comp-badge-os">${tipoLabel}</div>
+        <div class="comp-os-num">OS Nº ${String(os.numero || '0').padStart(5,'0')}</div>
+        <div class="comp-meta">
+          <span>📅 ${fmtDate(os.criado_em)} ${os.criado_em ? new Date(os.criado_em).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : ''}</span>
+          <span>${statusPill}</span>
+          <span>💳 ${pagFormas}</span>
+        </div>
       </div>
     </div>
-    <div class="comp-sec">Cliente</div>
-    <div class="comp-row"><span>Nome</span><span><b>${_e(nome)}</b></span></div>
-    ${tel ? `<div class="comp-row"><span>Tel</span><span>${_e(tel)}</span></div>` : ''}
-    ${os.equipamento || os.item ? `
-      <div class="comp-sec">Equipamento</div>
-      <div class="comp-row"><span>Equip.</span><span>${_e(os.equipamento || os.item || '')}</span></div>
-      ${os.defeito ? `<div class="comp-row"><span>Defeito</span><span>${_e(os.defeito)}</span></div>` : ''}
-      ${os.diagnostico ? `<div class="comp-row"><span>Diag.</span><span>${_e(os.diagnostico)}</span></div>` : ''}` : ''}
-    <div class="comp-sec">Itens</div>
-    <div class="comp-items">
-      ${itensH}
-      ${(os.valor_mao_obra || 0) > 0 ? `<div class="comp-item-r"><span>Mão de Obra</span><span><b>${fmt(os.valor_mao_obra)}</b></span></div>` : ''}
-      ${(os.desconto_pct   || 0) > 0 ? `<div class="comp-item-r"><span style="color:#e74c3c">Desconto (${os.desconto_pct}%)</span><span style="color:#e74c3c">-${fmt(os.desconto_valor)}</span></div>` : ''}
+
+    <!-- CORPO -->
+    <div class="comp-body">
+
+      <!-- Cards cliente + equipamento -->
+      <div class="comp-cards">
+        <div class="comp-card">
+          <div class="comp-card-title">
+            <div class="comp-card-icon">👤</div> Dados do Cliente
+          </div>
+          <div class="comp-field"><div class="comp-field-label">Nome</div><div class="comp-field-value">${_e(nome)}</div></div>
+          ${tel ? `<div class="comp-field"><div class="comp-field-label">Telefone</div><div class="comp-field-value">${_e(tel)}</div></div>` : ''}
+          ${cpf ? `<div class="comp-field"><div class="comp-field-label">Documento</div><div class="comp-field-value">${_e(cpf)}</div></div>` : ''}
+        </div>
+        ${equipBlock}
+      </div>
+
+      <!-- Itens e Serviços -->
+      <div class="comp-section">
+        <div class="comp-section-title">Itens e Serviços</div>
+        <table class="comp-table">
+          <thead><tr><th>Descrição</th><th>Qtd</th><th>Valor Unit.</th><th>Total</th></tr></thead>
+          <tbody>
+            ${itensRows}
+            ${maoObraRow}
+          </tbody>
+        </table>
+        <div class="comp-valores">
+          <div class="comp-valores-box">
+            ${descRow}
+            <div class="comp-valor-total"><span>TOTAL</span><span>${fmt(os.valor_total)}</span></div>
+          </div>
+        </div>
+      </div>
+
+      ${garantiaBlock}
+      ${fotosBlock}
+      ${obsBlock}
+      ${termosBlock}
+
+      <!-- Rodapé validação + recebimento -->
+      <div class="comp-footer">
+        <div class="comp-footer-box">
+          <div class="comp-footer-title">🛡️ Validação da OS</div>
+          <div style="font-size:.65rem;color:#94a3b8">Código de autenticação</div>
+          <div class="comp-hash">${hash.toUpperCase().slice(0,4)}-${hash.toUpperCase().slice(4,8)}-${hash.toUpperCase().slice(8,12)}</div>
+          <div id="${qrId}" style="margin-top:8px"></div>
+          <div style="font-size:.6rem;color:#94a3b8;margin-top:4px">Escaneie para validar esta OS</div>
+        </div>
+        <div class="comp-footer-box">
+          <div class="comp-footer-title">✍️ Recebimento</div>
+          <div style="font-size:.72rem;color:#64748b">Serviço concluído em ____/____/______</div>
+          <div class="comp-assinatura-area">${assinaturaBlock}</div>
+          <div class="comp-assinatura-label">Assinatura do cliente</div>
+        </div>
+      </div>
+
     </div>
-    <div class="comp-total"><span>TOTAL</span><span>${fmt(os.valor_total)}</span></div>
-    ${(os.valor_pago || 0) > 0 ? `<div class="comp-row"><span>Pago</span><span>${fmt(os.valor_pago)}</span></div>` : ''}
-    ${(os.garantia_dias || 0) > 0 ? `<div class="comp-row"><span>🛡️ Garantia</span><span>${os.garantia_dias} dias</span></div>` : ''}
-    ${os.observacoes ? `<div class="comp-sec">Observações</div><div style="font-size:12px;color:#555;line-height:1.6;margin-bottom:8px">${_e(os.observacoes)}</div>` : ''}
-    ${fotosH}
-    ${os.assinatura ? `
-      <div class="comp-sec">Assinatura</div>
-      <div style="border:1px solid #ddd;border-radius:6px;padding:8px;text-align:center;margin-bottom:8px">
-        <img src="${os.assinatura}" crossorigin="anonymous" style="max-width:100%;max-height:55px">
-        <div style="font-size:10px;color:#888;margin-top:3px">${_e(nome)}</div>
-      </div>` : ''}
-    ${p.termos ? `<div class="comp-terms">${_e(p.termos)}</div>` : ''}
-    <div class="comp-footer">
-      <div id="${qrId}" style="display:flex;justify-content:center;margin-bottom:8px"></div>
-      <div><b>Código de Verificação</b></div>
-      <div class="comp-hash">OS: #${os.numero} | HASH: ${hash} | ${fDateFull(os.criado_em)}</div>
-      ${p.pix ? `<div style="margin-top:7px"><b>PIX:</b> ${_e(p.pix)}</div>` : ''}
-      <div style="margin-top:8px">Obrigado pela preferência! 🙏</div>
+
+    <!-- RODAPÉ INFERIOR -->
+    <div class="comp-bottom">
+      <div class="comp-bottom-agradece">Agradecemos a Confiança!</div>
+      ${p.telefone ? `<div class="comp-bottom-item">📞 ${_e(p.telefone)}</div>` : ''}
+      ${p.pix      ? `<div class="comp-bottom-item">📱 PIX: ${_e(p.pix)}</div>` : ''}
+      ${p.site     ? `<div class="comp-bottom-item">🌐 ${_e(p.site)}</div>` : ''}
     </div>
+
   </div>`;
 
   return { html, qrId, hash };
@@ -1321,16 +1448,23 @@ function _renderComprovante(id) {
   const os = APP.os.find(o => o.id === id); if (!os) return null;
   const { html, qrId, hash } = buildOSTemplate(os);
   document.getElementById('compContent').innerHTML = html;
+  // Sincronizar tema
+  const paper = document.querySelector('.comp-paper');
+  if (paper) paper.classList.toggle('comp-dark', _compDark);
+  const lbl = document.getElementById('comp-tema-label');
+  if (lbl) lbl.textContent = _compDark ? 'Escuro' : 'Claro';
   setTimeout(() => {
     try {
       const el = document.getElementById(qrId);
-      if (el && window.QRCode) new QRCode(el, { text: 'OS:#' + os.numero + '|HASH:' + hash, width: 80, height: 80, colorDark: '#1a6cf0', colorLight: '#ffffff' });
+      const qrColor = _compDark ? '#5b8dee' : '#1a3a6b';
+      const qrBg    = _compDark ? '#0f1623' : '#ffffff';
+      if (el && window.QRCode) new QRCode(el, { text: 'OS:#' + os.numero + '|HASH:' + hash, width: 72, height: 72, colorDark: qrColor, colorLight: qrBg });
     } catch {}
   }, 200);
   return os;
 }
 
-function abrirComp(id) { _compId = id; if (!_renderComprovante(id)) return; document.getElementById('compView').classList.add('open'); }
+function abrirComp(id) { _compId = id; if (!_renderComprovante(id)) return; document.getElementById('compView').classList.add('open'); if (window.lucide) setTimeout(()=>lucide.createIcons(),100); }
 function fecharComp()  { document.getElementById('compView').classList.remove('open'); }
 
 // Feature #36 — Impressão Térmica (58mm / 80mm)
