@@ -955,7 +955,7 @@ async function _finalizarSalvarOS({ nome, tel, clienteId, totalItens, maoObra, t
 
       // v5.1 — Reconciliar CAIXA: remove lançamentos antigos desta OS e relança com os valores/formas atuais
       if (!isOrc) {
-        await window.sb.from('caixa').delete().eq('ordem_id', _editOsId).eq('dono_id', STATE.user.id).catch(() => {});
+        try { await window.sb.from('caixa').delete().eq('ordem_id', _editOsId).eq('dono_id', STATE.user.id); } catch {}
         const dia = today();
         for (const pg of _multiPays) {
           if (pg.forma === 'aguardando') continue;
@@ -1000,7 +1000,9 @@ async function _finalizarSalvarOS({ nome, tel, clienteId, totalItens, maoObra, t
         }
         if (carneData) {
           for (const p of carneData.itens) {
-            await window.sb.from('parcelas').insert({ dono_id: STATE.user.id, ordem_id: saved.id, numero: p.num, total: carneData.parcelas, valor: p.valor, vencimento: p.venc, pago: false }).catch(() => {});
+            try {
+              await window.sb.from('parcelas').insert({ dono_id: STATE.user.id, ordem_id: saved.id, numero: p.num, total: carneData.parcelas, valor: p.valor, vencimento: p.venc, pago: false });
+            } catch {}
           }
         }
       }
