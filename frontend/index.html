@@ -17,7 +17,7 @@
 <link rel="apple-touch-icon" href="NexOS.png">
 <link rel="manifest" href="manifest.json">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=51">
+<link rel="stylesheet" href="styles.css?v=52">
 <!-- Libs externas -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
@@ -26,9 +26,9 @@
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <!-- App Scripts — carregados no head para today() estar disponível -->
-<script src="api.js?v=51"></script>
-<script src="auth.js?v=51"></script>
-<script src="app.js?v=51"></script>
+<script src="api.js?v=52"></script>
+<script src="auth.js?v=52"></script>
+<script src="app.js?v=52"></script>
 </head>
 <body>
 
@@ -1022,16 +1022,15 @@
 
 <!-- ══ COMPROVANTE FULLSCREEN ═════════════════════════════════ -->
 <div id="compView">
-  <div style="display:flex;gap:8px;flex-wrap:wrap;padding:16px 16px 0;max-width:500px;margin:0 auto">
+  <div style="display:flex;gap:8px;flex-wrap:wrap;padding:16px 16px 0;max-width:680px;margin:0 auto;align-items:center">
     <button class="btn btn-ghost btn-sm" onclick="fecharComp()">
       <i data-lucide="arrow-left" style="width:13px;height:13px"></i> Voltar
     </button>
-    <!-- Feature #2 — Templates -->
-    <select class="form-control" style="width:auto;font-size:.78rem;padding:4px 8px" onchange="setCompTemplate(this.value)">
-      <option value="classico">📜 Clássico</option>
-      <option value="moderno">✨ Moderno</option>
-      <option value="minimalista">◻️ Minimalista</option>
-    </select>
+    <!-- Toggle claro/escuro -->
+    <button class="btn btn-ghost btn-sm" id="btn-comp-tema" onclick="toggleCompTema()" title="Alternar tema do comprovante">
+      <i data-lucide="sun" style="width:13px;height:13px"></i> <span id="comp-tema-label">Claro</span>
+    </button>
+    <div style="flex:1"></div>
     <button class="btn btn-secondary btn-sm" onclick="window.print()">
       <i data-lucide="printer" style="width:13px;height:13px"></i> Imprimir
     </button>
@@ -1039,20 +1038,16 @@
       <i data-lucide="file-text" style="width:13px;height:13px"></i> PDF
     </button>
     <button class="btn btn-ghost btn-sm" onclick="compartilharComp()">
-      <i data-lucide="share-2" style="width:13px;height:13px"></i> Compartilhar
+      <i data-lucide="share-2" style="width:13px;height:13px"></i> Imagem
     </button>
     <button class="btn btn-ghost btn-sm" style="background:#25D366;border-color:#25D366;color:#fff" onclick="enviarWA(_compId)">
       <i data-lucide="message-circle" style="width:13px;height:13px"></i> WhatsApp
     </button>
-    <!-- Feature #36 — Impressão térmica -->
     <button class="btn btn-secondary btn-sm" onclick="imprimirTermico(_compId)">
       <i data-lucide="printer" style="width:13px;height:13px"></i> 58mm
     </button>
-    <button class="btn btn-secondary btn-sm" onclick="salvarComoImagem()">
-      <i data-lucide="image" style="width:13px;height:13px"></i> Imagem
-    </button>
   </div>
-  <div id="compContent" style="padding:14px"></div>
+  <div id="compContent" style="padding:14px 14px 40px"></div>
 </div>
 
 <!-- ══ BUSCA GLOBAL — Feature #37 ════════════════════════════ -->
