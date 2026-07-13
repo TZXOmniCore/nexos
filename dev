@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NexOS — Diagnóstico</title>
+<style>
+  body { font-family: sans-serif; background: #0a0e1a; color: #fff; padding: 20px; font-size: 14px; }
+  .ok  { color: #34D399; }
+  .err { color: #F87171; }
+  .warn{ color: #FBBF24; }
+  .box { background: #1a2035; border-radius: 8px; padding: 12px; margin: 8px 0; }
+  pre  { font-size: 11px; white-space: pre-wrap; word-break: break-all; color: #9CA3AF; }
+  h2   { color: #38BDF8; margin: 16px 0 8px; }
+  button { background: #38BDF8; color: #000; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; margin: 4px; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<h1>🔍 NexOS Diagnóstico v3.5</h1>
+<div id="log"></div>
+
+<h2>Teste manual</h2>
+<button onclick="testeModal()">Testar Modal</button>
+<button onclick="testeSupabase()">Testar Supabase</button>
+<button onclick="testeSegments()">Testar Segments</button>
+<button onclick="testeI18N()">Testar I18N</button>
+<button onclick="limparCache()">Limpar Cache SW</button>
+
+<div id="modal-test"></div>
+
+<script>
+const log = document.getElementById('log');
+
+function add(msg, tipo = 'ok') {
+  const d = document.createElement('div');
+  d.className = 'box';
+  d.innerHTML = `<span class="${tipo}">${tipo === 'ok' ? '✅' : tipo === 'err' ? '❌' : '⚠️'}</span> ${msg}`;
+  log.appendChild(d);
+}
+
+function addPre(label, data) {
+  const d = document.createElement('div');
+  d.className = 'box';
+  d.innerHTML = `<strong>${label}</strong><pre>${JSON.stringify(data, null, 2)}</pre>`;
+  log.appendChild(d);
+}
+
+// ── Captura todos os erros JS ──────────────────────────────
+window.onerror = (msg, src, line, col, err) => {
+  add(`ERRO JS: ${msg} (${src}:${line}:${col})`, 'err');
+};
+window.addEventListener('unhandledrejection', e => {
+  add(`PROMISE rejeitada: ${e.reason}`, 'err');
+});
+
+// ── Testa carregamento dos scripts ────────────────────────
+async function runDiag() {
+  add('Diagnóstico iniciado');
+
+  // Supabase SDK
+  if (window.supabase) add('supabase SDK carregado');
+  else add('supabase SDK NÃO carregado', 'err');
+
+  // window.sb
+  if (window.sb) add('window.sb inicializado');
+  else add('window.sb NÃO inicializado — auth.js não carregou ou deu erro', 'err');
+
+  // STATE
+  if (window.STATE) {
+    add('STATE existe');
+    addPre('STATE', { user: STATE.user?.email||null, empresa: STATE.empresa?.nome||null, perfil: STATE.perfil?.nome||null });
+  } else add('STATE não existe', 'err');
+
+  // I18N
+  if (window.I18N) add('I18N carregado — lang: ' + I18N.lang);
+  else add('I18N não carregado', 'err');
+
+  // SEGMENTS
+  if (window.SEGMENTS) {
+    try {
+      const seg = SEGMENTS.current;
+      add('SEGMENTS carregado — segmento: ' + seg.id);
+    } catch(e) {
+      add('SEGMENTS.current ERRO: ' + e.message, 'err');
+    }
+  } else add('SEGMENTS não carregado', 'err');
+
+  // App
+  if (window.App) add('App objeto existe');
+  else add('App não existe', 'err');
+
+  // API
+  if (window.API) add('API existe');
+  else add('API não existe', 'err');
+
+  // UI
+  if (window.UI) add('UI existe');
+  else add('UI não existe', 'err');
+
+  // goPage
+  if (typeof goPage === 'function') add('goPage() existe');
+  else add('goPage() não existe', 'err');
+
+  // openNewOS
+  if (typeof openNewOS === 'function') add('openNewOS() existe');
+  else add('openNewOS() NÃO existe — este é o problema!', 'err');
+
+  // buildOSModal
+  if (typeof buildOSModal === 'function') add('buildOSModal() existe');
+  else add('buildOSModal() NÃO existe', 'err');
+
+  // STATUS_CONFIG
+  if (window.STATUS_CONFIG) add('STATUS_CONFIG existe — status: ' + Object.keys(STATUS_CONFIG).join(', '));
+  else add('STATUS_CONFIG não existe', 'err');
+
+  // PAY_CONFIG
+  if (window.PAY_CONFIG) add('PAY_CONFIG existe');
+  else add('PAY_CONFIG não existe', 'err');
+
+  // Lucide
+  if (window.lucide) add('Lucide carregado');
+  else add('Lucide não carregado', 'warn');
+
+  // Chart.js
+  if (window.Chart) add('Chart.js carregado');
+  else add('Chart.js não carregado', 'warn');
+
+  // Service Worker
+  if ('serviceWorker' in navigator) {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    if (regs.length) {
+      add(`Service Workers ativos: ${regs.length} — scope: ${regs.map(r=>r.scope).join(', ')}`, 'warn');
+    } else {
+      add('Nenhum Service Worker ativo');
+    }
+  }
+
+  // Cache
+  if (window.caches) {
+    const keys = await caches.keys();
+    if (keys.length) add(`Caches ativos: ${keys.join(', ')}`, 'warn');
+    else add('Nenhum cache ativo');
+  }
+
+  add('--- Diagnóstico completo ---');
+}
+
+// ── Testes manuais ────────────────────────────────────────
+function testeModal() {
+  try {
+    if (typeof openNewOS !== 'function') {
+      add('openNewOS não é função — app.js não carregou corretamente', 'err');
+      return;
+    }
+    openNewOS();
+    add('openNewOS() chamada sem erro — verifique se modal abriu');
+  } catch(e) {
+    add('ERRO em openNewOS: ' + e.message + ' (linha: ' + (e.stack?.split('\n')[1]||'?') + ')', 'err');
+    console.error(e);
+  }
+}
+
+async function testeSupabase() {
+  try {
+    if (!window.sb) { add('sb não existe', 'err'); return; }
+    const { data, error } = await window.sb.from('empresas').select('id, nome').limit(1);
+    if (error) add('Supabase ERRO: ' + error.message, 'err');
+    else add('Supabase OK — empresas: ' + JSON.stringify(data));
+  } catch(e) {
+    add('Supabase EXCEÇÃO: ' + e.message, 'err');
+  }
+}
+
+function testeSegments() {
+  try {
+    const seg = SEGMENTS.current;
+    add('Segments OK — id: ' + seg.id + ', campos: ' + seg.os_form_fields.length);
+    addPre('os_form_fields', seg.os_form_fields.map(f=>({id:f.id,type:f.type})));
+  } catch(e) {
+    add('ERRO Segments: ' + e.message, 'err');
+  }
+}
+
+function testeI18N() {
+  try {
+    const t = I18N.t('save');
+    add('I18N.t("save") = ' + t);
+  } catch(e) {
+    add('ERRO I18N: ' + e.message, 'err');
+  }
+}
+
+async function limparCache() {
+  const keys = await caches.keys();
+  await Promise.all(keys.map(k => caches.delete(k)));
+  const regs = await navigator.serviceWorker.getRegistrations();
+  await Promise.all(regs.map(r => r.unregister()));
+  add(`Cache limpo (${keys.length} removidos) e SW desregistrado (${regs.length}). Recarregue a página.`, 'ok');
+}
+
+// Roda automaticamente
+runDiag();
+</script>
+</body>
+</html>
