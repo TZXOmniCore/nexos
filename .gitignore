@@ -1,0 +1,20 @@
+# Dependências
+node_modules/
+
+# Variáveis de ambiente / segredos — nunca commitar
+.env
+.env.*
+!.env.example
+
+# Sistema operacional / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Vercel
+.vercel/

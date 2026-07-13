@@ -1,8 +1,1219 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="refresh" content="0; url=frontend/index.html">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<!-- CSP — Feature #8: Segurança contra XSS de terceiros -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://twxotfzlronfjfjyaklx.supabase.co https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com https://viacep.com.br; font-src 'self' https://fonts.gstatic.com;">
+<meta name="theme-color" content="#0a0f1e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="NexOS">
+<!-- X-Frame-Options via meta para proteção extra -->
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<title>NexOS</title>
+<link rel="icon" type="image/png" href="NexOS.png">
+<link rel="apple-touch-icon" href="NexOS.png">
+<link rel="manifest" href="manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=52">
+<!-- Libs externas -->
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<!-- App Scripts — carregados no head para today() estar disponível -->
+<script defer src="api.js?v=52"></script>
+<script defer src="auth.js?v=52"></script>
+<script defer src="app.js?v=52"></script>
 </head>
-<body></body>
+<body>
+
+<!-- ══ LOADING ═══════════════════════════════════════════════ -->
+<div id="loading-screen">
+  <img src="NexOS.png" class="loading-logo" alt="NexOS" onerror="this.style.display='none'">
+  <div class="loading-bar"><div class="loading-bar-fill"></div></div>
+  <p class="loading-msg" style="font-family:monospace;font-size:11px;color:#444;margin-top:8px">Iniciando NexOS...</p>
+</div>
+
+<!-- ══ AUTH ══════════════════════════════════════════════════ -->
+<div id="auth-screen">
+  <div class="auth-box">
+
+    <!-- Login -->
+    <div id="auth-login-view">
+      <div class="auth-logo">
+        <img src="NexOS.png" alt="NexOS" onerror="this.style.display='none'">
+        <div class="auth-logo-name">NexOS</div>
+        <div class="auth-logo-sub">Gestão inteligente</div>
+      </div>
+      <h2 class="auth-title">Bem-vindo</h2>
+      <p class="auth-sub">Entre com sua conta para continuar</p>
+      <div class="form-group">
+        <label class="form-label">E-mail</label>
+        <input type="email" id="auth-email" class="form-control" placeholder="seu@email.com" autocomplete="email" onkeydown="if(event.key==='Enter')Auth.login()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Senha</label>
+        <div style="position:relative">
+          <input type="password" id="auth-pass" class="form-control" placeholder="••••••••" autocomplete="current-password" style="padding-right:40px" onkeydown="if(event.key==='Enter')Auth.login()">
+          <button onclick="togglePass()" id="pass-eye" type="button" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-3)">
+            <i data-lucide="eye" style="width:16px;height:16px"></i>
+          </button>
+        </div>
+      </div>
+      <button id="btn-login" class="btn btn-primary btn-lg w-full" onclick="Auth.login()" style="margin-bottom:14px">
+        <i data-lucide="log-in" style="width:15px;height:15px"></i> Entrar
+      </button>
+      <div class="auth-divider"><span>ou</span></div>
+      <button class="btn-google" onclick="Auth.loginGoogle()">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908C16.658 14.013 17.64 11.705 17.64 9.2z"/>
+          <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"/>
+          <path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/>
+          <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
+        </svg>
+        Entrar com Google
+      </button>
+      <div class="auth-link" style="margin-top:10px">
+        <span onclick="Auth.forgot()" style="color:var(--text-2);cursor:pointer">Esqueci minha senha</span>
+        &nbsp;·&nbsp;
+        <span onclick="showRegView()">Criar conta</span>
+      </div>
+    </div>
+
+    <!-- Registro -->
+    <div id="auth-reg-view" style="display:none">
+      <div class="auth-logo">
+        <img src="NexOS.png" alt="NexOS" onerror="this.style.display='none'">
+        <div class="auth-logo-name">NexOS</div>
+        <div class="auth-logo-sub">Gestão inteligente</div>
+      </div>
+      <h2 class="auth-title">Criar Conta</h2>
+      <p class="auth-sub">Cadastre sua empresa gratuitamente</p>
+      <div class="form-group">
+        <label class="form-label">Nome da Empresa</label>
+        <input type="text" id="reg-nome" class="form-control" placeholder="Minha Empresa" autocomplete="organization">
+      </div>
+      <div class="form-group">
+        <label class="form-label">E-mail</label>
+        <input type="email" id="reg-email" class="form-control" placeholder="seu@email.com" autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Senha</label>
+        <input type="password" id="reg-pass" class="form-control" placeholder="Mínimo 8 caracteres" autocomplete="new-password">
+      </div>
+      <div class="form-group" style="margin-bottom:16px">
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:var(--text-2);line-height:1.5">
+          <input type="checkbox" id="reg-consent" style="margin-top:3px;flex-shrink:0;accent-color:var(--accent)">
+          <span>Li e aceito os
+            <a href="legal.html" target="_blank" style="color:var(--accent);text-decoration:none">Termos de Uso</a>
+            e a
+            <a href="legal.html#privacidade" target="_blank" style="color:var(--accent);text-decoration:none">Política de Privacidade</a>,
+            incluindo o tratamento dos meus dados conforme a LGPD.
+          </span>
+        </label>
+      </div>
+      <button id="btn-reg" class="btn btn-primary btn-lg w-full" onclick="Auth.register()" style="margin-bottom:12px">Criar conta</button>
+      <div class="auth-link">Já tem conta? <span onclick="showLoginView()">Entrar</span></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══ APP SHELL ══════════════════════════════════════════════ -->
+<div id="app-shell" style="display:none">
+
+  <!-- Sidebar Desktop -->
+  <aside id="sidebar">
+    <div class="sidebar-logo">
+      <img src="NexOS.png" alt="N" onerror="this.style.display='none'" style="width:32px;height:32px;border-radius:8px">
+      <div class="sidebar-logo-text">NexOS</div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-item active" data-page="dashboard" onclick="goPage('dashboard')">
+        <i data-lucide="layout-dashboard" class="nav-icon"></i> Dashboard
+      </div>
+      <div class="nav-item" data-page="os" onclick="goPage('os')">
+        <i data-lucide="clipboard-list" class="nav-icon"></i> Ordens de Serviço
+      </div>
+      <div class="nav-item" data-page="orcamentos" onclick="goPage('orcamentos')">
+        <i data-lucide="file-text" class="nav-icon"></i> Orçamentos
+      </div>
+      <div class="nav-item" data-page="clientes" onclick="goPage('clientes')">
+        <i data-lucide="users" class="nav-icon"></i> Clientes
+      </div>
+      <div class="nav-item" data-page="estoque" onclick="goPage('estoque')">
+        <i data-lucide="package" class="nav-icon"></i> Estoque
+      </div>
+      <div class="nav-item" data-page="caixa" onclick="goPage('caixa')">
+        <i data-lucide="wallet" class="nav-icon"></i> Caixa
+      </div>
+      <div class="nav-item" data-page="agenda" onclick="goPage('agenda')">
+        <i data-lucide="calendar" class="nav-icon"></i> Agenda
+      </div>
+      <div class="nav-item" data-page="config" onclick="goPage('config')">
+        <i data-lucide="settings" class="nav-icon"></i> Configurações
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="sidebar-user" onclick="toggleUserMenu()">
+        <div class="sidebar-user-avatar" id="sidebar-avatar">N</div>
+        <div class="sidebar-user-info">
+          <div class="sidebar-user-name" id="sidebar-name">NexOS</div>
+          <div class="sidebar-user-role" id="sidebar-role">Proprietário</div>
+        </div>
+        <i data-lucide="chevrons-up-down" style="width:14px;height:14px;color:var(--text-3);flex-shrink:0"></i>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div id="main-wrap">
+    <header id="header">
+      <div id="header-logo" onclick="goPage('dashboard')" style="display:none;align-items:center;gap:8px;cursor:pointer">
+        <img src="NexOS.png" alt="N" style="width:28px;height:28px;border-radius:7px;flex-shrink:0" onerror="this.style.display='none'">
+        <span style="font-size:1rem;font-weight:800;letter-spacing:-.04em;background:var(--grad-logo);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">NexOS</span>
+      </div>
+      <div id="header-title">Dashboard</div>
+
+      <!-- Busca Global — Feature #37 -->
+      <div class="header-search" onclick="abrirBuscaGlobal()">
+        <i data-lucide="search" class="header-search-icon" style="width:14px;height:14px"></i>
+        <input type="search" id="header-search-input" placeholder="Buscar OS, cliente, produto..." readonly style="cursor:pointer">
+      </div>
+
+      <div class="header-spacer"></div>
+      <div class="header-actions">
+        <div class="header-btn" onclick="openQrReader()" title="Ler QR (Alt+Q)">
+          <i data-lucide="scan-line" style="width:16px;height:16px"></i>
+        </div>
+        <div class="header-avatar" id="header-avatar" onclick="toggleUserMenu()">N</div>
+      </div>
+    </header>
+
+    <main id="page-content">
+
+      <!-- ══ DASHBOARD ══════════════════════════════════════ -->
+      <div class="page active" id="page-dashboard">
+        <div class="kpi-grid">
+          <div class="kpi-card green">
+            <div class="kpi-top">
+              <div class="kpi-icon"><i data-lucide="trending-up" style="width:18px;height:18px"></i></div>
+              <span class="kpi-delta neu">mês</span>
+            </div>
+            <div class="kpi-value" id="kpi-fat">R$ 0,00</div>
+            <div class="kpi-label">Faturamento Mensal</div>
+          </div>
+          <div class="kpi-card blue">
+            <div class="kpi-top">
+              <div class="kpi-icon"><i data-lucide="bar-chart-2" style="width:18px;height:18px"></i></div>
+              <span class="kpi-delta neu">bruto</span>
+            </div>
+            <div class="kpi-value" id="kpi-lucro">R$ 0,00</div>
+            <div class="kpi-label">Lucro Bruto</div>
+          </div>
+          <div class="kpi-card orange">
+            <div class="kpi-top">
+              <div class="kpi-icon"><i data-lucide="clipboard-list" style="width:18px;height:18px"></i></div>
+            </div>
+            <div class="kpi-value" id="kpi-os">0</div>
+            <div class="kpi-label">OS Abertas</div>
+          </div>
+        </div>
+
+        <!-- v5.1 — Vendas (peças/produtos) x Mão de Obra -->
+        <div class="card" style="margin-bottom:12px">
+          <div class="card-title"><div class="ct-bar"></div>Vendas x Mão de Obra (mês)</div>
+          <div style="display:flex;gap:12px">
+            <div style="flex:1;text-align:center;padding:10px;background:var(--bg-2);border-radius:var(--radius-md)">
+              <div class="kpi-value" id="kpi-vendas" style="font-size:1.1rem;color:var(--blue)">R$ 0,00</div>
+              <div style="font-size:.72rem;color:var(--text-2);margin-top:2px">Peças / Produtos</div>
+            </div>
+            <div style="flex:1;text-align:center;padding:10px;background:var(--bg-2);border-radius:var(--radius-md)">
+              <div class="kpi-value" id="kpi-maoobra" style="font-size:1.1rem;color:var(--purple)">R$ 0,00</div>
+              <div style="font-size:.72rem;color:var(--text-2);margin-top:2px">Mão de Obra</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Feature #19 — Meta Mensal -->
+        <div id="meta-section" class="card" style="display:none;margin-bottom:12px">
+          <div class="card-title"><div class="ct-bar"></div>Meta do Mês</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:.78rem;color:var(--text-2)" id="meta-val">R$ 0 / R$ 0</span>
+            <span style="font-size:.78rem;font-weight:700;color:var(--accent)" id="meta-pct">0%</span>
+          </div>
+          <div style="background:var(--bg-2);border-radius:99px;height:8px;overflow:hidden">
+            <div id="meta-bar" style="background:var(--accent);height:100%;width:0%;border-radius:99px;transition:width .6s ease"></div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;background:var(--bg-1);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px 14px">
+          <span style="font-size:.82rem;color:var(--text-2);display:flex;align-items:center;gap:6px">
+            <i data-lucide="alert-triangle" style="width:14px;height:14px;color:var(--orange)"></i> Alertas
+          </span>
+          <span class="kpi-value" id="kpi-alertas" style="font-size:1.1rem;color:var(--green)">✓</span>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><div class="ct-bar"></div>OS Recentes</div>
+          <div id="dash-os-list"></div>
+          <button class="btn btn-ghost btn-sm w-full" style="margin-top:8px" onclick="goPage('os')">Ver todas →</button>
+        </div>
+        <div class="card">
+          <div class="card-title"><div class="ct-bar"></div>Agenda de Hoje</div>
+          <div id="dash-agenda"><p style="font-size:.8rem;color:var(--text-3)">Nenhum compromisso</p></div>
+        </div>
+      </div>
+
+      <!-- ══ ORDENS DE SERVIÇO ═══════════════════════════════ -->
+      <div class="page" id="page-os">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Ordens de Serviço</div>
+            <div class="page-subtitle" id="os-count">0 registros</div>
+          </div>
+          <button class="btn btn-primary" onclick="novaOS()">
+            <i data-lucide="plus" style="width:14px;height:14px"></i> Nova OS
+          </button>
+        </div>
+        <div class="toolbar">
+          <div class="search-box">
+            <i data-lucide="search" class="search-box-icon" style="width:14px;height:14px"></i>
+            <input type="search" id="os-search" placeholder="Buscar cliente, equipamento, número..." oninput="renderOSDebounced()">
+          </div>
+        </div>
+        <div class="filter-chips">
+          <div class="chip on" onclick="setOsFilter('all',this)">Todas</div>
+          <div class="chip" onclick="setOsFilter('aguardando',this)">Aguardando</div>
+          <div class="chip" onclick="setOsFilter('andamento',this)">Em Andamento</div>
+          <div class="chip" onclick="setOsFilter('retirada',this)">Pronto</div>
+          <div class="chip" onclick="setOsFilter('concluido',this)">Concluídas</div>
+          <div class="chip" onclick="setOsFilter('fiado',this)">Fiado</div>
+          <div class="chip" onclick="setOsFilter('cancelado',this)">Canceladas</div>
+        </div>
+        <div id="os-list"></div>
+      </div>
+
+      <!-- ══ NOVA OS / EDITAR OS ════════════════════════════ -->
+      <div class="page" id="page-nova-os">
+        <div class="page-header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <button class="btn btn-ghost btn-icon" onclick="goBack()">
+              <i data-lucide="arrow-left" style="width:18px;height:18px"></i>
+            </button>
+            <div class="page-title" id="nova-os-title">Nova OS</div>
+          </div>
+          <button class="btn btn-primary" onclick="salvarOS()">
+            <i data-lucide="save" style="width:14px;height:14px"></i> Salvar
+          </button>
+        </div>
+
+        <!-- v5.1 — Tipo: escolha antes de tudo -->
+        <div class="card" id="card-tipo-os">
+          <div class="card-title"><div class="ct-bar"></div>O que você vai registrar?</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px">
+            <button class="tipo-os-btn active" id="tbtn-servico" onclick="setTipoOS('servico')">
+              <span style="font-size:1.5rem">🔧</span>
+              <span>Ordem de Serviço</span>
+            </button>
+            <button class="tipo-os-btn" id="tbtn-produto" onclick="setTipoOS('produto')">
+              <span style="font-size:1.5rem">📦</span>
+              <span>Venda de Produto</span>
+            </button>
+            <button class="tipo-os-btn" id="tbtn-misto" onclick="setTipoOS('misto')">
+              <span style="font-size:1.5rem">🛠️</span>
+              <span>Serviço + Produto</span>
+            </button>
+            <button class="tipo-os-btn" id="tbtn-orcamento" onclick="setTipoOS('orcamento')">
+              <span style="font-size:1.5rem">📄</span>
+              <span>Orçamento</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Cliente -->
+        <div class="card">
+          <div class="card-title"><div class="ct-bar"></div>Cliente</div>
+          <div class="form-group" style="position:relative">
+            <label class="form-label">Buscar cliente cadastrado</label>
+            <input type="text" id="m-cli-search" class="form-control" placeholder="Digite o nome..." autocomplete="off" oninput="filtrarClienteOSDebounced(this.value)" onfocus="filtrarClienteOS(this.value)">
+            <div id="m-cli-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg-1);border:1px solid var(--border-md);border-radius:var(--radius-md);max-height:220px;overflow-y:auto;z-index:200;box-shadow:var(--shadow-lg)"></div>
+            <input type="hidden" id="m-cli-id">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nome <span style="color:var(--red)">*</span></label>
+            <input type="text" id="m-cli-nome" class="form-control" placeholder="Nome completo">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Telefone</label>
+              <input type="tel" id="m-cli-tel" class="form-control" placeholder="(00) 00000-0000">
+            </div>
+            <div class="form-group">
+              <label class="form-label">CPF / Doc</label>
+              <input type="text" id="m-cli-doc" class="form-control" placeholder="000.000.000-00">
+            </div>
+          </div>
+        </div>
+
+        <!-- Equipamento — oculto em venda pura -->
+        <div class="card" id="card-equip-os">
+          <div class="card-title"><div class="ct-bar"></div>Equipamento / Item</div>
+          <div class="form-group">
+            <label class="form-label">Equipamento / Produto</label>
+            <input type="text" id="m-equip" class="form-control" placeholder="Ex: iPhone 13, Notebook Dell...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Defeito Relatado</label>
+            <textarea id="m-defeito" class="form-control" rows="2" placeholder="Descreva o defeito..."></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Diagnóstico Técnico</label>
+            <textarea id="m-diag" class="form-control" rows="2" placeholder="Diagnóstico após análise..."></textarea>
+          </div>
+          <!-- Feature #25 — Garantia -->
+          <div class="form-group">
+            <label class="form-label">Garantia (dias)</label>
+            <input type="number" id="m-garantia-dias" class="form-control" placeholder="0 = sem garantia" min="0" style="width:160px">
+          </div>
+        </div>
+
+        <!-- Itens -->
+        <div class="card">
+          <div class="card-title"><div class="ct-bar"></div>Itens / Peças</div>
+          <div class="it-head"><span>Descrição</span><span>Qtd</span><span>R$</span><span></span></div>
+          <div id="m-itens-rows"><p style="font-size:12px;color:var(--text-3);padding:8px 4px">Nenhum item adicionado</p></div>
+          <div class="add-item-row" style="margin-top:10px">
+            <input type="text" id="m-i-desc" class="form-control" placeholder="Peça ou serviço" style="margin-bottom:0">
+            <input type="number" id="m-i-qty" class="form-control" value="1" min="1" style="margin-bottom:0">
+            <input type="number" id="m-i-preco" class="form-control" placeholder="R$" step="0.01" style="margin-bottom:0">
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn btn-ghost btn-sm" onclick="addOSItem()">
+              <i data-lucide="plus" style="width:13px;height:13px"></i> Adicionar
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="addDoEstoque()">
+              <i data-lucide="package" style="width:13px;height:13px"></i> Do Estoque
+            </button>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:flex-end;padding:12px 0 0;border-top:1px solid var(--border);margin-top:12px;gap:12px;flex-wrap:wrap">
+            <div class="form-group" id="card-mao-obra-os" style="margin-bottom:0">
+              <label class="form-label">Mão de Obra R$</label>
+              <input type="number" id="m-mao-obra" class="form-control" value="0" step="0.01" style="width:130px;margin-bottom:0" oninput="recalcTotalOS()">
+            </div>
+            <!-- Feature #11 — Desconto -->
+            <div class="form-group" style="margin-bottom:0">
+              <label class="form-label">Desconto %</label>
+              <input type="number" id="m-desconto" class="form-control" value="0" min="0" max="100" step="1" style="width:90px;margin-bottom:0" oninput="recalcTotalOS()">
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:.7rem;color:var(--red);min-height:16px" id="m-desconto-val"></div>
+              <div class="it-total-label">TOTAL</div>
+              <div class="it-total-val" id="m-total">R$ 0,00</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Fotos — Feature #3: até 5MB com compressão -->
+        <div class="card">
+          <div class="card-title"><div class="ct-bar"></div>Fotos <span style="font-size:.7rem;color:var(--text-3);font-weight:400">(até 9 fotos · 5MB cada)</span></div>
+          <div style="display:flex;gap:8px;margin-bottom:10px">
+            <button class="btn btn-ghost btn-sm" style="flex:1" onclick="document.getElementById('fileInOS').click()">
+              <i data-lucide="camera" style="width:14px;height:14px"></i> Câmera
+            </button>
+            <button class="btn btn-ghost btn-sm" style="flex:1" onclick="document.getElementById('fileInOSGallery').click()">
+              <i data-lucide="image" style="width:14px;height:14px"></i> Galeria
+            </button>
+          </div>
+          <div class="photo-grid" id="m-photo-grid"></div>
+        </div>
+
+        <!-- Pagamento — v5.1: múltiplas formas -->
+        <div class="card" id="card-pag-os">
+          <div class="card-title"><div class="ct-bar"></div>Pagamento</div>
+
+          <!-- Formas de pagamento -->
+          <div class="pay-chips" id="payChips">
+            <div class="pchip" onclick="togglePayChip('dinheiro',this)">💵 Dinheiro</div>
+            <div class="pchip" onclick="togglePayChip('pix',this)">📱 PIX</div>
+            <div class="pchip" onclick="togglePayChip('credito',this)">💳 Crédito</div>
+            <div class="pchip" onclick="togglePayChip('debito',this)">💳 Débito</div>
+            <div class="pchip" onclick="togglePayChip('transferencia',this)">🏦 Transfer.</div>
+            <div class="pchip" onclick="togglePayChip('fiado',this)">📝 Fiado</div>
+            <div class="pchip" onclick="togglePayChip('carne',this)">📜 Carnê</div>
+            <div class="pchip" onclick="togglePayChip('aguardando',this)">⏳ Aguardando</div>
+          </div>
+
+          <!-- v5.1 — Linhas de pagamento múltiplo -->
+          <div id="multi-pay-rows" style="margin-top:12px"></div>
+          <div id="multi-pay-total-warn" style="display:none;font-size:.78rem;color:var(--red);margin-top:6px"></div>
+
+          <!-- Feature #6 — QR Code PIX com valor real -->
+          <div id="pix-qr-section" style="display:none;margin:14px 0;padding:16px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius-md);text-align:center">
+            <div style="font-size:.8rem;font-weight:700;margin-bottom:10px;color:var(--text-2)">📱 QR Code PIX — valor real</div>
+            <div id="pix-qr-canvas" style="display:inline-block;background:#fff;padding:8px;border-radius:8px;margin-bottom:10px"></div>
+            <div style="font-size:.72rem;color:var(--text-3);margin-bottom:8px">Copia e Cola:</div>
+            <div style="display:flex;gap:6px">
+              <input id="pix-copia-cola" class="form-control" readonly style="font-size:10px;font-family:monospace;flex:1">
+              <button class="btn btn-ghost btn-sm" onclick="copiarPixCode()">
+                <i data-lucide="copy" style="width:13px;height:13px"></i>
+              </button>
+            </div>
+            <button class="btn btn-primary btn-sm w-full" style="margin-top:10px" id="btn-confirmar-pix" onclick="alert('Salve a OS primeiro, depois confirme o PIX na tela de detalhes.')">
+              <i data-lucide="check-circle" style="width:13px;height:13px"></i> Confirmar Pagamento PIX
+            </button>
+          </div>
+
+          <div id="carneConfig" style="display:none">
+            <div style="background:var(--purple-dim);border:1px solid rgba(167,139,250,.2);border-radius:var(--radius-sm);padding:14px;margin-bottom:12px">
+              <div class="form-row-3">
+                <div class="form-group" style="margin-bottom:0">
+                  <label class="form-label">Parcelas</label>
+                  <input type="number" id="carneN" class="form-control" value="3" min="1" max="24" oninput="calcCarne()">
+                </div>
+                <div class="form-group" style="margin-bottom:0">
+                  <label class="form-label">Dia venc.</label>
+                  <input type="number" id="carneDia" class="form-control" value="10" min="1" max="28" oninput="calcCarne()">
+                </div>
+                <div class="form-group" style="margin-bottom:0">
+                  <label class="form-label">Entrada R$</label>
+                  <input type="number" id="carneEnt" class="form-control" value="0" step="0.01" oninput="calcCarne()">
+                </div>
+              </div>
+              <div id="carnePreview" style="font-family:var(--mono);font-size:11px;color:var(--text-2);margin-top:10px;line-height:1.8"></div>
+            </div>
+          </div>
+
+          <div id="fiadoWarn" style="display:none;background:var(--red-dim);border:1px solid rgba(248,113,113,.2);border-radius:var(--radius-sm);padding:10px;font-size:12px;color:var(--red);margin-bottom:12px">
+            <i data-lucide="alert-circle" style="width:13px;height:13px;vertical-align:middle"></i>
+            Fiado: será registrado como conta a receber
+          </div>
+
+          <div class="form-group" style="margin-top:12px">
+            <label class="form-label">Status</label>
+            <select id="m-status" class="form-control">
+              <option value="aguardando">Aguardando</option>
+              <option value="andamento">Em Andamento</option>
+              <option value="concluido">Concluído</option>
+              <option value="retirada">Pronto p/ Retirada</option>
+              <option value="fiado">Fiado</option>
+              <option value="cancelado">Cancelado</option>
+              <option value="orcamento">Orçamento</option>
+            </select>
+          </div>
+          <input type="hidden" id="m-tipo" value="servico">
+
+          <div class="form-group">
+            <label class="form-label">Data / Hora</label>
+            <input type="datetime-local" id="m-data" class="form-control">
+          </div>
+        </div>
+
+        <!-- Observações -->
+        <div class="card">
+          <div class="card-title"><div class="ct-bar"></div>Observações</div>
+          <textarea id="m-obs" class="form-control" rows="3" placeholder="Anotações, condições, observações..."></textarea>
+        </div>
+
+        <!-- Assinatura -->
+        <div class="card">
+          <div class="card-title"><div class="ct-bar"></div>Assinatura Digital</div>
+          <button class="btn btn-ghost w-full" onclick="abrirAssinatura()" style="margin-bottom:8px">
+            <i data-lucide="pen-line" style="width:14px;height:14px"></i>
+            <span id="sig-status-label">Toque para assinar</span>
+          </button>
+          <canvas id="sigCanvas" style="display:none"></canvas>
+        </div>
+
+        <!-- Botão fixo -->
+        <div style="position:sticky;bottom:0;left:0;right:0;background:var(--bg);border-top:1px solid var(--border);padding:12px 0;margin:0 -20px;padding-left:20px;padding-right:20px">
+          <button class="btn btn-primary btn-lg w-full" id="btn-emitir-os" onclick="salvarOS()">
+            <i data-lucide="check-circle" style="width:16px;height:16px"></i> EMITIR ORDEM DE SERVIÇO
+          </button>
+        </div>
+        <div style="height:80px"></div>
+      </div>
+
+      <!-- ══ VER OS ══════════════════════════════════════════ -->
+      <div class="page" id="page-ver-os">
+        <div class="page-header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <button class="btn btn-ghost btn-icon" onclick="goBack()">
+              <i data-lucide="arrow-left" style="width:18px;height:18px"></i>
+            </button>
+            <div>
+              <div class="page-title" id="ver-os-num">OS #–</div>
+              <div class="page-subtitle" id="ver-os-status">–</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-ghost btn-sm" onclick="editarOS(_verOsId)">
+              <i data-lucide="edit-2" style="width:13px;height:13px"></i> Editar
+            </button>
+            <button class="btn btn-primary btn-sm" onclick="abrirComp(_verOsId)">
+              <i data-lucide="receipt" style="width:13px;height:13px"></i> Comprovante
+            </button>
+          </div>
+        </div>
+        <div id="ver-os-body"></div>
+      </div>
+
+      <!-- ══ ORÇAMENTOS — Feature #13 ══════════════════════ -->
+      <div class="page" id="page-orcamentos">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Orçamentos</div>
+            <div class="page-subtitle">Aguardando aprovação do cliente</div>
+          </div>
+          <button class="btn btn-primary" onclick="novoOrcamento()">
+            <i data-lucide="plus" style="width:14px;height:14px"></i> Novo
+          </button>
+        </div>
+        <div id="orc-list"></div>
+      </div>
+
+      <!-- ══ CLIENTES ════════════════════════════════════════ -->
+      <div class="page" id="page-clientes">
+        <div class="page-header">
+          <div class="page-title">Clientes</div>
+          <button class="btn btn-primary" onclick="novoCliente()">
+            <i data-lucide="user-plus" style="width:14px;height:14px"></i> Novo
+          </button>
+        </div>
+        <div class="toolbar">
+          <div class="search-box">
+            <i data-lucide="search" class="search-box-icon" style="width:14px;height:14px"></i>
+            <input type="search" id="cli-search" placeholder="Buscar cliente..." oninput="renderClientesDebounced()">
+          </div>
+        </div>
+        <div id="cli-list"></div>
+      </div>
+
+      <!-- ══ VER CLIENTE ═════════════════════════════════════ -->
+      <div class="page" id="page-ver-cliente">
+        <div class="page-header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <button class="btn btn-ghost btn-icon" onclick="goBack()">
+              <i data-lucide="arrow-left" style="width:18px;height:18px"></i>
+            </button>
+            <div>
+              <div class="page-title" id="vcli-nome">Cliente</div>
+              <div class="page-subtitle" id="vcli-tel">–</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-ghost btn-sm" onclick="editarClienteAtual()">
+              <i data-lucide="edit-2" style="width:13px;height:13px"></i>
+            </button>
+            <button class="btn btn-primary btn-sm" onclick="novaOSparaCliente()">
+              <i data-lucide="plus" style="width:13px;height:13px"></i> Nova OS
+            </button>
+          </div>
+        </div>
+        <div id="vcli-body"></div>
+      </div>
+
+      <!-- ══ NOVO/EDITAR CLIENTE ════════════════════════════ -->
+      <div class="page" id="page-novo-cliente">
+        <div class="page-header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <button class="btn btn-ghost btn-icon" onclick="goBack()">
+              <i data-lucide="arrow-left" style="width:18px;height:18px"></i>
+            </button>
+            <div class="page-title" id="form-cli-title">Novo Cliente</div>
+          </div>
+          <button class="btn btn-primary" onclick="salvarCliente()">
+            <i data-lucide="save" style="width:14px;height:14px"></i> Salvar
+          </button>
+        </div>
+        <div class="card">
+          <input type="hidden" id="form-cli-id">
+          <div class="form-group">
+            <label class="form-label">Nome <span style="color:var(--red)">*</span></label>
+            <input type="text" id="form-cli-nome" class="form-control" placeholder="Nome completo">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Telefone / WhatsApp</label>
+              <input type="tel" id="form-cli-tel" class="form-control" placeholder="(00) 00000-0000">
+            </div>
+            <div class="form-group">
+              <label class="form-label">CPF / CNPJ</label>
+              <input type="text" id="form-cli-doc" class="form-control" placeholder="000.000.000-00">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">E-mail</label>
+            <input type="email" id="form-cli-email" class="form-control" placeholder="cliente@email.com">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Endereço</label>
+            <div class="form-row">
+              <div class="form-group" style="max-width:140px">
+                <input type="text" id="form-cli-cep" class="form-control" placeholder="CEP" inputmode="numeric" maxlength="9"
+                  oninput="maskCEP(this)" onblur="buscarCEP()">
+              </div>
+              <div class="form-group" style="flex:2">
+                <input type="text" id="form-cli-rua" class="form-control" placeholder="Rua / Av.">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group" style="max-width:110px">
+                <input type="text" id="form-cli-num" class="form-control" placeholder="Número">
+              </div>
+              <div class="form-group" style="flex:2">
+                <input type="text" id="form-cli-bairro" class="form-control" placeholder="Bairro">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group" style="flex:2">
+                <input type="text" id="form-cli-cidade" class="form-control" placeholder="Cidade">
+              </div>
+              <div class="form-group" style="max-width:80px">
+                <input type="text" id="form-cli-uf" class="form-control" placeholder="UF" maxlength="2" style="text-transform:uppercase">
+              </div>
+            </div>
+            <div id="form-cli-cep-status" style="font-size:.72rem;color:var(--text-3);min-height:14px"></div>
+          </div>
+          <!-- Feature #28 — Aniversário -->
+          <div class="form-group">
+            <label class="form-label">🎂 Aniversário</label>
+            <input type="date" id="form-cli-aniv" class="form-control">
+          </div>
+          <!-- Feature #32 — Blacklist -->
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 0;border-top:1px solid var(--border);margin-top:4px">
+            <input type="checkbox" id="form-cli-blacklist" style="accent-color:var(--red);width:16px;height:16px">
+            <div>
+              <div style="font-size:.85rem;font-weight:600;color:var(--red)">⛔ Blacklist</div>
+              <div style="font-size:.75rem;color:var(--text-3)">Exibirá alerta ao criar nova OS para este cliente</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- ══ ESTOQUE ════════════════════════════════════════ -->
+      <div class="page" id="page-estoque">
+        <div class="page-header">
+          <div class="page-title">Estoque</div>
+          <button class="btn btn-primary" onclick="novoProduto()">
+            <i data-lucide="plus" style="width:14px;height:14px"></i> Novo
+          </button>
+        </div>
+        <div class="toolbar">
+          <div class="search-box">
+            <i data-lucide="search" class="search-box-icon" style="width:14px;height:14px"></i>
+            <input type="search" id="est-search" placeholder="Buscar produto..." oninput="renderEstoqueDebounced()">
+          </div>
+        </div>
+        <div id="est-list"></div>
+      </div>
+
+      <!-- ══ NOVO/EDITAR PRODUTO ════════════════════════════ -->
+      <div class="page" id="page-novo-produto">
+        <div class="page-header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <button class="btn btn-ghost btn-icon" onclick="goBack()">
+              <i data-lucide="arrow-left" style="width:18px;height:18px"></i>
+            </button>
+            <div class="page-title" id="form-prd-title">Novo Produto</div>
+          </div>
+          <button class="btn btn-primary" onclick="salvarProduto()">
+            <i data-lucide="save" style="width:14px;height:14px"></i> Salvar
+          </button>
+        </div>
+        <div class="card">
+          <input type="hidden" id="form-prd-id">
+          <div class="form-group">
+            <label class="form-label">Nome <span style="color:var(--red)">*</span></label>
+            <input type="text" id="form-prd-nome" class="form-control" placeholder="Nome do produto">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Código / SKU</label>
+            <input type="text" id="form-prd-cod" class="form-control" placeholder="SKU-001">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Custo R$</label>
+              <input type="number" id="form-prd-custo" class="form-control" step="0.01" placeholder="0,00" oninput="updMgPrd()">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Venda R$</label>
+              <input type="number" id="form-prd-venda" class="form-control" step="0.01" placeholder="0,00" oninput="updMgPrd()">
+            </div>
+          </div>
+          <!-- Feature #17 — Precificação automática -->
+          <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:14px">
+            <div class="form-group" style="margin-bottom:0;flex:1">
+              <label class="form-label">Margem desejada %</label>
+              <input type="number" id="form-prd-margem-sug" class="form-control" placeholder="30" value="30" min="1" max="99">
+            </div>
+            <button class="btn btn-ghost btn-sm" style="flex-shrink:0;margin-bottom:1px" onclick="sugerirPreco()">
+              <i data-lucide="sparkles" style="width:13px;height:13px"></i> Sugerir preço
+            </button>
+          </div>
+          <div id="mg-prev" style="font-family:var(--mono);font-size:11px;color:var(--blue);margin-bottom:14px"></div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Quantidade</label>
+              <input type="number" id="form-prd-qtd" class="form-control" value="0" min="0">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Estoque Mín.</label>
+              <input type="number" id="form-prd-min" class="form-control" value="0" min="0">
+            </div>
+          </div>
+        </div>
+        <!-- Feature #20 — Histórico de preços -->
+        <button id="btn-hist-precos" class="btn btn-ghost btn-sm w-full" style="display:none;margin-bottom:12px">
+          <i data-lucide="trending-up" style="width:13px;height:13px"></i> Ver Histórico de Preços
+        </button>
+        <div id="prd-resumo" style="display:none" class="card">
+          <div class="card-title"><div class="ct-bar"></div>Resumo Atual</div>
+          <div class="ir"><span class="irl">Venda</span><span class="irv" style="color:var(--green)" id="res-venda">–</span></div>
+          <div class="ir"><span class="irl">Custo</span><span class="irv" id="res-custo">–</span></div>
+          <div class="ir"><span class="irl">Margem</span><span class="irv" style="color:var(--blue)" id="res-mg">–</span></div>
+          <div class="ir"><span class="irl">Estoque</span><span class="irv" id="res-est">–</span></div>
+        </div>
+      </div>
+
+      <!-- ══ CAIXA ═══════════════════════════════════════════ -->
+      <div class="page" id="page-caixa">
+        <div class="page-header">
+          <div class="page-title">Caixa</div>
+          <button class="btn btn-ghost btn-sm" onclick="gerarRelatorioPDF()">
+            <i data-lucide="file-text" style="width:13px;height:13px"></i> Relatório
+          </button>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center">
+          <input type="date" id="cx-date" class="form-control" style="flex:1" onchange="renderCaixa()">
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('cx-date').value=today();renderCaixa()">Hoje</button>
+        </div>
+        <div id="cx-cards" class="cx-grid"></div>
+        <div class="card"><div class="card-title"><div class="ct-bar"></div>Por Pagamento</div><div id="cx-pags"></div></div>
+        <div class="card"><div class="card-title"><div class="ct-bar"></div>Movimentações</div><div id="cx-movs"></div></div>
+        <div class="card">
+          <div class="card-title"><div class="ct-bar"></div>Carnês / Parcelas</div>
+          <div id="carne-list"></div>
+        </div>
+        <div class="card">
+          <div class="card-title"><div class="ct-bar"></div>Registrar Saída</div>
+          <div class="form-group">
+            <label class="form-label">Descrição</label>
+            <input type="text" id="cx-saida-desc" class="form-control" placeholder="Ex: Aluguel, fornecedor...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Valor R$</label>
+            <input type="number" id="cx-saida-val" class="form-control" placeholder="0,00" step="0.01">
+          </div>
+          <button class="btn btn-danger w-full" onclick="registrarSaida()">
+            <i data-lucide="minus-circle" style="width:14px;height:14px"></i> Registrar Saída
+          </button>
+        </div>
+      </div>
+
+      <!-- ══ AGENDA ══════════════════════════════════════════ -->
+      <div class="page" id="page-agenda">
+        <div class="page-header">
+          <div class="page-title">Agenda</div>
+          <button class="btn btn-primary" onclick="novoEvento()">
+            <i data-lucide="plus" style="width:14px;height:14px"></i> Evento
+          </button>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center">
+          <input type="date" id="ag-date" class="form-control" style="flex:1" onchange="renderAgenda()">
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('ag-date').value=today();renderAgenda()">Hoje</button>
+        </div>
+        <div id="ag-list"></div>
+      </div>
+
+      <!-- ══ NOVO/EDITAR EVENTO ══════════════════════════════ -->
+      <div class="page" id="page-novo-evento">
+        <div class="page-header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <button class="btn btn-ghost btn-icon" onclick="goBack()">
+              <i data-lucide="arrow-left" style="width:18px;height:18px"></i>
+            </button>
+            <div class="page-title" id="form-ev-title">Novo Evento</div>
+          </div>
+          <button class="btn btn-primary" onclick="salvarEvento()">
+            <i data-lucide="save" style="width:14px;height:14px"></i> Salvar
+          </button>
+        </div>
+        <div class="card">
+          <input type="hidden" id="form-ev-id">
+          <div class="form-group">
+            <label class="form-label">Título <span style="color:var(--red)">*</span></label>
+            <input type="text" id="form-ev-titulo" class="form-control" placeholder="Ex: Visita técnica...">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Data</label>
+              <input type="date" id="form-ev-data" class="form-control">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Hora</label>
+              <input type="time" id="form-ev-hora" class="form-control">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Cliente</label>
+            <select id="form-ev-cli" class="form-control"><option value="">Sem cliente</option></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Cor</label>
+            <input type="color" id="form-ev-cor" class="form-control" value="#38BDF8" style="height:44px;cursor:pointer">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Descrição</label>
+            <textarea id="form-ev-desc" class="form-control" rows="2" placeholder="Detalhes..."></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ CONFIGURAÇÕES ═══════════════════════════════════ -->
+      <div class="page" id="page-config">
+        <div class="page-title" style="margin-bottom:20px">Configurações</div>
+
+        <!-- Feature #4 — Upload de Logo -->
+        <div class="card">
+          <div class="card-title"><div class="ct-bar"></div>Logo / Foto da Loja</div>
+          <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px">
+            <img id="cfg-logo-preview" src="" alt="Logo" style="width:72px;height:72px;object-fit:contain;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-2)" onerror="this.style.display='none'">
+            <div>
+              <button class="btn btn-ghost btn-sm" onclick="document.getElementById('logoInput').click()">
+                <i data-lucide="upload" style="width:13px;height:13px"></i> Upload Logo
+              </button>
+              <div style="font-size:.72rem;color:var(--text-3);margin-top:4px">PNG, JPG ou WEBP · máx. 2MB</div>
+            </div>
+          </div>
+          <input type="file" id="logoInput" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="handleLogoUpload(event)">
+        </div>
+
+        <!-- Dados da empresa -->
+        <div class="card">
+          <div class="card-title"><div class="ct-bar"></div>Dados da Empresa</div>
+          <div class="form-group">
+            <label class="form-label">Nome da Empresa <span style="color:var(--red)">*</span></label>
+            <input id="cfg-nome" type="text" class="form-control" placeholder="Minha Empresa">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">CNPJ / CPF</label>
+              <input id="cfg-cnpj" type="text" class="form-control">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Telefone</label>
+              <input id="cfg-tel" type="tel" class="form-control">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Endereço</label>
+              <input id="cfg-end" type="text" class="form-control">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Cidade</label>
+              <input id="cfg-cidade" type="text" class="form-control" placeholder="Ex: São Paulo - SP">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Chave PIX</label>
+            <input id="cfg-pix" type="text" class="form-control" placeholder="CPF, e-mail, telefone ou chave aleatória">
+          </div>
+          <!-- Feature #19 — Meta mensal -->
+          <div class="form-group">
+            <label class="form-label">🎯 Meta Mensal R$</label>
+            <input id="cfg-meta" type="number" class="form-control" placeholder="0,00" step="100">
+          </div>
+        </div>
+
+        <!-- Termos -->
+        <div class="card">
+          <div class="card-title"><div class="ct-bar"></div>Termos da Nota</div>
+          <textarea id="cfg-termos" class="form-control" rows="4" placeholder="Termos e condições que aparecem no comprovante..."></textarea>
+        </div>
+
+        <!-- Template de comprovante — Feature #2 -->
+        <div class="card">
+          <div class="card-title"><div class="ct-bar"></div>Template de Comprovante</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-ghost btn-sm" onclick="setCompTemplate('classico')">📜 Clássico</button>
+            <button class="btn btn-ghost btn-sm" onclick="setCompTemplate('moderno')">✨ Moderno</button>
+            <button class="btn btn-ghost btn-sm" onclick="setCompTemplate('minimalista')">◻️ Minimalista</button>
+          </div>
+          <p style="font-size:.75rem;color:var(--text-3);margin-top:8px">Template atual: <b id="comp-template-atual">Clássico</b></p>
+        </div>
+
+        <button class="btn btn-primary btn-lg w-full" onclick="salvarConfig()">
+          <i data-lucide="save" style="width:14px;height:14px"></i> Salvar Configurações
+        </button>
+
+        <!-- Dados e Privacidade -->
+        <div class="card" style="margin-top:16px">
+          <div class="card-title"><div class="ct-bar"></div>Dados e Privacidade</div>
+          <button class="btn btn-secondary w-full" style="margin-bottom:10px" onclick="exportarDados()">
+            <i data-lucide="download" style="width:14px;height:14px"></i> Backup Completo (JSON)
+          </button>
+          <button class="btn btn-ghost w-full" style="margin-bottom:10px" onclick="gerarRelatorioPDF()">
+            <i data-lucide="file-text" style="width:14px;height:14px"></i> Relatório Mensal PDF
+          </button>
+          <button class="btn btn-ghost w-full" style="margin-bottom:10px" onclick="goPage('auditoria')">
+            <i data-lucide="clipboard-list" style="width:14px;height:14px"></i> Log de Auditoria
+          </button>
+          <button class="btn btn-danger w-full" onclick="excluirContaPermanente()">
+            <i data-lucide="trash-2" style="width:14px;height:14px"></i> Excluir Conta Permanentemente
+          </button>
+          <p style="font-size:.72rem;color:var(--text-3);margin-top:8px;line-height:1.5">A exclusão é irreversível. Todos os dados serão apagados permanentemente após confirmação com sua senha.</p>
+        </div>
+
+        <button class="btn btn-ghost btn-sm w-full" style="margin-top:10px" onclick="Auth.logout()">
+          <i data-lucide="log-out" style="width:13px;height:13px"></i> Sair da conta
+        </button>
+
+        <!-- Atalhos de teclado — Feature #34 -->
+        <div class="card" style="margin-top:16px">
+          <div class="card-title"><div class="ct-bar"></div>⌨️ Atalhos de Teclado</div>
+          <div style="font-size:.78rem;color:var(--text-2);line-height:2;font-family:var(--mono)">
+            <div><kbd style="background:var(--bg-2);border:1px solid var(--border);border-radius:4px;padding:1px 6px">N</kbd> Nova OS</div>
+            <div><kbd style="background:var(--bg-2);border:1px solid var(--border);border-radius:4px;padding:1px 6px">D</kbd> Dashboard</div>
+            <div><kbd style="background:var(--bg-2);border:1px solid var(--border);border-radius:4px;padding:1px 6px">C</kbd> Clientes</div>
+            <div><kbd style="background:var(--bg-2);border:1px solid var(--border);border-radius:4px;padding:1px 6px">E</kbd> Estoque</div>
+            <div><kbd style="background:var(--bg-2);border:1px solid var(--border);border-radius:4px;padding:1px 6px">X</kbd> Caixa</div>
+            <div><kbd style="background:var(--bg-2);border:1px solid var(--border);border-radius:4px;padding:1px 6px">A</kbd> Agenda</div>
+            <div><kbd style="background:var(--bg-2);border:1px solid var(--border);border-radius:4px;padding:1px 6px">/</kbd> Busca global</div>
+            <div><kbd style="background:var(--bg-2);border:1px solid var(--border);border-radius:4px;padding:1px 6px">Esc</kbd> Fechar modal</div>
+          </div>
+        </div>
+
+        <div style="text-align:center;font-size:.72rem;color:var(--text-3);margin-top:18px;font-family:var(--mono)">
+          NexOS · Versão 5.1.0
+        </div>
+
+        <div style="height:40px"></div>
+      </div>
+
+      <!-- ══ LOG DE AUDITORIA — Feature #39 ════════════════ -->
+      <div class="page" id="page-auditoria">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Log de Auditoria</div>
+            <div class="page-subtitle">Todas as ações registradas</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="renderAuditoria()">
+            <i data-lucide="refresh-cw" style="width:13px;height:13px"></i>
+          </button>
+        </div>
+        <div id="audit-list"></div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Mobile Nav -->
+  <nav id="mobile-nav">
+    <div class="mobile-nav-item active" data-page="dashboard" onclick="goPage('dashboard')">
+      <i data-lucide="layout-dashboard" style="width:22px;height:22px"></i>
+      <span class="mobile-nav-label">Home</span>
+    </div>
+    <div class="mobile-nav-item" data-page="os" onclick="goPage('os')">
+      <i data-lucide="clipboard-list" style="width:22px;height:22px"></i>
+      <span class="mobile-nav-label">OS</span>
+    </div>
+    <div class="mobile-nav-item" data-page="clientes" onclick="goPage('clientes')">
+      <i data-lucide="users" style="width:22px;height:22px"></i>
+      <span class="mobile-nav-label">Clientes</span>
+    </div>
+    <div class="mobile-nav-item" data-page="estoque" onclick="goPage('estoque')">
+      <i data-lucide="package" style="width:22px;height:22px"></i>
+      <span class="mobile-nav-label">Estoque</span>
+    </div>
+    <div class="mobile-nav-item" data-page="caixa" onclick="goPage('caixa')">
+      <i data-lucide="wallet" style="width:22px;height:22px"></i>
+      <span class="mobile-nav-label">Caixa</span>
+    </div>
+  </nav>
+
+</div><!-- /app-shell -->
+
+<!-- FAB -->
+<button id="fab" onclick="fabAction()" style="display:none">
+  <i data-lucide="plus" style="width:22px;height:22px"></i>
+</button>
+
+<!-- ══ COMPROVANTE FULLSCREEN ═════════════════════════════════ -->
+<div id="compView">
+  <div style="display:flex;gap:8px;flex-wrap:wrap;padding:16px 16px 0;max-width:680px;margin:0 auto;align-items:center">
+    <button class="btn btn-ghost btn-sm" onclick="fecharComp()">
+      <i data-lucide="arrow-left" style="width:13px;height:13px"></i> Voltar
+    </button>
+    <!-- Toggle claro/escuro -->
+    <button class="btn btn-ghost btn-sm" id="btn-comp-tema" onclick="toggleCompTema()" title="Alternar tema do comprovante">
+      <i data-lucide="sun" style="width:13px;height:13px"></i> <span id="comp-tema-label">Claro</span>
+    </button>
+    <div style="flex:1"></div>
+    <button class="btn btn-secondary btn-sm" onclick="window.print()">
+      <i data-lucide="printer" style="width:13px;height:13px"></i> Imprimir
+    </button>
+    <button class="btn btn-primary btn-sm" onclick="gerarPDF(_compId)">
+      <i data-lucide="file-text" style="width:13px;height:13px"></i> PDF
+    </button>
+    <button class="btn btn-ghost btn-sm" onclick="compartilharComp()">
+      <i data-lucide="share-2" style="width:13px;height:13px"></i> Imagem
+    </button>
+    <button class="btn btn-ghost btn-sm" style="background:#25D366;border-color:#25D366;color:#fff" onclick="enviarWA(_compId)">
+      <i data-lucide="message-circle" style="width:13px;height:13px"></i> WhatsApp
+    </button>
+    <button class="btn btn-secondary btn-sm" onclick="imprimirTermico(_compId)">
+      <i data-lucide="printer" style="width:13px;height:13px"></i> 58mm
+    </button>
+  </div>
+  <div id="compContent" style="padding:14px 14px 40px"></div>
+</div>
+
+<!-- ══ BUSCA GLOBAL — Feature #37 ════════════════════════════ -->
+<div id="global-search-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);z-index:800;display:none;flex-direction:column;padding:20px">
+  <div style="max-width:560px;width:100%;margin:0 auto">
+    <div style="display:flex;gap:10px;margin-bottom:12px">
+      <div style="flex:1;position:relative">
+        <i data-lucide="search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--text-3)"></i>
+        <input type="search" id="global-search-input" class="form-control" placeholder="Buscar OS, cliente, produto..." style="padding-left:38px;font-size:.95rem" oninput="globalSearchDebounced(this.value)" autocomplete="off">
+      </div>
+      <button class="btn btn-ghost" onclick="fecharBuscaGlobal()">
+        <i data-lucide="x" style="width:18px;height:18px"></i>
+      </button>
+    </div>
+    <div id="global-search-results" style="background:var(--bg-1);border:1px solid var(--border-md);border-radius:var(--radius-lg);overflow:hidden;max-height:60vh;overflow-y:auto"></div>
+    <div style="margin-top:10px;font-size:.72rem;color:var(--text-3);text-align:center">
+      Pressione <kbd style="background:var(--bg-2);border:1px solid var(--border);border-radius:4px;padding:1px 6px">Esc</kbd> para fechar
+    </div>
+  </div>
+</div>
+
+<!-- ══ ASSINATURA FULLSCREEN ══════════════════════════════════ -->
+<div id="sig-fullscreen" style="display:none;position:fixed;inset:0;background:#fff;z-index:900;flex-direction:column">
+  <div style="padding:12px 16px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;background:#f8fafc">
+    <div style="font-weight:700;color:#111;font-size:.9rem">✍️ Assinatura do Cliente</div>
+    <div style="display:flex;gap:8px">
+      <button onclick="limparSigFS()" style="background:none;border:1px solid #e5e7eb;border-radius:8px;padding:6px 12px;font-size:.8rem;cursor:pointer;color:#666">Limpar</button>
+      <button onclick="fecharAssinatura()" style="background:none;border:1px solid #e5e7eb;border-radius:8px;padding:6px 12px;font-size:.8rem;cursor:pointer;color:#666">Cancelar</button>
+      <button onclick="confirmarAssinatura()" style="background:#38BDF8;border:none;border-radius:8px;padding:6px 14px;font-size:.8rem;cursor:pointer;color:#fff;font-weight:700">✅ Confirmar</button>
+    </div>
+  </div>
+  <div style="padding:8px 16px;font-size:.75rem;color:#999;text-align:center">Assine no espaço abaixo</div>
+  <canvas id="sigCanvasFS" style="flex:1;width:100%;touch-action:none;cursor:crosshair;border-top:2px dashed #e5e7eb"></canvas>
+</div>
+
+<!-- ══ QR READER ══════════════════════════════════════════════ -->
+<div id="qrReaderWrap">
+  <video id="qrVideo" autoplay playsinline muted></video>
+  <p style="color:#fff;font-family:var(--mono);font-size:12px">Aponte para o QR Code da OS</p>
+  <button class="btn btn-ghost btn-sm" onclick="closeQrReader()" style="color:#fff;border-color:#fff;width:auto">Cancelar</button>
+</div>
+
+<!-- ══ MODAL GENÉRICO ════════════════════════════════════════ -->
+<div id="mwrap" class="modal-wrap" onclick="if(event.target===this)closeModal()">
+  <div class="modal-box">
+    <div id="mbody"></div>
+  </div>
+</div>
+
+<!-- Inputs de arquivo -->
+<input type="file" id="fileInOS" accept="image/*" multiple capture="environment" style="display:none" onchange="handlePhotos(event)">
+<input type="file" id="fileInOSGallery" accept="image/*" multiple style="display:none" onchange="handlePhotos(event)">
+
+<!-- Toast -->
+<div id="toast-container"></div>
+
+<!-- Scripts movidos para o <head> -->
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  // Datas padrão
+  const cx = document.getElementById('cx-date'); if (cx) cx.value = (typeof today === 'function' ? today() : new Date().toISOString().split('T')[0]);
+  const ag = document.getElementById('ag-date'); if (ag) ag.value = (typeof today === 'function' ? today() : new Date().toISOString().split('T')[0]);
+
+  // Fechar busca global com Esc
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      fecharBuscaGlobal();
+      closeModal();
+    }
+  });
+
+  // Fechar busca ao clicar fora
+  document.getElementById('global-search-overlay')?.addEventListener('click', e => {
+    if (e.target === e.currentTarget) fecharBuscaGlobal();
+  });
+
+  // Service Worker com auto-update
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      setInterval(() => reg.update(), 60_000);
+      reg.addEventListener('updatefound', () => {
+        const sw = reg.installing; if (!sw) return;
+        sw.addEventListener('statechange', () => {
+          if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+            sw.postMessage('SKIP_WAITING');
+          }
+        });
+      });
+    }).catch(() => {});
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!refreshing) { refreshing = true; location.reload(); }
+    });
+  }
+
+  // QR reader helper (movido do app.js original)
+  let _qrStream = null;
+  window.openQrReader = function() {
+    const w = document.getElementById('qrReaderWrap'); if (!w) return;
+    w.classList.add('open');
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      .then(stream => { _qrStream = stream; document.getElementById('qrVideo').srcObject = stream; _scanQR(); })
+      .catch(() => { UI.toast('Sem acesso à câmera', 'error'); closeQrReader(); });
+  };
+  window.closeQrReader = function() {
+    if (_qrStream) { _qrStream.getTracks().forEach(t => t.stop()); _qrStream = null; }
+    document.getElementById('qrReaderWrap')?.classList.remove('open');
+  };
+  function _scanQR() {
+    const video = document.getElementById('qrVideo');
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    function scan() {
+      if (!_qrStream) return;
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0);
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        if (window.jsQR) {
+          const code = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'dontInvert' });
+          if (code) {
+            closeQrReader();
+            const mo = code.data.match(/OS:#(\d+)/);
+            if (mo) {
+              const num = parseInt(mo[1]);
+              const os  = APP.os.find(o => o.numero === num);
+              if (os) { UI.toast('OS #' + num + ' encontrada!', 'success'); verOS(os.id); }
+              else UI.toast('OS #' + num + ' não encontrada', 'warning');
+            } else {
+              UI.toast('QR: ' + code.data.slice(0, 40), 'info');
+            }
+            return;
+          }
+        }
+      }
+      requestAnimationFrame(scan);
+    }
+    requestAnimationFrame(scan);
+  }
+});
+</script>
+</body>
 </html>

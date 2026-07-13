@@ -1,0 +1,5 @@
+# Não faz parte do site publicado — evita expor código-fonte
+# das Edge Functions (deployadas separadamente via Supabase CLI)
+# e a página de diagnóstico interna.
+supabase/
+dev/
