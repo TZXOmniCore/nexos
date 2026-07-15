@@ -755,7 +755,11 @@ function gerarQRPix() {
   const qrEl = document.getElementById('pix-qr-canvas');
   if (qrEl && window.QRCode) {
     qrEl.innerHTML = '';
-    new QRCode(qrEl, { text: brCode, width: 160, height: 160, colorDark: '#000000', colorLight: '#ffffff' });
+    // correctLevel L (baixa redundância): o payload PIX já é longo (100-200+ caracteres);
+    // com o nível padrão da lib (H, 30%) o QR fica denso demais e os módulos ficam pequenos
+    // demais em 160px, dificultando a leitura pela câmera do banco. L é o padrão usado pelos
+    // geradores oficiais de QR PIX exatamente por isso. Aumentei o tamanho pra dar mais margem.
+    new QRCode(qrEl, { text: brCode, width: 220, height: 220, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.L });
   }
 
   const copyEl = document.getElementById('pix-copia-cola');
