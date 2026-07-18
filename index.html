@@ -19,12 +19,20 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css?v=52">
 <!-- Libs externas -->
-<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<!-- supabase-js: pinado em versão exata (antes era "@2", que muda de arquivo a cada
+     release e por isso não dá pra colocar integrity nele com segurança — um hash
+     fixo quebraria o site no próximo patch do pacote). SRI não incluído aqui porque
+     a CDN não expõe esse build de um jeito que eu consiga conferir o hash com certeza;
+     se quiser fechar 100%, gera o SRI em https://www.jsdelivr.com/package/npm/@supabase/supabase-js
+     (aba "Files", clica no arquivo, tem botão de copiar o "integrity") e cola aqui. -->
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.7/dist/umd/supabase.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js" integrity="sha384-hJnF5AwidE18GSWTAGHv3ByzzvfNZ1Tcx5y1UUV3WkauuMCEzBJBMSwSt/PUPXnM" crossorigin="anonymous"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha384-3zSEDfvllQohrq0PHL1fOXJuC/jSOO34H46t6UQfobFOmxE5BpjjaIJY5F2/bMnU" crossorigin="anonymous"></script>
+<!-- jsQR: mesma observação do supabase-js — já pinado em versão exata, mas sem
+     integrity porque não consegui confirmar o hash com 100% de certeza daqui. -->
 <script defer src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H" crossorigin="anonymous"></script>
 <!-- App Scripts — carregados no head para today() estar disponível -->
 <script defer src="api.js?v=52"></script>
 <script defer src="auth.js?v=52"></script>
@@ -924,6 +932,7 @@
           <div class="form-group">
             <label class="form-label">Chave PIX</label>
             <input id="cfg-pix" type="text" class="form-control" placeholder="CPF, e-mail, telefone ou chave aleatória">
+            <div style="font-size:.72rem;color:var(--text-3);margin-top:4px">Pode digitar com ou sem formatação — o sistema detecta sozinho se é CPF, celular, e-mail ou chave aleatória.</div>
           </div>
           <!-- Feature #19 — Meta mensal -->
           <div class="form-group">
