@@ -24,12 +24,8 @@ const PRECACHE = [
 ];
 
 // Estratégia por tipo
-const NETWORK_FIRST_EXT = ['.html', '.js', '.css', 'manifest.json'];
+const NETWORK_FIRST_EXT = ['.html', '.js', '.css'];
 const CACHE_FIRST_EXT   = ['.png', '.jpg', '.jpeg', '.webp', '.svg', '.ico', '.woff', '.woff2'];
-const NEVER_CACHE_HOST  = [
-  'supabase.co', 'googleapis.com', '/api/',
-  'cdnjs.cloudflare.com', 'cdn.jsdelivr.net',
-];
 
 // ══ INSTALL — pré-cacheia essenciais ════════════════════════
 self.addEventListener('install', e => {
@@ -53,21 +49,33 @@ self.addEventListener('activate', e => {
   );
 });
 
+const NEVER_CACHE_HOSTS = ['supabase.co', 'googleapis.com', 'cdnjs.cloudflare.com', 'cdn.jsdelivr.net'];
+const FONT_HOSTS        = ['fonts.gstatic.com', 'fonts.googleapis.com'];
+
+// Confere o host de verdade (via URL parseada), não uma substring solta —
+// evita bypass tipo "https://evil.com/?x=supabase.co" ou "supabase.co.evil.com"
+// sendo tratados como se fossem o host confiável (CodeQL: incomplete URL substring sanitization)
+function _hostMatches(hostname, list) {
+  return list.some(h => hostname === h || hostname.endsWith('.' + h));
+}
+
 // ══ FETCH — roteamento por estratégia ═══════════════════════
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
 
-  const url = e.request.url;
-
-  // Nunca interceptar Supabase nem CDNs externos
-  if (NEVER_CACHE_HOST.some(h => url.includes(h))) return;
+  let u;
+  try { u = new URL(e.request.url); } catch { return; }
 
   // Segurança: apenas http/https
-  if (!url.startsWith('http')) return;
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return;
 
-  const isCacheFirst   = CACHE_FIRST_EXT.some(ext => url.includes(ext));
-  const isNetworkFirst = NETWORK_FIRST_EXT.some(ext => url.includes(ext));
-  const isFontReq      = url.includes('fonts.gstatic.com') || url.includes('fonts.googleapis.com');
+  // Nunca interceptar Supabase, CDNs externos ou chamadas de API
+  if (_hostMatches(u.hostname, NEVER_CACHE_HOSTS) || u.pathname.includes('/api/')) return;
+
+  const ext = u.pathname.slice(u.pathname.lastIndexOf('.'));
+  const isCacheFirst   = CACHE_FIRST_EXT.includes(ext);
+  const isNetworkFirst = NETWORK_FIRST_EXT.some(e2 => u.pathname.endsWith(e2)) || u.pathname.endsWith('manifest.json');
+  const isFontReq      = _hostMatches(u.hostname, FONT_HOSTS);
 
   if (isFontReq) {
     e.respondWith(cacheFirstWithFallback(e.request, CACHE_FONT));
