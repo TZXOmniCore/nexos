@@ -627,7 +627,11 @@ function _atualizarTrocoMulti() {
   const troco   = pago - total;
   const warn    = document.getElementById('multi-pay-total-warn');
   if (!warn) return;
-  if (_multiPays.length <= 1) { warn.style.display = 'none'; return; }
+  const temDinheiro = _multiPays.some(p => p.forma === 'dinheiro');
+  // Mostra o cálculo de troco sempre que "Dinheiro" estiver entre as formas selecionadas
+  // (mesmo sozinho — é o caso mais comum: cliente paga com nota maior) ou quando há mais
+  // de uma forma de pagamento (conferência da divisão do total).
+  if (!temDinheiro && _multiPays.length <= 1) { warn.style.display = 'none'; return; }
   warn.style.display = 'block';
   if (troco > 0.009)
     warn.innerHTML = `<span style="color:var(--green)">✅ Troco: ${fmt(troco)}</span>`;
@@ -1313,14 +1317,28 @@ function buildOSTemplate(os) {
 
   // Pagamento — suporte multi-pagamento
   let pagFormas = '';
+  let pagamentosArr = [];
   if (os.pagamentos_multiplos) {
     try {
-      const pags = JSON.parse(os.pagamentos_multiplos);
-      pagFormas = pags.map(p2 => `${payLabel(p2.forma)}: ${fmt(p2.valor)}`).join(' · ');
+      pagamentosArr = JSON.parse(os.pagamentos_multiplos);
+      pagFormas = pagamentosArr.map(p2 => `${payLabel(p2.forma)}: ${fmt(p2.valor)}`).join(' · ');
     } catch { pagFormas = payLabel(os.forma_pagamento); }
   } else {
     pagFormas = payLabel(os.forma_pagamento || 'aguardando');
+    if (os.forma_pagamento && os.forma_pagamento !== 'aguardando') {
+      pagamentosArr = [{ forma: os.forma_pagamento, valor: os.valor_pago != null ? os.valor_pago : os.valor_total }];
+    }
   }
+
+  // Valor recebido / troco — só faz sentido mostrar quando teve pagamento em dinheiro
+  // e o cliente pagou com uma nota maior que o total (feature pedida pelo usuário)
+  const temDinheiroPago = pagamentosArr.some(p2 => p2.forma === 'dinheiro');
+  const valorPagoTotal  = os.valor_pago != null ? os.valor_pago : pagamentosArr.reduce((s, p2) => s + (+p2.valor || 0), 0);
+  const trocoComp       = valorPagoTotal - (os.valor_total || 0);
+  const trocoRow = (temDinheiroPago && trocoComp > 0.009)
+    ? `<div class="comp-valor-row"><span>Valor recebido</span><span>${fmt(valorPagoTotal)}</span></div>
+       <div class="comp-valor-row"><span><b>Troco</b></span><span><b>${fmt(trocoComp)}</b></span></div>`
+    : '';
 
   // Equipamento
   const equipBlock = (os.equipamento || os.item) ? `
@@ -1422,6 +1440,7 @@ function buildOSTemplate(os) {
           <div class="comp-valores-box">
             ${descRow}
             <div class="comp-valor-total"><span>TOTAL</span><span>${fmt(os.valor_total)}</span></div>
+            ${trocoRow}
           </div>
         </div>
       </div>
