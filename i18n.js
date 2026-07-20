@@ -1061,12 +1061,12 @@ const I18N = {
 
   apply() {
     document.querySelectorAll('[data-i18n]').forEach(el => {
-      const key = el.getAttribute('data-i18n');
+      const key = el.dataset.i18n;
       const val = this.t(key);
       if (val && val !== key) el.textContent = val;
     });
     document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
-      const key = el.getAttribute('data-i18n-placeholder');
+      const key = el.dataset.i18nPlaceholder;
       const val = this.t(key);
       if (val && val !== key) el.placeholder = val;
     });
