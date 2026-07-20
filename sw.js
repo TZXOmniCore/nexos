@@ -136,6 +136,10 @@ async function cacheFirstWithFallback(req, cacheName = CACHE_STATIC) {
 
 // ══ MENSAGENS DO CLIENTE ════════════════════════════════════
 self.addEventListener('message', e => {
+  // Segurança: só processa mensagens vindas da própria origem do app
+  // (CWE-346 — verificação de origem da mensagem recebida)
+  if (e.origin && e.origin !== self.location.origin) return;
+
   // Força update quando nova versão disponível
   if (e.data === 'SKIP_WAITING') {
     self.skipWaiting();
