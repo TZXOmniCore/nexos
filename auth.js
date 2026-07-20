@@ -84,7 +84,7 @@ const ACENTOS = {
 function aplicarTema() {
   const tema   = STATE.tema   || 'dark';
   const acento = STATE.acento || 'blue';
-  document.documentElement.setAttribute('data-theme', tema);
+  document.documentElement.dataset.theme = tema;
   const vars = ACENTOS[acento] || ACENTOS.blue;
   Object.entries(vars).forEach(([k, v]) => document.documentElement.style.setProperty(k, v));
 }
