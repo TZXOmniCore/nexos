@@ -237,7 +237,7 @@ function _applyUiLocks() {
    *   <a data-requires="api:access" href="/api-docs">API</a>
    */
   document.querySelectorAll('[data-requires]').forEach(el => {
-    const feature = el.getAttribute('data-requires');
+    const feature = el.dataset.requires;
     if (!NexOSPlans.can(feature)) {
       if (el.tagName === 'BUTTON' || el.tagName === 'INPUT') {
         el.disabled = true;
