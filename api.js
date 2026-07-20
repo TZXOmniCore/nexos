@@ -67,7 +67,7 @@ function genHash(seed) {
   let h = 0;
   for (let i = 0; i < String(seed).length; i++) {
     h = ((h << 5) - h) + String(seed).charCodeAt(i);
-    h |= 0;
+    h |= 0; // força overflow de 32 bits (parte do algoritmo do hash — Math.trunc NÃO faz isso, muda o resultado)
   }
   return Math.abs(h).toString(16).toUpperCase().padStart(6, '0') + '-' + ts;
 }
@@ -101,18 +101,40 @@ async function gerarNumeroOS(uid) {
 // GERADOR DE PIX BR CODE (payload EMV padrão Bacen)
 // Feature #6: QR Code PIX com valor real
 // ══════════════════════════════════════════════════════════════
+// DDDs válidos no Brasil — usados pra detectar automaticamente se uma chave de
+// 11 dígitos é celular (DDD + 9 + 8 dígitos) ou CPF (mesmo tamanho, mas sem esse padrão)
+const _DDDS_VALIDOS = new Set([
+  11,12,13,14,15,16,17,18,19, 21,22,24, 27,28, 31,32,33,34,35,37,38,
+  41,42,43,44,45,46, 47,48,49, 51,53,54,55, 61, 62,64, 63, 65,66, 67,
+  68, 69, 71,73,74,75,77, 79, 81,87, 82, 83, 84, 85,88, 86,89,
+  91,93,94, 92,97, 95, 96, 98,99,
+]);
+
 function normalizarChavePix(chave) {
   if (!chave) return '';
   const c = String(chave).trim();
   if (!c) return '';
+  // Chave aleatória (EVP/UUID) — mantém como está, só normaliza caixa
   if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(c)) return c.toLowerCase();
+  // E-mail — mantém como está
   if (c.includes('@')) return c.toLowerCase();
-  if (/^[+\d][\d\s().-]*$/.test(c)) {
+  if (/^[+(\d][\d\s().-]*$/.test(c)) {
     const digitos = c.replace(/\D/g, '');
-    if (digitos.length === 11 || digitos.length === 14) return digitos;
-    if (c.startsWith('+')) return '+' + digitos;
-    if (digitos.length === 12 || digitos.length === 13) return '+' + digitos;
-    if (digitos.length === 10 || digitos.length === 11) return '+55' + digitos;
+    if (c.startsWith('+'))                               return '+' + digitos;          // já veio com "+"
+    if (digitos.length === 12 || digitos.length === 13)  return '+' + digitos;           // DDI 55 sem "+"
+    if (digitos.length === 14)                           return digitos;                 // CNPJ
+    if (digitos.length === 11) {
+      // Celular = DDD válido + "9" obrigatório como 3º dígito. CPF não segue esse padrão,
+      // então isso diferencia automaticamente sem precisar o usuário digitar "+55" na mão.
+      const ddd  = parseInt(digitos.slice(0, 2), 10);
+      const nono = digitos[2];
+      if (nono === '9' && _DDDS_VALIDOS.has(ddd)) return '+55' + digitos;   // celular sem "+55"
+      return digitos;                                                       // CPF
+    }
+    if (digitos.length === 10) {
+      const ddd = parseInt(digitos.slice(0, 2), 10);
+      if (_DDDS_VALIDOS.has(ddd)) return '+55' + digitos;                   // fixo sem "+55"
+    }
     return digitos;
   }
   return c;
