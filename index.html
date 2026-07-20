@@ -1192,32 +1192,32 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('qrReaderWrap')?.classList.remove('open');
   };
   function _scanQR() {
-    const video = document.getElementById('qrVideo');
+    const video  = document.getElementById('qrVideo');
     const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
+    const ctx    = canvas.getContext('2d');
+
+    function decodeFrame() {
+      if (video.readyState !== video.HAVE_ENOUGH_DATA || !window.jsQR) return null;
+      canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0);
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      return jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'dontInvert' });
+    }
+
+    function handleCode(code) {
+      closeQrReader();
+      const mo = code.data.match(/OS:#(\d+)/);
+      if (!mo) { UI.toast('QR: ' + code.data.slice(0, 40), 'info'); return; }
+      const num = parseInt(mo[1]);
+      const os  = APP.os.find(o => o.numero === num);
+      if (os) { UI.toast('OS #' + num + ' encontrada!', 'success'); verOS(os.id); }
+      else UI.toast('OS #' + num + ' não encontrada', 'warning');
+    }
+
     function scan() {
       if (!_qrStream) return;
-      if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0);
-        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        if (window.jsQR) {
-          const code = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'dontInvert' });
-          if (code) {
-            closeQrReader();
-            const mo = code.data.match(/OS:#(\d+)/);
-            if (mo) {
-              const num = parseInt(mo[1]);
-              const os  = APP.os.find(o => o.numero === num);
-              if (os) { UI.toast('OS #' + num + ' encontrada!', 'success'); verOS(os.id); }
-              else UI.toast('OS #' + num + ' não encontrada', 'warning');
-            } else {
-              UI.toast('QR: ' + code.data.slice(0, 40), 'info');
-            }
-            return;
-          }
-        }
-      }
+      const code = decodeFrame();
+      if (code) { handleCode(code); return; }
       requestAnimationFrame(scan);
     }
     requestAnimationFrame(scan);
